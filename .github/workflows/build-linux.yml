@@ -12,8 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: TablaApp/package-lock.json
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -30,24 +28,23 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: TablaApp/src-tauri
+          workspaces: src-tauri
 
       - name: Install npm dependencies
         run: npm ci
-        working-directory: TablaApp
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: TablaApp
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Upload Linux installers
         uses: actions/upload-artifact@v4
         with:
           name: cursus-linux
           path: |
-            TablaApp/src-tauri/target/release/bundle/deb/*.deb
-            TablaApp/src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
