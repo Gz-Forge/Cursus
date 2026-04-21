@@ -49,8 +49,9 @@
 
   <h2>2. Cómo usamos la información</h2>
   <ul>
-    <li>Proveer y sincronizar las funcionalidades de la aplicación.</li>
+    <li>Proveer las funcionalidades de la aplicación.</li>
     <li>Permitir el inicio de sesión y la gestión de perfiles.</li>
+    <li>Facilitar la sincronización puntual entre dispositivos cuando el usuario la solicita explícitamente.</li>
     <li>No vendemos ni compartimos datos personales con terceros.</li>
   </ul>
 
@@ -58,15 +59,27 @@
   <p>
     Los datos de cuenta se almacenan de forma segura en
     <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a>,
-    que utiliza cifrado en tránsito (TLS) y en reposo. Los datos académicos
-    se guardan localmente en el dispositivo y, opcionalmente, en la cuenta del
-    usuario en Supabase.
+    que utiliza cifrado en tránsito (TLS) y en reposo.
+  </p>
+  <p>
+    Los <strong>datos académicos</strong> (materias, notas, configuraciones) se guardan
+    <strong>únicamente de forma local en el dispositivo</strong>. No existe sincronización
+    en tiempo real ni almacenamiento permanente en la nube de estos datos.
+  </p>
+  <p>
+    Cuando el usuario inicia manualmente una sincronización entre la app de escritorio
+    y la app móvil, los datos académicos se cargan de forma <strong>temporal</strong>
+    en el servidor exclusivamente para realizar la transferencia entre dispositivos.
+    Una vez completada la sincronización, esos datos son <strong>eliminados del servidor</strong>
+    de forma inmediata. Este diseño es la razón por la cual la sincronización no es
+    en tiempo real.
   </p>
 
   <h2>4. Retención de datos</h2>
   <p>
-    Los datos se conservan mientras el usuario mantenga su cuenta activa.
-    El usuario puede eliminar su cuenta y todos sus datos en cualquier momento
+    Los datos de cuenta se conservan mientras el usuario mantenga su cuenta activa.
+    Los datos académicos nunca se retienen en el servidor más allá del proceso de
+    sincronización. El usuario puede eliminar su cuenta en cualquier momento
     contactándonos.
   </p>
 
