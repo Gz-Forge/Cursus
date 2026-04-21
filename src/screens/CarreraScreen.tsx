@@ -1,0 +1,469 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useStore } from '../store/useStore';
+import { useTema } from '../theme/ThemeContext';
+import { SemestreSection } from '../components/SemestreSection';
+import { MateriaCard } from '../components/MateriaCard';
+import { FabSpeedDial } from '../components/FabSpeedDial';
+import { QrShareModal } from '../components/QrShareModal';
+import { QrScannerModal } from '../components/QrScannerModal';
+import { PerfilSheet } from '../components/PerfilSheet';
+import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
+import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '../utils/calculos';
+import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
+import { importarCarrera } from '../utils/importExportNative';
+import { EstadoMateria, Materia } from '../types';
+import { estadoColores, temaOscuro } from '../theme/colors';
+
+type Vista = 'carrera' | 'semestre' | 'busqueda';
+const VISTA_LABELS: Record<Vista, string> = {
+  carrera: 'Carrera', semestre: 'Semestre', busqueda: 'Búsqueda',
+};
+const ESTADO_LABELS: Record<EstadoMateria, string> = {
+  aprobado: '✅ Aprobadas', exonerado: '⭐ Exoneradas',
+  cursando: '🔵 Cursando', por_cursar: '⬜ Por cursar',
+  reprobado: '🟠 Reprobadas', recursar: '🔴 Recursar',
+};
+
+export function CarreraScreen() {
+  const { materias, config, decrementarPeriodoExamen, actualizarConfig, guardarMateria, perfiles, perfilActivoId } = useStore();
+  const [mostrarPerfilSheet, setMostrarPerfilSheet] = useState(false);
+  const [mostrarAgregar, setMostrarAgregar] = useState(false);
+  const tema = useTema();
+  const navigation = useNavigation<any>();
+  const [vista, setVista] = useState<Vista>('carrera');
+  const [semestreActual, setSemestreActual] = useState(1);
+  const [filtroEstado, setFiltroEstado] = useState<EstadoMateria | null>(null);
+  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  const [mostrarSoloDisponibles, setMostrarSoloDisponibles] = useState(false);
+  const [subFiltroDisp, setSubFiltroDisp] = useState<'para_cursar' | 'para_examen'>('para_cursar');
+  const [mostrarQrShare, setMostrarQrShare] = useState(false);
+  const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
+  const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
+
+  const isWeb = Platform.OS === 'web';
+  const creditos = creditosAcumulados(materias, config);
+  const exoneradas = materias.filter(m => calcularEstadoFinal(m, config) === 'exonerado').length;
+  const disponibles = materiasDisponibles(materias, config).length;
+
+  // Renderiza lista de materias en grid 2 cols (web) o lista simple (móvil)
+  const renderMateriasList = (lista: Materia[]) => {
+    if (!isWeb) {
+      return lista.map(m => (
+        <MateriaCard key={m.id} materia={m} todasLasMaterias={materias} config={config} onEditar={() => irAEditar(m)} />
+      ));
+    }
+    return (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {lista.map(m => (
+          <View key={m.id} style={{ width: '50%', paddingHorizontal: 4 }}>
+            <MateriaCard materia={m} todasLasMaterias={materias} config={config} onEditar={() => irAEditar(m)} />
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
+  const coloresSem = (tema as any).semestres ?? temaOscuro.semestres;
+
+  const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
+
+  const isExpandido = (sem: number) => semestreExpandido[sem] !== undefined ? semestreExpandido[sem] : true;
+  const toggleSemestre = (sem: number) => setSemestreExpandido(prev => ({ ...prev, [sem]: !isExpandido(sem) }));
+  const todosExpandidos = semestres.every(s => isExpandido(s));
+  const toggleTodos = () => {
+    const nuevo = !todosExpandidos;
+    setSemestreExpandido(Object.fromEntries(semestres.map(s => [s, nuevo])));
+  };
+
+  const irAEditar = (m: Materia) => navigation.navigate('EditMateria', { materiaId: m.id });
+
+  useEffect(() => {
+    if (config.modoExamen !== 'automatico') return;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const pendientes = config.fechasLimiteExamen.filter(
+      f => f <= hoy && !config.fechasEjecutadas.includes(f)
+    );
+    if (pendientes.length === 0) return;
+    const sinOportunidades = decrementarPeriodoExamen();
+    actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });
+    if (sinOportunidades.length > 0) {
+      const nombres = sinOportunidades.map(m => m.nombre).join(', ');
+      Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+    }
+  }, []);
+
+  const handleImportar = async () => {
+    let datos: Awaited<ReturnType<typeof importarCarrera>>;
+    try {
+      datos = await importarCarrera();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error al leer el archivo';
+      Alert.alert('Error al importar', msg);
+      return;
+    }
+    if (!datos) return;
+    Alert.alert(
+      'Importar carrera',
+      `Se importarán ${datos.length} materias. ¿Reemplazar los datos actuales?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Importar',
+          onPress: () => {
+            const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
+            const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
+            if (tiposNuevos.length > 0) {
+              actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
+            }
+            nuevas.forEach(m => guardarMateria(m));
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePeriodoExamen = () => {
+    Alert.alert(
+      'Período de examen',
+      '¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: () => {
+            const sinOportunidades = decrementarPeriodoExamen();
+            if (sinOportunidades.length > 0) {
+              const nombres = sinOportunidades.map(m => m.nombre).join(', ');
+              Alert.alert(
+                'Materias sin oportunidades',
+                `Las siguientes materias pasaron a Recursar:\n\n${nombres}`,
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+
+  return (
+    <View style={{ flex: 1, backgroundColor: tema.fondo }}>
+      {/* Selector de perfil */}
+      {isWeb ? (
+        <View style={{ backgroundColor: tema.superficie, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde, flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => setMostrarPerfilSheet(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: tema.tarjeta,
+              borderWidth: 1,
+              borderColor: tema.borde,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              gap: 6,
+            }}
+          >
+            <Text style={{ color: tema.acento, fontSize: 13 }}>⚡</Text>
+            <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600', maxWidth: 220 }} numberOfLines={1}>
+              {perfiles.find(p => p.id === perfilActivoId)?.nombre ?? 'Perfil'}
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>▼</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={() => setMostrarPerfilSheet(true)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 4,
+            backgroundColor: tema.superficie,
+          }}
+        >
+          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
+          <Text
+            style={{
+              color: tema.texto,
+              fontSize: 13,
+              fontWeight: '600',
+              marginLeft: 4,
+              maxWidth: 200,
+            }}
+            numberOfLines={1}
+          >
+            {perfiles.find(p => p.id === perfilActivoId)?.nombre ?? 'Perfil'}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginLeft: 4 }}>▼</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Resumen */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: tema.superficie }}>
+        {[
+          { valor: creditos, label: 'créditos' },
+          { valor: exoneradas, label: 'exoneradas' },
+          { valor: disponibles, label: 'disp.' },
+        ].map(({ valor, label }) => (
+          <View key={label} style={{ alignItems: 'center' }}>
+            <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{valor}</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Pestañas */}
+      <View style={{ flexDirection: 'row', backgroundColor: tema.superficie, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+        {(Object.keys(VISTA_LABELS) as Vista[]).map(v => (
+          <TouchableOpacity
+            key={v}
+            onPress={() => setVista(v)}
+            style={{ flex: 1, padding: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: vista === v ? tema.acento : 'transparent' }}
+          >
+            <Text style={{ color: vista === v ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>{VISTA_LABELS[v]}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+        {/* VISTA CARRERA */}
+        {vista === 'carrera' && (
+          <>
+            <TouchableOpacity
+              onPress={toggleTodos}
+              style={{ alignSelf: 'flex-end', marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta }}
+            >
+              <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>
+                {todosExpandidos ? '▲ Colapsar todo' : '▼ Expandir todo'}
+              </Text>
+            </TouchableOpacity>
+            {semestres.map((sem, i) => (
+              <SemestreSection
+                key={sem}
+                semestre={sem}
+                materias={materias.filter(m => m.semestre === sem)}
+                todasLasMaterias={materias}
+                config={config}
+                colorAcento={coloresSem[i % coloresSem.length]}
+                onEditar={irAEditar}
+                expandidoExterno={isExpandido(sem)}
+                onToggle={() => toggleSemestre(sem)}
+                webGrid={isWeb}
+              />
+            ))}
+          </>
+        )}
+
+        {/* VISTA SEMESTRE */}
+        {vista === 'semestre' && (
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <TouchableOpacity onPress={() => setSemestreActual(s => Math.max(1, s - 1))}>
+                <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+              </TouchableOpacity>
+              <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700' }}>{semestreActual}° Semestre</Text>
+              <TouchableOpacity onPress={() => setSemestreActual(s => s + 1)}>
+                <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+              </TouchableOpacity>
+            </View>
+            {renderMateriasList(materias.filter(m => m.semestre === semestreActual))}
+          </>
+        )}
+
+        {/* VISTA BÚSQUEDA */}
+        {vista === 'busqueda' && (
+          <>
+            {/* Toggle: Todas / Solo disponibles */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={() => setMostrarSoloDisponibles(false)}
+                style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                  backgroundColor: !mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
+              >
+                <Text style={{ color: !mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todas</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setMostrarSoloDisponibles(true)}
+                style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                  backgroundColor: mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
+              >
+                <Text style={{ color: mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
+              </TouchableOpacity>
+            </View>
+
+            {mostrarSoloDisponibles ? (
+              /* ── Vista: disponibles con sub-tabs ── */
+              <>
+                {/* Sub-tabs: Para cursar / Para dar examen */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  {([
+                    { key: 'para_cursar', label: '📚 Para cursar' },
+                    { key: 'para_examen', label: '📝 Para dar examen' },
+                  ] as const).map(({ key, label }) => (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() => setSubFiltroDisp(key)}
+                      style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
+                        backgroundColor: subFiltroDisp === key ? tema.acento : tema.tarjeta }}
+                    >
+                      <Text style={{ color: subFiltroDisp === key ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {subFiltroDisp === 'para_cursar' && (() => {
+                  const numerosDisp = new Set(materiasDisponibles(materias, config));
+                  const lista = materias.filter(m => numerosDisp.has(m.numero));
+                  const primerSem = lista.filter(m => m.semestre % 2 === 1);
+                  const segundoSem = lista.filter(m => m.semestre % 2 === 0);
+                  return (
+                    <>
+                      {lista.length === 0 && (
+                        <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
+                          No hay materias disponibles para cursar
+                        </Text>
+                      )}
+                      {primerSem.length > 0 && (
+                        <>
+                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>
+                            1° semestre del año
+                          </Text>
+                          {renderMateriasList(primerSem)}
+                        </>
+                      )}
+                      {segundoSem.length > 0 && (
+                        <>
+                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13,
+                            marginBottom: 8, marginTop: primerSem.length > 0 ? 12 : 0 }}>
+                            2° semestre del año
+                          </Text>
+                          {renderMateriasList(segundoSem)}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+
+                {subFiltroDisp === 'para_examen' && (() => {
+                  const paraExamen = materias.filter(m => calcularEstadoFinal(m, config) === 'reprobado');
+                  return (
+                    <>
+                      {paraExamen.length === 0 ? (
+                        <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
+                          No tenés materias pendientes de examen
+                        </Text>
+                      ) : (
+                        <>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
+                            {paraExamen.length} materia{paraExamen.length !== 1 ? 's' : ''} pendiente{paraExamen.length !== 1 ? 's' : ''} de examen
+                          </Text>
+                          {renderMateriasList(paraExamen)}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            ) : (
+              /* ── Vista: todas con filtros de estado y tipo ── */
+              <>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setFiltroEstado(null)}
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === null ? tema.acento : tema.tarjeta }}
+                  >
+                    <Text style={{ color: filtroEstado === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
+                  </TouchableOpacity>
+                  {(Object.keys(ESTADO_LABELS) as EstadoMateria[]).map(e => (
+                    <TouchableOpacity
+                      key={e}
+                      onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
+                      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
+                    >
+                      <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {tiposFormacion.length > 0 && (
+                  <>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Tipo de formación</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => setFiltroTipo(null)}
+                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === null ? tema.acento : tema.tarjeta }}
+                      >
+                        <Text style={{ color: filtroTipo === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
+                      </TouchableOpacity>
+                      {tiposFormacion.map(t => (
+                        <TouchableOpacity
+                          key={t}
+                          onPress={() => setFiltroTipo(prev => prev === t ? null : t)}
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === t ? tema.acento : tema.tarjeta }}
+                        >
+                          <Text style={{ color: filtroTipo === t ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{t}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {renderMateriasList(
+                  materias.filter(m => {
+                    const estadoOk = filtroEstado === null || calcularEstadoFinal(m, config) === filtroEstado;
+                    const tipoOk = filtroTipo === null || m.tipoFormacion === filtroTipo;
+                    return estadoOk && tipoOk;
+                  })
+                )}
+              </>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      <FabSpeedDial
+        acciones={[
+          { icono: '✏️', label: 'Agregar Materia/s', onPress: () => setMostrarAgregar(true) },
+          { icono: '📤', label: 'Compartir Carrera por QR', onPress: () => setMostrarQrShare(true) },
+          ...(!isWeb ? [{ icono: '📷', label: 'Escanear QR de Carrera', onPress: () => setMostrarQrScanner(true) }] : []),
+          ...(config.modoExamen === 'manual'
+            ? [{ icono: '📅', label: 'Período de examen', onPress: handlePeriodoExamen }]
+            : []),
+        ]}
+      />
+
+      <QrShareModal
+        visible={mostrarQrShare}
+        materias={materias}
+        onCerrar={() => setMostrarQrShare(false)}
+      />
+
+      <QrScannerModal
+        visible={mostrarQrScanner}
+        onCerrar={() => setMostrarQrScanner(false)}
+      />
+
+      <PerfilSheet
+        visible={mostrarPerfilSheet}
+        onCerrar={() => setMostrarPerfilSheet(false)}
+      />
+
+      <AgregarMateriaModal
+        visible={mostrarAgregar}
+        onCerrar={() => setMostrarAgregar(false)}
+        onManual={() => navigation.navigate('EditMateria', {})}
+        onImportar={handleImportar}
+      />
+    </View>
+  );
+}

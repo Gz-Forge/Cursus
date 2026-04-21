@@ -1,0 +1,42 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: TablaApp/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: TablaApp/src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+        working-directory: TablaApp
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: TablaApp
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursus-macos
+          path: TablaApp/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

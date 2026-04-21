@@ -1,0 +1,13 @@
+name: Build Production (iOS)
+
+on:
+  workflow_dispatch:
+    inputs: {}
+
+jobs:
+  build_ios:
+    name: Build iOS
+    type: build
+    params:
+      platform: ios
+      profile: production

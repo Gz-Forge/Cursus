@@ -1,0 +1,472 @@
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform } from 'react-native';
+import { useStore } from '../store/useStore';
+import { useTema } from '../theme/ThemeContext';
+import { BloqueHorario } from '../types';
+import { calcularEstadoFinal } from '../utils/calculos';
+import {
+  exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
+  parsearJSONMultiMateria, leerArchivo,
+} from '../utils/horarioImportExport';
+
+const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const HORA_DEF_INICIO = 7 * 60;
+const HORA_DEF_FIN   = 22 * 60;
+const PX_POR_MIN     = 1.2;
+const HORA_PX        = 60 * PX_POR_MIN; // 72px por hora
+const TIME_COL_W     = 38;
+
+const COLORES_BLOQUES = [
+  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
+  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
+];
+
+function fmtHora(mins: number): string {
+  return `${Math.floor(mins / 60).toString().padStart(2, '0')}:${(mins % 60).toString().padStart(2, '0')}`;
+}
+
+function isoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const d = date.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay()); // retrocede al domingo
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function fmtFechaCorta(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
+export function HorarioScreen() {
+  const { materias, config } = useStore();
+  const tema = useTema();
+  const { width } = useWindowDimensions();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [modalExport, setModalExport] = useState(false);
+  const [modalImport, setModalImport] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
+
+  const cerrarModal = () => {
+    setModalExport(false);
+    setSeleccionadas(new Set());
+  };
+
+  const toggleMateria = (id: string) => {
+    setSeleccionadas(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleTodas = () => {
+    if (seleccionadas.size === materias.length) {
+      setSeleccionadas(new Set());
+    } else {
+      setSeleccionadas(new Set(materias.map(m => m.id)));
+    }
+  };
+
+  const exportarSeleccionadas = async () => {
+    try {
+      const elegidas = materias.filter(m => seleccionadas.has(m.id));
+      if (elegidas.length === 0) return;
+      await compartirArchivo('horarios.json', exportarJSONMultiMateria(elegidas), 'application/json');
+      cerrarModal();
+    } catch (e: any) {
+      Alert.alert('Error al exportar', e.message);
+    }
+  };
+
+  const descargarEjemploJSON = async () => {
+    try {
+      await compartirArchivo('ejemplo_horarios.json', generarEjemploJSON(), 'application/json');
+    } catch (e: any) {
+      Alert.alert('Error al descargar ejemplo', e.message);
+    }
+  };
+
+  const importarJSONGlobal = async () => {
+    try {
+      const texto = await leerArchivo(['application/json', '*/*']);
+      if (!texto) return;
+      const importadas = parsearJSONMultiMateria(texto);
+      const { guardarMateria, materias: materiasActuales } = useStore.getState();
+      importadas.forEach(imp => {
+        const materia = materiasActuales.find(m =>
+          (imp.id && m.id === imp.id) ||
+          (imp.numero && m.numero === imp.numero) ||
+          m.nombre.toLowerCase() === imp.nombre.toLowerCase()
+        );
+        if (materia) {
+          guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...imp.bloques] });
+        }
+      });
+      cerrarModal();
+      Alert.alert('Importado', `Se procesaron ${importadas.length} materia(s).`);
+    } catch (e: any) {
+      Alert.alert('Error al importar', e.message);
+    }
+  };
+
+  const todosLosBloques = materias
+    .filter(m => calcularEstadoFinal(m, config) === 'cursando')
+    .flatMap(m => (m.bloques ?? []).map(b => ({ ...b, materia: m })));
+
+  // Calcular rango horario: siempre muestra el mínimo default y solo expande si hay bloques fuera de ese rango
+  const horaInicio = todosLosBloques.length > 0
+    ? Math.min(HORA_DEF_INICIO, Math.floor(Math.min(...todosLosBloques.map(b => b.horaInicio)) / 60) * 60)
+    : HORA_DEF_INICIO;
+  const horaFin = todosLosBloques.length > 0
+    ? Math.max(HORA_DEF_FIN, Math.ceil(Math.max(...todosLosBloques.map(b => b.horaFin)) / 60) * 60)
+    : HORA_DEF_FIN;
+
+  const totalMins    = horaFin - horaInicio;
+  const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
+  const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
+  const dayColW      = (width - TIME_COL_W) / 7;
+
+  // Fechas de la semana mostrada (Dom–Sáb)
+  const semanaBase   = startOfWeek(new Date());
+  const semanaInicio = addDays(semanaBase, weekOffset * 7);
+  const fechasSemana = Array.from({ length: 7 }, (_, i) => isoDate(addDays(semanaInicio, i)));
+  const hoyIso       = isoDate(new Date());
+
+  // Bloques filtrados a esta semana
+  const bloquesEstaSemana = todosLosBloques.filter(
+    b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]
+  );
+
+  const colorMateria = (num: number) => COLORES_BLOQUES[num % COLORES_BLOQUES.length];
+  const sigla = (tipo: BloqueHorario['tipo']): string => {
+    if (config.mostrarNombreCompletoEnBloque) {
+      switch (tipo) {
+        case 'teorica':  return config.labelTeorica  || 'Teórica';
+        case 'practica': return config.labelPractica || 'Práctica';
+        case 'parcial':  return config.labelParcial  || 'Parcial';
+        case 'otro':     return config.labelOtro     || 'Otro';
+      }
+    }
+    switch (tipo) {
+      case 'teorica':  return config.abrevTeorica  || 'T';
+      case 'practica': return config.abrevPractica || 'P';
+      case 'parcial':  return config.abrevParcial  || '★';
+      case 'otro':     return config.abrevOtro     || 'O';
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: tema.fondo }}>
+      {/* Navegación de semana */}
+      <View style={{
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: tema.superficie, paddingHorizontal: 14, paddingVertical: 8,
+        borderBottomWidth: 1, borderBottomColor: tema.borde,
+        justifyContent: Platform.OS === 'web' ? undefined : 'space-between',
+      }}>
+        {Platform.OS === 'web' ? (
+          <>
+            {/* Nav: ocupa el espacio disponible y centra su contenido */}
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)}>
+                <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+              </TouchableOpacity>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
+                  {fmtFechaCorta(fechasSemana[0])} — {fmtFechaCorta(fechasSemana[6])}
+                </Text>
+                <TouchableOpacity onPress={() => setWeekOffset(0)}>
+                  <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
+                    {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)}>
+                <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Derecha: botones importar/exportar (tamaño fijo, pegados a la derecha) */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setModalImport(true)}
+                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
+                  paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>📥</Text>
+                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Importar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
+                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
+                  paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>📤</Text>
+                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Exportar</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Móvil: layout original */}
+            <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
+                {fmtFechaCorta(fechasSemana[0])} — {fmtFechaCorta(fechasSemana[6])}
+              </Text>
+              <TouchableOpacity onPress={() => setWeekOffset(0)}>
+                <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
+                  {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity
+                onPress={() => setModalImport(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
+                  borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
+                <Text style={{ fontSize: 15 }}>📥</Text>
+                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Importar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
+                  borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
+                <Text style={{ fontSize: 15 }}>📤</Text>
+                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Exportar</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Cabecera con días y fechas */}
+      <View style={{
+        flexDirection: 'row', backgroundColor: tema.superficie,
+        paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: tema.borde,
+      }}>
+        <View style={{ width: TIME_COL_W }} />
+        {fechasSemana.map((fecha, i) => {
+          const esHoy = fecha === hoyIso;
+          return (
+            <View key={i} style={{ width: dayColW, alignItems: 'center' }}>
+              <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
+                {DIAS_CORTO[i]}
+              </Text>
+              <Text style={{
+                color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
+                backgroundColor: esHoy ? tema.acento : undefined,
+                borderRadius: 8, paddingHorizontal: 3,
+              }}>
+                {fmtFechaCorta(fecha)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Grilla horaria */}
+      <ScrollView style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row' }}>
+          {/* Columna de horas */}
+          <View style={{ width: TIME_COL_W }}>
+            {horas.map(h => (
+              <View key={h} style={{ height: HORA_PX, paddingTop: 2 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 9, textAlign: 'right', paddingRight: 3 }}>
+                  {h}:00
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Columnas por día */}
+          {fechasSemana.map((fecha, diaIdx) => {
+            const esHoy = fecha === hoyIso;
+            return (
+              <View key={diaIdx} style={{
+                width: dayColW, height: TOTAL_HEIGHT, position: 'relative',
+                borderLeftWidth: 1,
+                borderLeftColor: esHoy ? tema.acento : tema.borde,
+                backgroundColor: esHoy ? `${tema.acento}0A` : undefined,
+              }}>
+                {/* Líneas de hora */}
+                {horas.map((_, i) => (
+                  <View key={i} style={{
+                    position: 'absolute', top: i * HORA_PX,
+                    left: 0, right: 0, height: 1,
+                    backgroundColor: tema.borde, opacity: 0.5,
+                  }} />
+                ))}
+                {/* Líneas de media hora */}
+                {horas.map((_, i) => (
+                  <View key={`m${i}`} style={{
+                    position: 'absolute', top: i * HORA_PX + HORA_PX / 2,
+                    left: 0, right: 0, height: 1,
+                    backgroundColor: tema.borde, opacity: 0.2,
+                  }} />
+                ))}
+
+                {/* Bloques de este día */}
+                {bloquesEstaSemana
+                  .filter(b => b.fecha === fecha)
+                  .map(b => {
+                    const top    = (b.horaInicio - horaInicio) * PX_POR_MIN;
+                    const height = Math.max((b.horaFin - b.horaInicio) * PX_POR_MIN, 16);
+                    const color  = colorMateria(b.materia.numero);
+                    return (
+                      <View key={b.id} style={{
+                        position: 'absolute', top, height,
+                        left: 1, right: 1,
+                        backgroundColor: color, borderRadius: 3,
+                        padding: 2, overflow: 'hidden',
+                      }}>
+                        <Text
+                          style={{ color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                          numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                          ellipsizeMode="tail"
+                        >
+                          {sigla(b.tipo)} - {b.materia.nombre}
+                        </Text>
+                      </View>
+                    );
+                  })}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, maxHeight: '80%', width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Exportar horarios
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 12 }}>
+              Seleccioná las materias a incluir en el JSON
+            </Text>
+
+            {/* Seleccionar todas */}
+            <TouchableOpacity
+              onPress={toggleTodas}
+              style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+              <View style={{
+                width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                backgroundColor: seleccionadas.size === materias.length ? tema.acento : undefined,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                {seleccionadas.size === materias.length && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
+              </View>
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>
+                {seleccionadas.size === materias.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Lista de materias */}
+            <ScrollView style={{ maxHeight: 300 }}>
+              {materias.map(m => (
+                <TouchableOpacity
+                  key={m.id}
+                  onPress={() => toggleMateria(m.id)}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+                    borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 10 }}>
+                  <View style={{
+                    width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                    backgroundColor: seleccionadas.has(m.id) ? tema.acento : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {seleccionadas.has(m.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.texto, fontSize: 13 }}>{m.nombre}</Text>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
+                      {(m.bloques ?? []).length} bloques
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Preview JSON */}
+            {seleccionadas.size > 0 && (
+              <ScrollView horizontal style={{ marginTop: 10, backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, maxHeight: 80 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 9, fontFamily: 'monospace' }} numberOfLines={5}>
+                  {exportarJSONMultiMateria(materias.filter(m => seleccionadas.has(m.id))).slice(0, 300)}…
+                </Text>
+              </ScrollView>
+            )}
+
+            {/* Botones */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={() => cerrarModal()}
+                style={{ flex: 1, padding: 10, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={exportarSeleccionadas}
+                disabled={seleccionadas.size === 0}
+                style={{ flex: 2, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
+                  borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>
+                  ↑ Exportar {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal importar */}
+      <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => setModalImport(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 10 }}>
+              Importar horarios
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 8 }}>
+              Para importar correctamente, el archivo .json debe seguir un formato específico.
+            </Text>
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Para saber cómo generarlo, revisá la sección{' '}
+                <Text style={{ color: tema.acento, fontWeight: '600' }}>Prompts para IA</Text>
+                {' '}al final de Configuración.
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setModalImport(false)}
+                style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => { setModalImport(false); await importarJSONGlobal(); }}
+                style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Continuar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
