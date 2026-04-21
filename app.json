@@ -28,7 +28,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.gzforge.cursus",
       "permissions": ["android.permission.CAMERA"],
-      "privacyPolicyUrl": "https://gz-forge.github.io/cursus-app/privacidad"
+      "privacyPolicyUrl": "https://gz-forge.github.io/Cursus/privacidad"
     },
     "web": {
       "bundler": "metro",
