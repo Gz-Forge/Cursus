@@ -7,7 +7,7 @@ import {
 import { useTema } from '../theme/ThemeContext';
 import { useAuthStore } from '../store/useAuthStore';
 import { useStore } from '../store/useStore';
-import { subirPerfiles, listarPerfilesRemotos, PerfilRemoto } from '../services/syncService';
+import { subirPerfiles, listarPerfilesRemotos, eliminarPerfilesRemotos, PerfilRemoto } from '../services/syncService';
 import {
   cargarPerfilEstado,
   guardarPerfilEstado,
@@ -190,6 +190,37 @@ export function SyncModal({ visible, onCerrar }: Props) {
                 ))
               )}
             </ScrollView>
+          )}
+
+          {remotos.length > 0 && (
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert(
+                  'Borrar de la nube',
+                  '¿Eliminar todos los perfiles subidos? Hacé esto una vez que todos los dispositivos hayan descargado.',
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    {
+                      text: 'Borrar',
+                      style: 'destructive',
+                      onPress: async () => {
+                        setCargando(true);
+                        setError(null);
+                        setExito(null);
+                        const err = await eliminarPerfilesRemotos(user!.id);
+                        if (err) { setError(err); setCargando(false); return; }
+                        setExito('Perfiles eliminados de la nube.');
+                        await cargarRemotos();
+                      },
+                    },
+                  ]
+                )
+              }
+              disabled={cargando}
+              style={{ marginTop: 12, alignItems: 'center', padding: 10 }}
+            >
+              <Text style={{ color: '#F44336', fontWeight: '600', fontSize: 13 }}>Borrar de la nube</Text>
+            </TouchableOpacity>
           )}
 
           {error && <Text style={{ color: '#F44336', fontSize: 13, marginTop: 8, textAlign: 'center' }}>{error}</Text>}

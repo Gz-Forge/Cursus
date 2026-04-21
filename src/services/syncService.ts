@@ -41,6 +41,16 @@ export async function listarPerfilesRemotos(userId: string): Promise<PerfilRemot
   return (data ?? []) as PerfilRemoto[];
 }
 
+/** Elimina todos los perfiles del usuario de la nube */
+export async function eliminarPerfilesRemotos(userId: string): Promise<string | null> {
+  const { error } = await supabase
+    .from('perfiles_sync')
+    .delete()
+    .eq('user_id', userId);
+
+  return error ? error.message : null;
+}
+
 /** Descarga un perfil específico de la nube */
 export async function bajarPerfil(
   userId: string,
