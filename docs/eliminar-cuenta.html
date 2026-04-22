@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eliminar cuenta / Delete Account — Cursus</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #555;
+      --border: #e0e0e0;
+      --accent: #6200ee;
+      --section-bg: #f5f5f5;
+      --tab-active-bg: #6200ee;
+      --tab-active-text: #ffffff;
+      --tab-bg: #e8e8e8;
+      --tab-text: #333;
+      --danger: #b00020;
+      --danger-bg: #fff0f0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121212;
+        --text: #e8e8e8;
+        --text-muted: #999;
+        --border: #2e2e2e;
+        --accent: #bb86fc;
+        --section-bg: #1e1e1e;
+        --tab-active-bg: #bb86fc;
+        --tab-active-text: #121212;
+        --tab-bg: #2a2a2a;
+        --tab-text: #ccc;
+        --danger: #cf6679;
+        --danger-bg: #2a1a1a;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .logo { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+
+    .theme-toggle {
+      background: var(--section-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: background 0.2s;
+    }
+    .theme-toggle:hover { background: var(--border); }
+
+    .lang-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+    .lang-tab {
+      padding: 0.45rem 1.2rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: var(--tab-bg);
+      color: var(--tab-text);
+      transition: background 0.15s, color 0.15s;
+    }
+    .lang-tab.active {
+      background: var(--tab-active-bg);
+      color: var(--tab-active-text);
+    }
+
+    .lang-section { display: none; }
+    .lang-section.active { display: block; }
+
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 {
+      font-size: 1.1rem;
+      margin-top: 2rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .updated { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    ul { padding-left: 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    a { color: var(--accent); }
+
+    .steps {
+      counter-reset: steps;
+      list-style: none;
+      padding-left: 0;
+    }
+    .steps li {
+      counter-increment: steps;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    .steps li::before {
+      content: counter(steps);
+      background: var(--accent);
+      color: var(--tab-active-text);
+      min-width: 1.8rem;
+      height: 1.8rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+
+    .highlight {
+      background: var(--section-bg);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1rem 0;
+    }
+
+    .warning {
+      background: var(--danger-bg);
+      border-left: 3px solid var(--danger);
+      padding: 0.75rem 1rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1rem 0;
+      color: var(--text);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border);
+    }
+    th {
+      background: var(--section-bg);
+      font-weight: 600;
+    }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+    footer {
+      margin-top: 3rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">Cursus</span>
+    <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">
+      <span id="themeIcon">🌙</span> <span id="themeLabel">Dark mode</span>
+    </button>
+  </header>
+
+  <div class="lang-tabs">
+    <button class="lang-tab active" onclick="setLang('es')">Español</button>
+    <button class="lang-tab" onclick="setLang('en')">English</button>
+  </div>
+
+  <!-- ══════════════ ESPAÑOL ══════════════ -->
+  <div class="lang-section active" id="lang-es">
+    <h1>Eliminar tu cuenta de Cursus</h1>
+    <p class="updated">Última actualización: 21 de abril de 2026</p>
+
+    <p>
+      Si deseas eliminar tu cuenta de <strong>Cursus</strong> (desarrollada por
+      <strong>Gz-Forge</strong>), podés hacerlo contactándonos directamente.
+      Tu solicitud será procesada en un plazo de <strong>7 días hábiles</strong>.
+    </p>
+
+    <h2>Cómo solicitar la eliminación</h2>
+    <ol class="steps">
+      <li>
+        Enviá un correo a
+        <a href="mailto:gzforge.admin@gmail.com">gzforge.admin@gmail.com</a>
+        con el asunto: <strong>"Eliminar cuenta"</strong>.
+      </li>
+      <li>
+        Incluí la dirección de correo electrónico asociada a tu cuenta de Cursus
+        para que podamos identificarla.
+      </li>
+      <li>
+        Recibirás una confirmación cuando la cuenta haya sido eliminada.
+      </li>
+    </ol>
+
+    <h2>Qué datos se eliminan</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo de dato</th>
+          <th>Acción</th>
+          <th>Plazo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dirección de correo electrónico</td>
+          <td>Eliminado permanentemente de Supabase</td>
+          <td>7 días hábiles</td>
+        </tr>
+        <tr>
+          <td>Contraseña (hash)</td>
+          <td>Eliminado permanentemente de Supabase</td>
+          <td>7 días hábiles</td>
+        </tr>
+        <tr>
+          <td>Datos académicos (materias, notas, configuraciones)</td>
+          <td>Almacenados solo en tu dispositivo — se eliminan al desinstalar la app</td>
+          <td>Inmediato al desinstalar</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight">
+      Los datos académicos <strong>nunca se almacenan de forma permanente en nuestros servidores</strong>.
+      Solo se suben de forma temporal durante una sincronización manual entre dispositivos y se eliminan
+      del servidor en cuanto la transferencia finaliza.
+    </div>
+
+    <div class="warning">
+      <strong>Atención:</strong> la eliminación de la cuenta es irreversible.
+      Una vez procesada, no podrás recuperar el acceso ni los datos asociados.
+    </div>
+  </div>
+
+  <!-- ══════════════ ENGLISH ══════════════ -->
+  <div class="lang-section" id="lang-en">
+    <h1>Delete Your Cursus Account</h1>
+    <p class="updated">Last updated: April 21, 2026</p>
+
+    <p>
+      If you want to delete your <strong>Cursus</strong> account (developed by
+      <strong>Gz-Forge</strong>), you can do so by contacting us directly.
+      Your request will be processed within <strong>7 business days</strong>.
+    </p>
+
+    <h2>How to Request Deletion</h2>
+    <ol class="steps">
+      <li>
+        Send an email to
+        <a href="mailto:gzforge.admin@gmail.com">gzforge.admin@gmail.com</a>
+        with the subject: <strong>"Delete account"</strong>.
+      </li>
+      <li>
+        Include the email address associated with your Cursus account
+        so we can identify it.
+      </li>
+      <li>
+        You will receive a confirmation once your account has been deleted.
+      </li>
+    </ol>
+
+    <h2>What Data Gets Deleted</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Data type</th>
+          <th>Action</th>
+          <th>Timeline</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Email address</td>
+          <td>Permanently deleted from Supabase</td>
+          <td>7 business days</td>
+        </tr>
+        <tr>
+          <td>Password (hash)</td>
+          <td>Permanently deleted from Supabase</td>
+          <td>7 business days</td>
+        </tr>
+        <tr>
+          <td>Academic data (courses, grades, settings)</td>
+          <td>Stored on your device only — deleted when you uninstall the app</td>
+          <td>Immediately upon uninstall</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight">
+      Academic data is <strong>never permanently stored on our servers</strong>.
+      It is only uploaded temporarily during a manual device-to-device sync and is
+      deleted from the server as soon as the transfer is complete.
+    </div>
+
+    <div class="warning">
+      <strong>Warning:</strong> account deletion is irreversible.
+      Once processed, you will not be able to recover access or any associated data.
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2026 Gz-Forge · Cursus
+  </footer>
+
+  <script>
+    // ── Theme ──────────────────────────────────────────────────────────────
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+    let darkMode = prefersDark.matches;
+
+    function applyTheme() {
+      document.documentElement.style.setProperty('--bg',              darkMode ? '#121212' : '#ffffff');
+      document.documentElement.style.setProperty('--text',            darkMode ? '#e8e8e8' : '#1a1a1a');
+      document.documentElement.style.setProperty('--text-muted',      darkMode ? '#999'    : '#555');
+      document.documentElement.style.setProperty('--border',          darkMode ? '#2e2e2e' : '#e0e0e0');
+      document.documentElement.style.setProperty('--accent',          darkMode ? '#bb86fc' : '#6200ee');
+      document.documentElement.style.setProperty('--section-bg',      darkMode ? '#1e1e1e' : '#f5f5f5');
+      document.documentElement.style.setProperty('--tab-active-bg',   darkMode ? '#bb86fc' : '#6200ee');
+      document.documentElement.style.setProperty('--tab-active-text', darkMode ? '#121212' : '#ffffff');
+      document.documentElement.style.setProperty('--tab-bg',          darkMode ? '#2a2a2a' : '#e8e8e8');
+      document.documentElement.style.setProperty('--tab-text',        darkMode ? '#ccc'    : '#333');
+      document.documentElement.style.setProperty('--danger',          darkMode ? '#cf6679' : '#b00020');
+      document.documentElement.style.setProperty('--danger-bg',       darkMode ? '#2a1a1a' : '#fff0f0');
+
+      document.getElementById('themeIcon').textContent  = darkMode ? '☀️' : '🌙';
+      document.getElementById('themeLabel').textContent = darkMode ? 'Light mode' : 'Dark mode';
+    }
+
+    function toggleTheme() {
+      darkMode = !darkMode;
+      applyTheme();
+      try { localStorage.setItem('theme', darkMode ? 'dark' : 'light'); } catch(e) {}
+    }
+
+    try {
+      const saved = localStorage.getItem('theme');
+      if (saved) darkMode = saved === 'dark';
+    } catch(e) {}
+
+    applyTheme();
+
+    // ── Language ───────────────────────────────────────────────────────────
+    function setLang(lang) {
+      document.querySelectorAll('.lang-section').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.lang-tab').forEach(el => el.classList.remove('active'));
+      document.getElementById('lang-' + lang).classList.add('active');
+      document.querySelector('[onclick="setLang(\'' + lang + '\')"]').classList.add('active');
+      document.documentElement.lang = lang;
+      try { localStorage.setItem('lang', lang); } catch(e) {}
+    }
+
+    try {
+      const savedLang = localStorage.getItem('lang');
+      if (savedLang && savedLang !== 'es') setLang(savedLang);
+    } catch(e) {}
+  </script>
+</body>
+</html>
