@@ -5,10 +5,11 @@ import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
 
 // ── Reemplazá estas URLs cuando estén disponibles ──────────────────────────
-const PAYPAL_URL      = 'https://www.paypal.com/donate/?hosted_button_id=9TCFLYW98H8JA';
-const PLAY_STORE_URL  = 'https://play.google.com/store/apps/details?id=TU_APP_ID';
-const APP_STORE_URL   = 'https://apps.apple.com/app/id/TU_APP_ID';
-const GOOGLE_FORM_URL = 'https://forms.gle/257Bf5rb4MMyt6TVA';
+const PAYPAL_URL        = 'https://www.paypal.com/donate/?hosted_button_id=9TCFLYW98H8JA';
+const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/Gz-Forge';
+const PLAY_STORE_URL    = 'https://play.google.com/store/apps/details?id=TU_APP_ID';
+const APP_STORE_URL     = 'https://apps.apple.com/app/id/TU_APP_ID';
+const GOOGLE_FORM_URL   = 'https://forms.gle/257Bf5rb4MMyt6TVA';
 
 export function DonacionScreen() {
   const tema = useTema();
@@ -49,11 +50,27 @@ export function DonacionScreen() {
               paddingVertical: 15, paddingHorizontal: 48,
               borderRadius: 12, width: '100%', alignItems: 'center',
               shadowColor: '#0070BA', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-              elevation: 4,
+              elevation: 4, marginBottom: 12,
             }}
           >
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
               💙  Donar con PayPal
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => abrir(GITHUB_SPONSORS_URL)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#24292F',
+              paddingVertical: 15, paddingHorizontal: 48,
+              borderRadius: 12, width: '100%', alignItems: 'center',
+              shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
+              🤍  Apoyar en GitHub Sponsors
             </Text>
           </TouchableOpacity>
 

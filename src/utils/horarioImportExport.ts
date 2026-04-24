@@ -293,8 +293,8 @@ Reglas:
 - "tipo": usá exactamente uno de estos valores:
   - "teorica"  → para clases de tipo ${config.labelTeorica}
   - "practica" → para clases de tipo ${config.labelPractica}
-  - "parcial"  → para evaluaciones de tipo ${config.labelParcial}
   - "otro"     → para cualquier otro tipo (${config.labelOtro})
+- No uses "parcial" como tipo de bloque; los exámenes y evaluaciones se registran aparte desde la sección Evaluaciones.
 
 Pasame solamente el .json para descargar, sin explicaciones adicionales.`;
 }

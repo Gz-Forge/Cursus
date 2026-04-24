@@ -139,7 +139,6 @@ export function EditMateriaScreen() {
   const tiposBloque: { key: TipoBloque; label: string }[] = [
     { key: 'teorica', label: config.labelTeorica || 'Teórica' },
     { key: 'practica', label: config.labelPractica || 'Práctica' },
-    { key: 'parcial', label: config.labelParcial || 'Parcial' },
     { key: 'otro', label: config.labelOtro || 'Otro' },
   ];
 
@@ -402,6 +401,25 @@ export function EditMateriaScreen() {
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
+        {/* ── Toggle Cursando ── */}
+        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>Estoy cursando esta materia</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
+                {form.cursando
+                  ? 'El estado se muestra como Cursando sin importar la nota'
+                  : 'El estado se calcula a partir de la nota'}
+              </Text>
+            </View>
+            <Switch
+              value={form.cursando ?? false}
+              onValueChange={handleToggleCursando}
+              trackColor={{ true: tema.acento }}
+            />
+          </View>
+        </View>
+
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
         {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })))}
         {campo('Semestre', String(form.semestre), v => setForm(f => ({ ...f, semestre: Number(v) })), true)}
@@ -495,25 +513,6 @@ export function EditMateriaScreen() {
               }
             </View>
           )}
-        </View>
-
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>ESTADO</Text>
-        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: tema.texto, fontWeight: '600' }}>Estoy cursando esta materia</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
-                {form.cursando
-                  ? 'El estado se muestra como Cursando sin importar la nota'
-                  : 'El estado se calcula a partir de la nota'}
-              </Text>
-            </View>
-            <Switch
-              value={form.cursando ?? false}
-              onValueChange={handleToggleCursando}
-              trackColor={{ true: tema.acento }}
-            />
-          </View>
         </View>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>NOTA</Text>

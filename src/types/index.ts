@@ -16,6 +16,9 @@ export interface EvaluacionSimple {
   tipoNota: TipoNota;
   nota: number | null;
   notaMaxima: number;      // ej: 50 puntos o 100%
+  fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
+  hora?: number;           // minutos desde 00:00, ej: 480 = 08:00
+  horaFin?: number;        // minutos desde 00:00, duración opcional
 }
 
 export interface SubEvaluacion {
@@ -24,6 +27,9 @@ export interface SubEvaluacion {
   tipoNota: TipoNota;
   nota: number | null;
   notaMaxima: number;
+  fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
+  hora?: number;           // minutos desde 00:00
+  horaFin?: number;        // minutos desde 00:00
 }
 
 export interface GrupoEvaluacion {
@@ -37,6 +43,11 @@ export interface GrupoEvaluacion {
 export type Evaluacion = EvaluacionSimple | GrupoEvaluacion;
 
 export type TipoBloque = 'teorica' | 'practica' | 'parcial' | 'otro';
+
+export interface ColorBloque {
+  fondo: string;
+  texto: string;
+}
 
 export interface BloqueHorario {
   id: string;
@@ -65,8 +76,27 @@ export interface Materia {
   bloques?: BloqueHorario[];
 }
 
+export interface FondoPantalla {
+  tipo: 'color' | 'imagen';
+  valor: string;
+}
+
+export interface TemaPersonalizado {
+  fondo: string;
+  tarjeta: string;
+  texto: string;
+  textoSecundario: string;
+  acento: string;
+  borde: string;
+  fondoCarrera?: FondoPantalla;
+  fondoHorario?: FondoPantalla;
+  fondoMetricas?: FondoPantalla;
+  fondoConfig?: FondoPantalla;
+}
+
 export interface Config {
-  tema: 'oscuro' | 'claro';
+  tema: 'oscuro' | 'claro' | 'personalizado';
+  temaPersonalizado?: TemaPersonalizado;
   notaMaxima: number;            // ej: 12, 10, 100
   umbralExoneracion: number;     // % ej: 85
   umbralAprobacion: number;      // % ej: 60
@@ -99,6 +129,9 @@ export interface Config {
   tarjetaAvisoPrevias: boolean;
   tarjetaTipoFormacion: boolean;
   tarjetaCreditosExtendida: 'da' | 'necesita' | 'ambos';
+  tarjetaMostrarToggleCursando: boolean;
+  coloresHorario: Record<string, Partial<Record<TipoBloque, ColorBloque>>>;
+  horarioMostrarEvaluaciones: boolean;
 }
 
 export interface AppState {
