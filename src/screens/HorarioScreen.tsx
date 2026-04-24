@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, ImageBackground } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { BloqueHorario } from '../types';
+import { useFondoPantalla } from '../utils/useFondoPantalla';
+import { BloqueHorario, EvaluacionSimple } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
@@ -122,16 +123,33 @@ export function HorarioScreen() {
     }
   };
 
-  const todosLosBloques = materias
-    .filter(m => calcularEstadoFinal(m, config) === 'cursando')
+  const materiasEnCurso = materias.filter(m => calcularEstadoFinal(m, config) === 'cursando');
+
+  const todosLosBloques = materiasEnCurso
     .flatMap(m => (m.bloques ?? []).map(b => ({ ...b, materia: m })));
 
-  // Calcular rango horario: siempre muestra el mínimo default y solo expande si hay bloques fuera de ese rango
-  const horaInicio = todosLosBloques.length > 0
-    ? Math.min(HORA_DEF_INICIO, Math.floor(Math.min(...todosLosBloques.map(b => b.horaInicio)) / 60) * 60)
+  // Evaluaciones con fecha de materias en curso
+  type EvalConMateria = EvaluacionSimple & { materia: typeof todosLosBloques[0]['materia'] };
+  const todasLasEvaluaciones: EvalConMateria[] = config.horarioMostrarEvaluaciones
+    ? materiasEnCurso.flatMap(m =>
+        m.evaluaciones
+          .filter((ev): ev is EvaluacionSimple =>
+            ev.tipo === 'simple' && !!ev.fecha && ev.hora !== undefined
+          )
+          .map(ev => ({ ...ev, materia: m }))
+      )
+    : [];
+
+  // Calcular rango horario combinando bloques y evaluaciones
+  const todosLosTiempos = [
+    ...todosLosBloques.flatMap(b => [b.horaInicio, b.horaFin]),
+    ...todasLasEvaluaciones.flatMap(ev => [ev.hora!, ev.horaFin ?? ev.hora! + 60]),
+  ];
+  const horaInicio = todosLosTiempos.length > 0
+    ? Math.min(HORA_DEF_INICIO, Math.floor(Math.min(...todosLosTiempos) / 60) * 60)
     : HORA_DEF_INICIO;
-  const horaFin = todosLosBloques.length > 0
-    ? Math.max(HORA_DEF_FIN, Math.ceil(Math.max(...todosLosBloques.map(b => b.horaFin)) / 60) * 60)
+  const horaFin = todosLosTiempos.length > 0
+    ? Math.max(HORA_DEF_FIN, Math.ceil(Math.max(...todosLosTiempos) / 60) * 60)
     : HORA_DEF_FIN;
 
   const totalMins    = horaFin - horaInicio;
@@ -150,7 +168,18 @@ export function HorarioScreen() {
     b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]
   );
 
-  const colorMateria = (num: number) => COLORES_BLOQUES[num % COLORES_BLOQUES.length];
+  // Evaluaciones filtradas a esta semana
+  const evaluacionesEstaSemana = todasLasEvaluaciones.filter(
+    ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
+  );
+
+  const obtenerColorBloque = (materiaId: string, tipo: BloqueHorario['tipo']): { fondo: string; texto: string } => {
+    const configurado = config.coloresHorario?.[materiaId]?.[tipo];
+    if (configurado) return configurado;
+    const mat = materias.find(m => m.id === materiaId);
+    const fondo = COLORES_BLOQUES[(mat?.numero ?? 0) % COLORES_BLOQUES.length];
+    return { fondo, texto: '#ffffff' };
+  };
   const sigla = (tipo: BloqueHorario['tipo']): string => {
     if (config.mostrarNombreCompletoEnBloque) {
       switch (tipo) {
@@ -168,8 +197,11 @@ export function HorarioScreen() {
     }
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: tema.fondo }}>
+  const fondoPantalla = useFondoPantalla('horario');
+  const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+
+  const innerContent = (
+    <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Navegación de semana */}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
@@ -330,20 +362,54 @@ export function HorarioScreen() {
                   .map(b => {
                     const top    = (b.horaInicio - horaInicio) * PX_POR_MIN;
                     const height = Math.max((b.horaFin - b.horaInicio) * PX_POR_MIN, 16);
-                    const color  = colorMateria(b.materia.numero);
+                    const { fondo, texto } = obtenerColorBloque(b.materia.id, b.tipo);
                     return (
                       <View key={b.id} style={{
                         position: 'absolute', top, height,
                         left: 1, right: 1,
-                        backgroundColor: color, borderRadius: 3,
+                        backgroundColor: fondo, borderRadius: 3,
                         padding: 2, overflow: 'hidden',
                       }}>
                         <Text
-                          style={{ color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                          style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
                           numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
                           ellipsizeMode="tail"
                         >
                           {sigla(b.tipo)} - {b.materia.nombre}
+                        </Text>
+                      </View>
+                    );
+                  })}
+
+                {/* Evaluaciones de este día */}
+                {evaluacionesEstaSemana
+                  .filter(ev => ev.fecha === fecha)
+                  .map(ev => {
+                    const horaI  = ev.hora!;
+                    const horaF  = ev.horaFin ?? horaI + 60;
+                    const top    = (horaI - horaInicio) * PX_POR_MIN;
+                    const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
+                    const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
+                    const fondoColor  = colorConfig?.fondo ?? '#FF9800';
+                    const textoColor  = colorConfig?.texto ?? '#fff';
+                    return (
+                      <View key={ev.id} style={{
+                        position: 'absolute', top, height,
+                        left: 1, right: 1,
+                        backgroundColor: fondoColor,
+                        borderRadius: 3,
+                        borderWidth: 1.5,
+                        borderColor: textoColor,
+                        borderStyle: 'dashed',
+                        padding: 2,
+                        overflow: 'hidden',
+                      }}>
+                        <Text
+                          style={{ color: textoColor, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                          numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                          ellipsizeMode="tail"
+                        >
+                          {ev.materia.nombre}{ev.nombre ? ` - ${ev.nombre}` : ''}
                         </Text>
                       </View>
                     );
@@ -469,4 +535,13 @@ export function HorarioScreen() {
       </Modal>
     </View>
   );
+
+  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
+    return (
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+        {innerContent}
+      </ImageBackground>
+    );
+  }
+  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{innerContent}</View>;
 }

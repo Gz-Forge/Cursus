@@ -141,7 +141,8 @@ function PanelImportar() {
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
           Formatos aceptados:{'\n'}
-          • <Text style={{ color: tema.texto }}>Carrera</Text>: generado con el prompt de IA{'\n'}
+          • <Text style={{ color: tema.texto }}>Carrera</Text>: plan de materias generado con IA{'\n'}
+          • <Text style={{ color: tema.texto }}>Plan completo</Text>: carrera + horarios + evaluaciones en un JSON{'\n'}
           • <Text style={{ color: tema.texto }}>Exportación completa</Text>: generada desde esta pantalla{'\n\n'}
           💡 Encontrás los prompts en{' '}
           <Text style={{ color: tema.acento }}>Configuración → Prompts para IA</Text>

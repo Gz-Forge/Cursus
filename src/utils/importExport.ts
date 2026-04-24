@@ -1,4 +1,4 @@
-import { Materia } from '../types';
+import { Materia, BloqueHorario, Evaluacion, TipoBloque } from '../types';
 
 export function generarPromptCarrera(): string {
   return `Generá un archivo JSON con el plan de estudios de mi carrera.
@@ -34,6 +34,13 @@ export interface MateriaJson {
   previas?: string[];   // nombres de materias necesarias para cursar ESTA materia (previasNecesarias)
   numero?: number;      // si ausente se auto-asigna por orden de semestre
   tipo_formacion?: string;
+  bloques?: Array<{
+    fecha: string;
+    horaInicio: number;
+    horaFin: number;
+    tipo?: TipoBloque;
+  }>;
+  evaluaciones?: Evaluacion[];
 }
 
 export function normalizarTipo(t: string): string {
@@ -76,24 +83,45 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
   const nombreANumero = new Map<string, number>();
   conNumero.forEach(d => nombreANumero.set(d.nombre.trim(), d.numero!));
 
-  const materias: Materia[] = conNumero.map(d => ({
-    id: `importada_${d.numero}`,
-    numero: d.numero!,
-    nombre: d.nombre,
-    semestre: d.semestre,
-    creditosQueDA: d.creditos_da ?? 0,
-    creditosNecesarios: d.creditos_necesarios ?? 0,
-    previasNecesarias: (d.previas ?? [])
-      .map(nombre => nombreANumero.get(nombre.trim()))
-      .filter((n): n is number => n !== undefined),
-    esPreviaDe: [],
-    usarNotaManual: false,
-    notaManual: null,
-    tipoNotaManual: 'numero',
-    evaluaciones: [],
-    oportunidadesExamen: oportunidadesDefault,
-    tipoFormacion: d.tipo_formacion,
-  }));
+  const materias: Materia[] = conNumero.map(d => {
+    const bloques: BloqueHorario[] = Array.isArray(d.bloques)
+      ? d.bloques.map((b, i) => ({
+          id: `importada_${d.numero}_b${i}`,
+          fecha: b.fecha,
+          horaInicio: b.horaInicio,
+          horaFin: b.horaFin,
+          tipo: (b.tipo ?? 'otro') as TipoBloque,
+        }))
+      : [];
+
+    const evaluaciones: Evaluacion[] = Array.isArray(d.evaluaciones)
+      ? d.evaluaciones.map((ev, i) => ({
+          ...ev,
+          id: (ev as any).id ?? `importada_${d.numero}_ev${i}`,
+        })) as Evaluacion[]
+      : [];
+
+    return {
+      id: `importada_${d.numero}`,
+      numero: d.numero!,
+      nombre: d.nombre,
+      semestre: d.semestre,
+      creditosQueDA: d.creditos_da ?? 0,
+      creditosNecesarios: d.creditos_necesarios ?? 0,
+      previasNecesarias: (d.previas ?? [])
+        .map(nombre => nombreANumero.get(nombre.trim()))
+        .filter((n): n is number => n !== undefined),
+      esPreviaDe: [],
+      cursando: false,
+      usarNotaManual: false,
+      notaManual: null,
+      tipoNotaManual: 'numero',
+      evaluaciones,
+      oportunidadesExamen: oportunidadesDefault,
+      tipoFormacion: d.tipo_formacion,
+      bloques,
+    };
+  });
 
   // Derivar esPreviaDe invirtiendo previasNecesarias
   materias.forEach(m => {
@@ -155,6 +183,88 @@ Ejemplo para una materia con parcial, final y TPs:
 
 Evaluaciones de mi materia:
 [describí acá: nombre materia, exámenes, trabajos, pesos aproximados]`;
+}
+
+export function generarPromptCompleto(): string {
+  return `Generá un archivo JSON completo con el plan de estudios de mi carrera.
+Podés incluir horarios y evaluaciones para cada materia si tenés esa información.
+Devolvé solo el JSON (array), sin explicaciones.
+
+Estructura de cada materia:
+{
+  "nombre": "Nombre de la materia",
+  "semestre": 1,
+  "creditos_da": 6,
+  "creditos_necesarios": 0,
+  "previas": ["Nombre de materia prerequisito"],
+  "tipo_formacion": "Básica",
+  "bloques": [
+    {
+      "fecha": "2026-03-15",
+      "horaInicio": 480,
+      "horaFin": 600,
+      "tipo": "teorica"
+    }
+  ],
+  "evaluaciones": [
+    {
+      "id": "ev1",
+      "tipo": "simple",
+      "nombre": "Parcial 1",
+      "pesoEnMateria": 50,
+      "tipoNota": "numero",
+      "nota": null,
+      "notaMaxima": 12
+    }
+  ]
+}
+
+Reglas para "bloques":
+- "fecha": formato ISO YYYY-MM-DD (ej: "2026-03-15")
+- "horaInicio" y "horaFin": minutos desde las 00:00 (ej: 480 = 8:00, 600 = 10:00, 720 = 12:00)
+- "tipo": "teorica", "practica" u "otro". No uses "parcial" — los exámenes van en evaluaciones.
+
+Reglas para "evaluaciones":
+- "tipo": "simple" para una evaluación individual, "grupo" para agrupar varias pruebas.
+- "pesoEnMateria": porcentaje que pesa en la nota final. La suma de todos los ítems debe ser 100.
+- "tipoNota": "numero" o "porcentaje".
+- "nota": null si aún no hay nota.
+- "notaMaxima": puntaje máximo de esa evaluación.
+- Para grupos: incluí "subEvaluaciones" con el mismo formato (sin "tipo" ni "pesoEnMateria").
+
+Podés omitir "bloques" y/o "evaluaciones" si no tenés esa información para alguna materia.
+Los campos "creditos_da", "creditos_necesarios", "previas" y "tipo_formacion" también son opcionales.
+
+Ejemplo mínimo:
+[
+  { "nombre": "Cálculo I", "semestre": 1 },
+  { "nombre": "Cálculo II", "semestre": 2, "previas": ["Cálculo I"] }
+]
+
+Ejemplo completo:
+[
+  {
+    "nombre": "Cálculo I",
+    "semestre": 1,
+    "creditos_da": 6,
+    "tipo_formacion": "Básica",
+    "bloques": [
+      { "fecha": "2026-03-10", "horaInicio": 480, "horaFin": 600, "tipo": "teorica" },
+      { "fecha": "2026-03-12", "horaInicio": 600, "horaFin": 720, "tipo": "practica" }
+    ],
+    "evaluaciones": [
+      { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+      { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+      { "id": "3", "tipo": "grupo", "nombre": "TPs", "pesoEnMateria": 20, "subEvaluaciones": [
+        { "id": "3a", "nombre": "TP1", "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
+        { "id": "3b", "nombre": "TP2", "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
+      ]}
+    ]
+  }
+]
+
+Mi carrera:
+[describí tu carrera acá con toda la información disponible: materias, semestres, previas, horarios y evaluaciones]`;
 }
 
 export function materiasAJson(materias: Materia[]): MateriaJson[] {
