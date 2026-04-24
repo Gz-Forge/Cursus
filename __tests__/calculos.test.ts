@@ -21,6 +21,18 @@ const configBase: Config = {
   aprobadoHabilitaPrevias: false,
   oportunidadesExamenDefault: 3,
   tiposFormacion: [],
+  abrevTeorica: 'T', abrevPractica: 'P', abrevParcial: '★', abrevOtro: 'O',
+  labelTeorica: 'Teórica', labelPractica: 'Práctica', labelParcial: 'Parcial', labelOtro: 'Otro',
+  mostrarNombreCompletoEnBloque: false,
+  modoExamen: 'manual', fechasLimiteExamen: [], fechasEjecutadas: [],
+  tarjetaCreditosBadge: 'da', tarjetaBadgeOrden: 'da_primero',
+  tarjetaMostrarNota: true, tarjetaNota: 'numero',
+  tarjetaPrevias: 'todas', tarjetaPreviasFormato: 'numero_nombre',
+  tarjetaAvisoPrevias: true, tarjetaTipoFormacion: true,
+  tarjetaCreditosExtendida: 'ambos',
+  tarjetaMostrarToggleCursando: true,
+  coloresHorario: {},
+  horarioMostrarEvaluaciones: true,
 };
 
 describe('calcularPorcentajeEvaluacion', () => {
@@ -104,6 +116,7 @@ const materiaBase: Materia = {
   id: 'test', numero: 1, nombre: 'Test', semestre: 1,
   creditosQueDA: 6, creditosNecesarios: 0,
   previasNecesarias: [], esPreviaDe: [],
+  cursando: false,
   usarNotaManual: true, notaManual: null,
   tipoNotaManual: 'numero', evaluaciones: [], oportunidadesExamen: 3,
 };
@@ -155,6 +168,7 @@ describe('renumerarMaterias', () => {
     id, numero, nombre: `Mat ${id}`, semestre,
     creditosQueDA: 6, creditosNecesarios: 0,
     previasNecesarias: previas, esPreviaDe: [],
+    cursando: false,
     usarNotaManual: false, notaManual: null,
     tipoNotaManual: 'numero', evaluaciones: [], oportunidadesExamen: 3,
   });
@@ -209,6 +223,7 @@ describe('materiasDisponibles', () => {
     id: '1', numero: 1, nombre: 'Mat I', semestre: 1,
     creditosQueDA: 6, creditosNecesarios: 0,
     previasNecesarias: [], esPreviaDe: [2],
+    cursando: false,
     usarNotaManual: true, notaManual: 75,
     tipoNotaManual: 'porcentaje', evaluaciones: [], oportunidadesExamen: 3,
   };
@@ -216,6 +231,7 @@ describe('materiasDisponibles', () => {
     id: '2', numero: 2, nombre: 'Mat II', semestre: 2,
     creditosQueDA: 6, creditosNecesarios: 0,
     previasNecesarias: [1], esPreviaDe: [],
+    cursando: false,
     usarNotaManual: false, notaManual: null,
     tipoNotaManual: 'numero', evaluaciones: [], oportunidadesExamen: 3,
   };

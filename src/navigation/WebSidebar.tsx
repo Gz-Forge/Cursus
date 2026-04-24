@@ -1,7 +1,7 @@
 // TablaApp/src/navigation/WebSidebar.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { NavigationContainerRef, ParamListBase } from '@react-navigation/native';
+import { NavigationContainerRef } from '@react-navigation/native';
 import { useTema } from '../theme/ThemeContext';
 
 const TABS = [
@@ -13,7 +13,8 @@ const TABS = [
 ];
 
 interface Props {
-  navRef: React.RefObject<NavigationContainerRef<ParamListBase>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  navRef: React.RefObject<NavigationContainerRef<any>>;
 }
 
 export function WebSidebar({ navRef }: Props) {
@@ -29,7 +30,7 @@ export function WebSidebar({ navRef }: Props) {
   }, [navRef]);
 
   const navigate = (tabName: string) => {
-    navRef.current?.navigate('Tabs' as never, { screen: tabName } as never);
+    navRef.current?.navigate('Tabs', { screen: tabName } as any);
   };
 
   return (

@@ -14,9 +14,10 @@ interface Props {
   expandidoExterno?: boolean;
   onToggle?: () => void;
   webGrid?: boolean;
+  onToggleCursando?: (m: Materia, v: boolean) => void;
 }
 
-export function SemestreSection({ semestre, materias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid }: Props) {
+export function SemestreSection({ semestre, materias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid, onToggleCursando }: Props) {
   const [expandidoLocal, setExpandidoLocal] = useState(true);
   const expandido = expandidoExterno !== undefined ? expandidoExterno : expandidoLocal;
   const toggleExpandido = onToggle ?? (() => setExpandidoLocal(v => !v));
@@ -49,6 +50,8 @@ export function SemestreSection({ semestre, materias, todasLasMaterias, config, 
                   todasLasMaterias={todasLasMaterias}
                   config={config}
                   onEditar={() => onEditar(m)}
+                  mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+                  onToggleCursando={onToggleCursando ? (v) => onToggleCursando(m, v) : undefined}
                 />
               </View>
             ))}
@@ -61,6 +64,8 @@ export function SemestreSection({ semestre, materias, todasLasMaterias, config, 
               todasLasMaterias={todasLasMaterias}
               config={config}
               onEditar={() => onEditar(m)}
+              mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+              onToggleCursando={onToggleCursando ? (v) => onToggleCursando(m, v) : undefined}
             />
           ))
         )

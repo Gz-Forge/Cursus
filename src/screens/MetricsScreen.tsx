@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform, ImageBackground } from 'react-native';
+import { useFondoPantalla } from '../utils/useFondoPantalla';
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -33,6 +34,7 @@ export function MetricsScreen() {
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
 
   const isWeb = Platform.OS === 'web';
+  const fondoPantalla = useFondoPantalla('metricas');
 
   // ── Base ─────────────────────────────────────────────────────────────────
   const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
@@ -157,8 +159,9 @@ export function MetricsScreen() {
     ? { width: '50%' as const, paddingHorizontal: 6 }
     : { width: '100%' as const };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: tema.fondo }}>
+  const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const innerContent = (
+    <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
 
       {/* ── Pestañas ── */}
       <View style={{ flexDirection: 'row', backgroundColor: tema.superficie,
@@ -496,4 +499,13 @@ export function MetricsScreen() {
       </ScrollView>
     </View>
   );
+
+  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
+    return (
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+        {innerContent}
+      </ImageBackground>
+    );
+  }
+  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{innerContent}</View>;
 }

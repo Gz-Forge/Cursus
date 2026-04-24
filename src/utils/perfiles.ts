@@ -41,6 +41,9 @@ const CONFIG_DEFAULT_PARCIAL = {
   tarjetaAvisoPrevias: true,
   tarjetaTipoFormacion: true,
   tarjetaCreditosExtendida: 'ambos' as const,
+  tarjetaMostrarToggleCursando: true,
+  coloresHorario: {} as Record<string, Partial<Record<import('../types').TipoBloque, import('../types').ColorBloque>>>,
+  horarioMostrarEvaluaciones: true,
 };
 
 /**

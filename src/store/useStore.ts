@@ -45,6 +45,9 @@ const CONFIG_DEFAULT: Config = {
   tarjetaAvisoPrevias: true,
   tarjetaTipoFormacion: true,
   tarjetaCreditosExtendida: 'ambos',
+  tarjetaMostrarToggleCursando: true,
+  coloresHorario: {},
+  horarioMostrarEvaluaciones: true,
 };
 
 interface Store extends AppState {

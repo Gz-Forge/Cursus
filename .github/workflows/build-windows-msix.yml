@@ -1,4 +1,4 @@
-name: Build Windows — EXE / MSI
+name: Build Windows — MSIX
 
 on:
   workflow_dispatch:
@@ -31,21 +31,19 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Build Tauri app (NSIS + MSI)
+      - name: Build Tauri app (MSIX)
         uses: tauri-apps/tauri-action@v0
         with:
-          args: --bundles nsis,msi
+          args: --bundles msix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_ENV: production
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Upload Windows installers
+      - name: Upload MSIX package
         uses: actions/upload-artifact@v4
         with:
-          name: cursus-windows-exe-msi
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+          name: cursus-windows-msix
+          path: src-tauri/target/release/bundle/msix/*.msix
           if-no-files-found: error
