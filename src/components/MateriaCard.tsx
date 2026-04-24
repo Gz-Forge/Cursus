@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { estadoColores } from '../theme/colors';
@@ -40,9 +40,11 @@ interface Props {
   todasLasMaterias: Materia[];
   config: Config;
   onEditar: () => void;
+  onToggleCursando?: (v: boolean) => void;
+  mostrarToggleCursando?: boolean;
 }
 
-export function MateriaCard({ materia, todasLasMaterias, config, onEditar }: Props) {
+export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
 
@@ -135,9 +137,23 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar }: Pro
             </>
           )}
 
-          <TouchableOpacity style={s.botonEditar} onPress={onEditar}>
-            <Text style={{ color: '#fff', fontSize: 13 }}>✏️ Editar</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
+            {(mostrarToggleCursando ?? true) && onToggleCursando && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <Switch
+                  value={materia.cursando ?? false}
+                  onValueChange={onToggleCursando}
+                  trackColor={{ true: estadoColores.cursando }}
+                />
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
+                  {materia.cursando ? 'Cursando' : 'No cursando'}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity style={s.botonEditar} onPress={onEditar}>
+              <Text style={{ color: '#fff', fontSize: 13 }}>✏️ Editar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </TouchableOpacity>

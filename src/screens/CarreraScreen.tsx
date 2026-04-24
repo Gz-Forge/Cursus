@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, ImageBackground } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -10,6 +10,7 @@ import { QrShareModal } from '../components/QrShareModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PerfilSheet } from '../components/PerfilSheet';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
+import { useFondoPantalla } from '../utils/useFondoPantalla';
 import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '../utils/calculos';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
@@ -43,6 +44,7 @@ export function CarreraScreen() {
   const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
 
   const isWeb = Platform.OS === 'web';
+  const fondoPantalla = useFondoPantalla('carrera');
   const creditos = creditosAcumulados(materias, config);
   const exoneradas = materias.filter(m => calcularEstadoFinal(m, config) === 'exonerado').length;
   const disponibles = materiasDisponibles(materias, config).length;
@@ -51,14 +53,29 @@ export function CarreraScreen() {
   const renderMateriasList = (lista: Materia[]) => {
     if (!isWeb) {
       return lista.map(m => (
-        <MateriaCard key={m.id} materia={m} todasLasMaterias={materias} config={config} onEditar={() => irAEditar(m)} />
+        <MateriaCard
+          key={m.id}
+          materia={m}
+          todasLasMaterias={materias}
+          config={config}
+          onEditar={() => irAEditar(m)}
+          mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+          onToggleCursando={(v) => handleToggleCursandoCard(m, v)}
+        />
       ));
     }
     return (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {lista.map(m => (
           <View key={m.id} style={{ width: '50%', paddingHorizontal: 4 }}>
-            <MateriaCard materia={m} todasLasMaterias={materias} config={config} onEditar={() => irAEditar(m)} />
+            <MateriaCard
+              materia={m}
+              todasLasMaterias={materias}
+              config={config}
+              onEditar={() => irAEditar(m)}
+              mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+              onToggleCursando={(v) => handleToggleCursandoCard(m, v)}
+            />
           </View>
         ))}
       </View>
@@ -79,6 +96,37 @@ export function CarreraScreen() {
   };
 
   const irAEditar = (m: Materia) => navigation.navigate('EditMateria', { materiaId: m.id });
+
+  const handleToggleCursandoCard = (materia: Materia, v: boolean) => {
+    if (!v) {
+      guardarMateria({ ...materia, cursando: false });
+      return;
+    }
+    const creditos = creditosAcumulados(materias, config);
+    const aprobadas = new Set(
+      materias
+        .filter(m => {
+          const est = calcularEstadoFinal(m, config);
+          return est === 'exonerado' || (config.aprobadoHabilitaPrevias && est === 'aprobado');
+        })
+        .map(m => m.numero)
+    );
+    const creditosOk = creditos >= materia.creditosNecesarios;
+    const previasOk = materia.previasNecesarias.every(p => aprobadas.has(p));
+    if (creditosOk && previasOk) {
+      guardarMateria({ ...materia, cursando: true });
+      return;
+    }
+    const faltantes: string[] = [];
+    if (!creditosOk) faltantes.push(`• Créditos: tenés ${creditos}, necesitás ${materia.creditosNecesarios}`);
+    if (!previasOk) {
+      const previasFaltantes = materia.previasNecesarias
+        .filter(p => !aprobadas.has(p))
+        .map(p => { const mx = materias.find(x => x.numero === p); return `  - ${p}${mx ? ` · ${mx.nombre}` : ''}`; });
+      faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
+    }
+    Alert.alert('No cumple los requisitos', `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`, [{ text: 'Entendido' }]);
+  };
 
   useEffect(() => {
     if (config.modoExamen !== 'automatico') return;
@@ -149,8 +197,9 @@ export function CarreraScreen() {
   };
 
 
-  return (
-    <View style={{ flex: 1, backgroundColor: tema.fondo }}>
+  const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const contenido = (
+    <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Selector de perfil */}
       {isWeb ? (
         <View style={{ backgroundColor: tema.superficie, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde, flexDirection: 'row', alignItems: 'center' }}>
@@ -255,6 +304,7 @@ export function CarreraScreen() {
                 expandidoExterno={isExpandido(sem)}
                 onToggle={() => toggleSemestre(sem)}
                 webGrid={isWeb}
+                onToggleCursando={handleToggleCursandoCard}
               />
             ))}
           </>
@@ -466,4 +516,13 @@ export function CarreraScreen() {
       />
     </View>
   );
+
+  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
+    return (
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+        {contenido}
+      </ImageBackground>
+    );
+  }
+  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{contenido}</View>;
 }

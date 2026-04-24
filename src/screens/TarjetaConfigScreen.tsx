@@ -200,6 +200,12 @@ export function TarjetaConfigScreen() {
                   valor={config.tarjetaCreditosExtendida}
                   onChange={v => actualizarConfig({ tarjetaCreditosExtendida: v })}
                 />
+                <ToggleFila
+                  label='Mostrar toggle "Estoy cursando"'
+                  valor={config.tarjetaMostrarToggleCursando ?? true}
+                  onChange={v => actualizarConfig({ tarjetaMostrarToggleCursando: v })}
+                  descripcion="Switch rápido en la tarjeta expandida para cambiar el estado de cursando"
+                />
               </View>
             </>
           )}

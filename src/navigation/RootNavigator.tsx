@@ -13,6 +13,7 @@ import { EditMateriaScreen } from '../screens/EditMateriaScreen';
 import { TarjetaConfigScreen } from '../screens/TarjetaConfigScreen';
 import { HorarioScreen } from '../screens/HorarioScreen';
 import { ImportarExportarScreen } from '../screens/ImportarExportarScreen';
+import { TemaPersonalizadoScreen } from '../screens/TemaPersonalizadoScreen';
 import { WebSidebar } from './WebSidebar';
 
 const Tab = createBottomTabNavigator();
@@ -47,7 +48,7 @@ export function RootNavigator() {
 
   return (
     <View style={{ flex: 1, flexDirection: Platform.OS === 'web' ? 'row' : 'column' }}>
-      {Platform.OS === 'web' && <WebSidebar navRef={navRef} />}
+      {Platform.OS === 'web' && <WebSidebar navRef={navRef as any} />}
       <NavigationContainer ref={navRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Tabs" component={TabNavigator} />
@@ -59,6 +60,11 @@ export function RootNavigator() {
             name="ImportarExportar"
             component={ImportarExportarScreen}
             options={{ headerShown: true, title: 'Importar / Exportar' }}
+          />
+          <Stack.Screen
+            name="TemaPersonalizado"
+            component={TemaPersonalizadoScreen}
+            options={{ headerShown: true, title: 'Personalizar tema' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
