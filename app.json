@@ -40,6 +40,16 @@
       "themeColor": "#BB86FC",
       "backgroundColor": "#121212"
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true
+          }
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "5be7cc96-1676-4ac7-95a1-5136ef2b0c42"
