@@ -157,11 +157,17 @@ export function HorarioScreen() {
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
   const dayColW      = (width - TIME_COL_W) / 7;
 
-  // Fechas de la semana mostrada (Dom–Sáb)
+  // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
   const semanaBase   = startOfWeek(new Date());
   const semanaInicio = addDays(semanaBase, weekOffset * 7);
   const fechasSemana = Array.from({ length: 7 }, (_, i) => isoDate(addDays(semanaInicio, i)));
   const hoyIso       = isoDate(new Date());
+
+  // Orden de visualización según config: Lun-Dom → [1,2,3,4,5,6,0] / Dom-Sáb → [0,1,2,3,4,5,6]
+  const ORDEN_DIAS = config.horarioPrimerDia === 'domingo'
+    ? [0, 1, 2, 3, 4, 5, 6]
+    : [1, 2, 3, 4, 5, 6, 0];
+  const fechasSemanaDisplay = ORDEN_DIAS.map(i => fechasSemana[i]);
 
   // Bloques filtrados a esta semana
   const bloquesEstaSemana = todosLosBloques.filter(
@@ -218,7 +224,7 @@ export function HorarioScreen() {
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
                 <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                  {fmtFechaCorta(fechasSemana[0])} — {fmtFechaCorta(fechasSemana[6])}
+                  {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
                 </Text>
                 <TouchableOpacity onPress={() => setWeekOffset(0)}>
                   <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
@@ -296,12 +302,12 @@ export function HorarioScreen() {
         paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: tema.borde,
       }}>
         <View style={{ width: TIME_COL_W }} />
-        {fechasSemana.map((fecha, i) => {
+        {fechasSemanaDisplay.map((fecha, i) => {
           const esHoy = fecha === hoyIso;
           return (
             <View key={i} style={{ width: dayColW, alignItems: 'center' }}>
               <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
-                {DIAS_CORTO[i]}
+                {DIAS_CORTO[ORDEN_DIAS[i]]}
               </Text>
               <Text style={{
                 color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
@@ -330,7 +336,7 @@ export function HorarioScreen() {
           </View>
 
           {/* Columnas por día */}
-          {fechasSemana.map((fecha, diaIdx) => {
+          {fechasSemanaDisplay.map((fecha, diaIdx) => {
             const esHoy = fecha === hoyIso;
             return (
               <View key={diaIdx} style={{

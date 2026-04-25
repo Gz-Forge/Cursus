@@ -44,6 +44,13 @@ export type Evaluacion = EvaluacionSimple | GrupoEvaluacion;
 
 export type TipoBloque = 'teorica' | 'practica' | 'parcial' | 'otro';
 
+export interface RegistroFalta {
+  id: string;
+  fecha: string;                          // 'YYYY-MM-DD'
+  tipo: 'teorica' | 'practica' | 'otro';
+  nota?: string;                          // comentario libre opcional
+}
+
 export interface ColorBloque {
   fondo: string;
   texto: string;
@@ -74,6 +81,9 @@ export interface Materia {
   oportunidadesExamen: number;
   tipoFormacion?: string;
   bloques?: BloqueHorario[];
+  faltasMaxTeorica?: number;
+  faltasMaxPractica?: number;
+  faltas?: RegistroFalta[];
 }
 
 export interface FondoPantalla {
@@ -132,6 +142,7 @@ export interface Config {
   tarjetaMostrarToggleCursando: boolean;
   coloresHorario: Record<string, Partial<Record<TipoBloque, ColorBloque>>>;
   horarioMostrarEvaluaciones: boolean;
+  horarioPrimerDia: 'lunes' | 'domingo';
 }
 
 export interface AppState {

@@ -48,6 +48,7 @@ const CONFIG_DEFAULT: Config = {
   tarjetaMostrarToggleCursando: true,
   coloresHorario: {},
   horarioMostrarEvaluaciones: true,
+  horarioPrimerDia: 'lunes',
 };
 
 interface Store extends AppState {
