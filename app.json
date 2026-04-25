@@ -26,6 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "versionCode": 2,
       "package": "com.gzforge.cursus",
       "permissions": ["android.permission.CAMERA"],
       "privacyPolicyUrl": "https://gz-forge.github.io/Cursus/privacidad"
