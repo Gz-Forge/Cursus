@@ -312,6 +312,30 @@ export function ConfigScreen() {
             'horarioMostrarEvaluaciones',
             'Muestra las evaluaciones con fecha como bloques especiales (📝) en la vista semanal',
           )}
+
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 6 }}>Primer día de la semana</Text>
+            <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 8, overflow: 'hidden' }}>
+              {(['lunes', 'domingo'] as const).map(opcion => (
+                <TouchableOpacity
+                  key={opcion}
+                  onPress={() => actualizarConfig({ horarioPrimerDia: opcion })}
+                  style={{
+                    flex: 1, paddingVertical: 10, alignItems: 'center',
+                    backgroundColor: config.horarioPrimerDia === opcion ? tema.acento : 'transparent',
+                  }}
+                >
+                  <Text style={{
+                    color: config.horarioPrimerDia === opcion ? '#fff' : tema.textoSecundario,
+                    fontWeight: '600', fontSize: 13,
+                  }}>
+                    {opcion === 'lunes' ? 'Lun → Dom' : 'Dom → Sáb'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <View style={{ marginBottom: 14 }} />
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>

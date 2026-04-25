@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota } from '../types';
+import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
 import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
@@ -89,6 +89,12 @@ export function EditMateriaScreen() {
   const [semanasICS, setSemanasICS] = useState('16');
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
   const [mostrarAcordeonCSV, setMostrarAcordeonCSV] = useState(false);
+
+  // ── Asistencia ──────────────────────────────────────────────────────
+  const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
+  const [faltaNueva, setFaltaNueva] = useState<{
+    fechaStr: string; tipo: RegistroFalta['tipo']; nota: string;
+  }>({ fechaStr: '', tipo: 'teorica', nota: '' });
 
   // ── Nota manual: estado de string para soportar decimales al tipear ──
   const [notaManualStr, setNotaManualStr] = useState<string>(() => {
@@ -384,6 +390,23 @@ export function EditMateriaScreen() {
       `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`,
       [{ text: 'Entendido' }]
     );
+  };
+
+  const confirmarFalta = () => {
+    const fecha = parsearFecha(faltaNueva.fechaStr);
+    if (!fecha) {
+      Alert.alert('Fecha inválida', 'Usá el formato DD/MM/AAAA.');
+      return;
+    }
+    const nueva: RegistroFalta = {
+      id: Date.now().toString(),
+      fecha,
+      tipo: faltaNueva.tipo,
+      ...(faltaNueva.nota.trim() ? { nota: faltaNueva.nota.trim() } : {}),
+    };
+    setForm(f => ({ ...f, faltas: [...(f.faltas ?? []), nueva] }));
+    setMostrarFormFalta(false);
+    setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' });
   };
 
   const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false) => (
@@ -947,6 +970,187 @@ export function EditMateriaScreen() {
               </TouchableOpacity>
             )}
           </>
+        )}
+
+        {/* ── ASISTENCIA ── */}
+        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
+
+        {/* Límites por tipo */}
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
+          {(
+            [
+              { label: config.labelTeorica || 'Teórica', key: 'faltasMaxTeorica' as const },
+              { label: config.labelPractica || 'Práctica', key: 'faltasMaxPractica' as const },
+            ] as const
+          ).map(({ label, key }) => (
+            <View key={key} style={{ flex: 1 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
+                Máx. faltas {label}
+              </Text>
+              <TextInput
+                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8 }}
+                value={form[key] !== undefined ? String(form[key]) : ''}
+                onChangeText={v => {
+                  const n = parseInt(v, 10);
+                  setForm(f => ({ ...f, [key]: v === '' ? undefined : isNaN(n) ? f[key] : n }));
+                }}
+                keyboardType="number-pad"
+                placeholder="Sin límite"
+                placeholderTextColor={tema.textoSecundario}
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Contadores con barra de progreso */}
+        {(
+          [
+            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, max: form.faltasMaxTeorica },
+            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
+          ] as const
+        ).map(({ label, tipo, max }) => {
+          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo).length;
+          if (max === undefined && cantidad === 0) return null;
+          const pct = max ? Math.min(cantidad / max, 1) : 0;
+          const colorBarra = max === undefined
+            ? tema.acento
+            : pct >= 1 ? '#F44336' : pct >= 0.7 ? '#FF9800' : '#4CAF50';
+          return (
+            <View key={tipo} style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+                <Text style={{ color: colorBarra, fontSize: 13, fontWeight: '700' }}>
+                  {cantidad}{max !== undefined ? ` / ${max}` : ' falta(s)'}
+                </Text>
+              </View>
+              {max !== undefined && (
+                <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, overflow: 'hidden' }}>
+                  <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colorBarra, borderRadius: 3 }} />
+                </View>
+              )}
+            </View>
+          );
+        })}
+
+        {/* Formulario de nueva falta */}
+        {mostrarFormFalta && (
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fecha (DD/MM/AAAA)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 10 }}
+              value={faltaNueva.fechaStr}
+              onChangeText={v => setFaltaNueva(f => ({ ...f, fechaStr: autoFormatFechaBloque(f.fechaStr, v) }))}
+              placeholder="15/03/2026"
+              placeholderTextColor={tema.textoSecundario}
+              keyboardType="numbers-and-punctuation"
+            />
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Tipo</Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+              {(
+                [
+                  { key: 'teorica' as const, label: config.labelTeorica || 'Teórica' },
+                  { key: 'practica' as const, label: config.labelPractica || 'Práctica' },
+                  { key: 'otro' as const, label: config.labelOtro || 'Otro' },
+                ] as const
+              ).map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => setFaltaNueva(f => ({ ...f, tipo: key }))}
+                  style={{
+                    flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center',
+                    backgroundColor: faltaNueva.tipo === key ? tema.acento : tema.fondo,
+                  }}
+                >
+                  <Text style={{
+                    color: faltaNueva.tipo === key ? '#fff' : tema.textoSecundario,
+                    fontSize: 12, fontWeight: '600',
+                  }}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Nota (opcional)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
+              value={faltaNueva.nota}
+              onChangeText={v => setFaltaNueva(f => ({ ...f, nota: v }))}
+              placeholder="ej: médico, lluvia..."
+              placeholderTextColor={tema.textoSecundario}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' }); }}
+                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}
+              >
+                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmarFalta}
+                style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Registrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Botón agregar falta */}
+        {!mostrarFormFalta && (
+          <TouchableOpacity
+            onPress={() => setMostrarFormFalta(true)}
+            style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 12 }}
+          >
+            <Text style={{ color: tema.acento }}>＋ Registrar falta</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Historial de faltas */}
+        {(form.faltas ?? []).length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
+              Historial — {(form.faltas ?? []).length} falta(s) registrada(s)
+            </Text>
+            {[...(form.faltas ?? [])]
+              .sort((a, b) => b.fecha.localeCompare(a.fecha))
+              .map(falta => {
+                const tipoLabel = falta.tipo === 'teorica'
+                  ? (config.labelTeorica || 'Teórica')
+                  : falta.tipo === 'practica'
+                    ? (config.labelPractica || 'Práctica')
+                    : (config.labelOtro || 'Otro');
+                return (
+                  <View
+                    key={falta.id}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center',
+                      backgroundColor: tema.tarjeta, borderRadius: 8,
+                      padding: 10, marginBottom: 4,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: tema.texto, fontSize: 13 }}>
+                        {fmtFechaBloque(falta.fecha)}
+                        <Text style={{ color: tema.acento }}> · {tipoLabel}</Text>
+                      </Text>
+                      {falta.nota ? (
+                        <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
+                          {falta.nota}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setForm(f => ({ ...f, faltas: (f.faltas ?? []).filter(x => x.id !== falta.id) }))}
+                    >
+                      <Text style={{ color: '#F44336' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+          </View>
         )}
 
         {esMateriaExistente ? (
