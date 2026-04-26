@@ -91,6 +91,14 @@ export interface FondoPantalla {
   valor: string;
 }
 
+export interface ColoresScreen {
+  tarjeta?: string;
+  texto?: string;
+  textoSecundario?: string;
+  acento?: string;
+  borde?: string;
+}
+
 export interface TemaPersonalizado {
   fondo: string;
   tarjeta: string;
@@ -98,10 +106,20 @@ export interface TemaPersonalizado {
   textoSecundario: string;
   acento: string;
   borde: string;
+  // Per-screen color overrides (fallback: global values above)
+  coloresCarrera?: ColoresScreen;
+  coloresHorario?: ColoresScreen;
+  coloresMetricas?: ColoresScreen;
+  coloresConfig?: ColoresScreen;
+  // Per-screen backgrounds
   fondoCarrera?: FondoPantalla;
   fondoHorario?: FondoPantalla;
   fondoMetricas?: FondoPantalla;
   fondoConfig?: FondoPantalla;
+  // Tab bar label color (separate from textoSecundario)
+  colorLabelsTab?: string;
+  // Header/surface opacity when image background is active (0–100, default 85)
+  opacidadSuperficie?: number;
 }
 
 export interface Config {

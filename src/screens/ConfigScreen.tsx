@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, Platform, ImageBackground } from 'react-native';
-import { useFondoPantalla } from '../utils/useFondoPantalla';
+import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto } from '../utils/importExport';
@@ -45,7 +44,7 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
 
 export function ConfigScreen() {
   const { config, actualizarConfig, materias } = useStore();
-  const tema = useTema();
+  const tema = useTemaPantalla('config');
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
@@ -133,7 +132,7 @@ export function ConfigScreen() {
 
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
   const innerContent = (
-    <SafeAreaView style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
+    <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
@@ -616,10 +615,10 @@ export function ConfigScreen() {
       <SyncModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
       <QrScannerModal visible={mostrarScanner} onCerrar={() => setMostrarScanner(false)} />
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
-    </SafeAreaView>
+    </View>
   );
   if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
-    return <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>{innerContent}</ImageBackground>;
+    return <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>{innerContent}</ImageBackground>;
   }
   return <View style={{ flex: 1, ...fondoStyle }}>{innerContent}</View>;
 }

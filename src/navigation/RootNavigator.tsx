@@ -5,6 +5,7 @@ import { NavigationContainer, useNavigationContainerRef } from '@react-navigatio
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useTema } from '../theme/ThemeContext';
+import { useStore } from '../store/useStore';
 import { CarreraScreen } from '../screens/CarreraScreen';
 import { MetricsScreen } from '../screens/MetricsScreen';
 import { ConfigScreen } from '../screens/ConfigScreen';
@@ -21,6 +22,11 @@ const Stack = createStackNavigator();
 
 function TabNavigator() {
   const tema = useTema();
+  const colorLabelsTab = useStore(s =>
+    s.config.tema === 'personalizado'
+      ? (s.config.temaPersonalizado?.colorLabelsTab ?? tema.textoSecundario)
+      : tema.textoSecundario
+  );
   return (
     <Tab.Navigator
       screenOptions={{
@@ -28,7 +34,7 @@ function TabNavigator() {
           ? { display: 'none' }
           : { backgroundColor: tema.fondo, borderTopColor: tema.borde },
         tabBarActiveTintColor: tema.acento,
-        tabBarInactiveTintColor: tema.textoSecundario,
+        tabBarInactiveTintColor: colorLabelsTab,
         headerStyle: { backgroundColor: tema.fondo },
         headerTintColor: tema.texto,
         headerShadowVisible: false,

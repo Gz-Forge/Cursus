@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Linking, Alert, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
-import { useTema } from '../theme/ThemeContext';
+import { useStore } from '../store/useStore';
+import { temaOscuro, temaClaro } from '../theme/colors';
 
 // ── Reemplazá estas URLs cuando estén disponibles ──────────────────────────
 const PAYPAL_URL        = 'https://www.paypal.com/donate/?hosted_button_id=9TCFLYW98H8JA';
@@ -12,7 +13,9 @@ const APP_STORE_URL     = 'https://apps.apple.com/app/id/TU_APP_ID';
 const GOOGLE_FORM_URL   = 'https://forms.gle/257Bf5rb4MMyt6TVA';
 
 export function DonacionScreen() {
-  const tema = useTema();
+  // Siempre usa el tema base (claro u oscuro), nunca el tema personalizado
+  const configTema = useStore(s => s.config.tema);
+  const tema = configTema === 'claro' ? temaClaro : temaOscuro;
   const isWeb = Platform.OS === 'web';
 
   const abrir = async (url: string) => {

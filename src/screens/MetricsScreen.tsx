@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform, ImageBackground } from 'react-native';
-import { useFondoPantalla } from '../utils/useFondoPantalla';
+import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -28,13 +28,16 @@ function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
 
 export function MetricsScreen() {
   const { materias, config } = useStore();
-  const tema = useTema();
+  const tema = useTemaPantalla('metricas');
   const { width } = useWindowDimensions();
   const [semestreTorta, setSemestreTorta] = useState<number | null>(null);
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
 
   const isWeb = Platform.OS === 'web';
   const fondoPantalla = useFondoPantalla('metricas');
+  const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
+  const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
+  const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
 
   // ── Base ─────────────────────────────────────────────────────────────────
   const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
@@ -164,7 +167,7 @@ export function MetricsScreen() {
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
 
       {/* ── Pestañas ── */}
-      <View style={{ flexDirection: 'row', backgroundColor: tema.superficie,
+      <View style={{ flexDirection: 'row', backgroundColor: surfaceBg,
         borderBottomWidth: 1, borderBottomColor: tema.borde }}>
         {(['general', 'graficos'] as Panel[]).map(p => (
           <TouchableOpacity key={p} onPress={() => setPanelActivo(p)}
@@ -502,7 +505,7 @@ export function MetricsScreen() {
 
   if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
     return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
         {innerContent}
       </ImageBackground>
     );
