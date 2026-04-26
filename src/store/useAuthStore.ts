@@ -1,4 +1,4 @@
-// TablaApp/src/store/useAuthStore.ts
+// Cursus/src/store/useAuthStore.ts
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';

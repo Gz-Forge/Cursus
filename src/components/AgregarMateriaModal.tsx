@@ -1,4 +1,4 @@
-// TablaApp/src/components/AgregarMateriaModal.tsx
+// Cursus/src/components/AgregarMateriaModal.tsx
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, Platform } from 'react-native';
 import { useTema } from '../theme/ThemeContext';

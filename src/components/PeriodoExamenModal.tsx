@@ -1,4 +1,4 @@
-// TablaApp/src/components/PeriodoExamenModal.tsx
+// Cursus/src/components/PeriodoExamenModal.tsx
 import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Alert } from 'react-native';
 import { useTema } from '../theme/ThemeContext';

@@ -1,4 +1,4 @@
-// TablaApp/src/services/syncService.ts
+// Cursus/src/services/syncService.ts
 import { supabase } from './supabase';
 import { AppState } from '../types';
 

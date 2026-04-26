@@ -1,4 +1,4 @@
-// TablaApp/src/components/SyncModal.tsx
+// Cursus/src/components/SyncModal.tsx
 import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, TouchableOpacity, ActivityIndicator,
