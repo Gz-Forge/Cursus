@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, ImageBackground } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { useFondoPantalla } from '../utils/useFondoPantalla';
+import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BloqueHorario, EvaluacionSimple } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
 import {
@@ -53,7 +53,7 @@ function fmtFechaCorta(iso: string): string {
 
 export function HorarioScreen() {
   const { materias, config } = useStore();
-  const tema = useTema();
+  const tema = useTemaPantalla('horario');
   const { width } = useWindowDimensions();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalExport, setModalExport] = useState(false);
@@ -204,6 +204,9 @@ export function HorarioScreen() {
   };
 
   const fondoPantalla = useFondoPantalla('horario');
+  const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
+  const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
+  const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
 
   const innerContent = (
@@ -211,7 +214,7 @@ export function HorarioScreen() {
       {/* Navegación de semana */}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: tema.superficie, paddingHorizontal: 14, paddingVertical: 8,
+        backgroundColor: surfaceBg, paddingHorizontal: 14, paddingVertical: 8,
         borderBottomWidth: 1, borderBottomColor: tema.borde,
         justifyContent: Platform.OS === 'web' ? undefined : 'space-between',
       }}>
@@ -298,7 +301,7 @@ export function HorarioScreen() {
 
       {/* Cabecera con días y fechas */}
       <View style={{
-        flexDirection: 'row', backgroundColor: tema.superficie,
+        flexDirection: 'row', backgroundColor: surfaceBg,
         paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: tema.borde,
       }}>
         <View style={{ width: TIME_COL_W }} />
@@ -544,7 +547,7 @@ export function HorarioScreen() {
 
   if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
     return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
         {innerContent}
       </ImageBackground>
     );

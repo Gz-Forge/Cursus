@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { temaOscuro } from '../theme/colors';
-import { TemaPersonalizado, FondoPantalla } from '../types';
+import { TemaPersonalizado, FondoPantalla, ColoresScreen } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
 // ── Color picker ──────────────────────────────────────────────────────────────
@@ -120,6 +120,144 @@ function FondoEditor({
   );
 }
 
+// ── Tipos y helpers para edición por pantalla ─────────────────────────────────
+type PantallaKey = 'carrera' | 'horario' | 'metricas' | 'config';
+const PANTALLAS: { key: PantallaKey; label: string }[] = [
+  { key: 'carrera',  label: 'Carrera' },
+  { key: 'horario',  label: 'Horario' },
+  { key: 'metricas', label: 'Métricas' },
+  { key: 'config',   label: 'Config' },
+];
+const FONDO_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
+  carrera:  'fondoCarrera',
+  horario:  'fondoHorario',
+  metricas: 'fondoMetricas',
+  config:   'fondoConfig',
+};
+const COLORES_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
+  carrera:  'coloresCarrera',
+  horario:  'coloresHorario',
+  metricas: 'coloresMetricas',
+  config:   'coloresConfig',
+};
+
+function mergeScreenColors(draft: TemaPersonalizado, pagina: PantallaKey): TemaPersonalizado {
+  const overrides = draft[COLORES_KEY[pagina]] as ColoresScreen | undefined;
+  if (!overrides) return draft;
+  return {
+    ...draft,
+    ...(overrides.tarjeta         ? { tarjeta:         overrides.tarjeta }         : {}),
+    ...(overrides.texto           ? { texto:           overrides.texto }           : {}),
+    ...(overrides.textoSecundario ? { textoSecundario: overrides.textoSecundario } : {}),
+    ...(overrides.acento          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.borde           ? { borde:           overrides.borde }           : {}),
+  };
+}
+
+// ── Editor de colores por pantalla ────────────────────────────────────────────
+function PantallaEditor({
+  pantallaKey, draft, onChange,
+}: {
+  pantallaKey: PantallaKey;
+  draft: TemaPersonalizado;
+  onChange: (parcial: Partial<TemaPersonalizado>) => void;
+}) {
+  const tema = useTema();
+  const fondo = draft[FONDO_KEY[pantallaKey]] as FondoPantalla | undefined;
+  const colores = draft[COLORES_KEY[pantallaKey]] as ColoresScreen | undefined;
+
+  const setFondo = (v: FondoPantalla | undefined) => onChange({ [FONDO_KEY[pantallaKey]]: v });
+  const setColor = (campo: keyof ColoresScreen, v: string) =>
+    onChange({ [COLORES_KEY[pantallaKey]]: { ...(colores ?? {}), [campo]: v } });
+  const limpiarColor = (campo: keyof ColoresScreen) => {
+    const next = { ...(colores ?? {}) };
+    delete next[campo];
+    const hayAlguno = Object.keys(next).some(k => (next as any)[k]);
+    onChange({ [COLORES_KEY[pantallaKey]]: hayAlguno ? next : undefined });
+  };
+
+  const otras = PANTALLAS.filter(p => p.key !== pantallaKey);
+
+  return (
+    <View>
+      <FondoEditor label="Fondo de pantalla" valor={fondo} onChange={setFondo} />
+
+      {/* Copiar fondo de otra pantalla */}
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 12, alignSelf: 'center', marginRight: 4 }}>
+          Copiar fondo de:
+        </Text>
+        {otras.map(p => (
+          <TouchableOpacity
+            key={p.key}
+            onPress={() => setFondo(draft[FONDO_KEY[p.key]] as FondoPantalla | undefined)}
+            style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+          >
+            <Text style={{ color: tema.acento, fontSize: 12 }}>{p.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Colores de esta pantalla (override de globales) */}
+      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 8 }}>
+        Colores propios (vacío = usa el global)
+      </Text>
+      {(
+        [
+          { campo: 'tarjeta'         as const, label: 'Tarjeta / panel'   },
+          { campo: 'texto'           as const, label: 'Texto principal'   },
+          { campo: 'textoSecundario' as const, label: 'Texto secundario'  },
+          { campo: 'acento'          as const, label: 'Acento (botones)'  },
+          { campo: 'borde'           as const, label: 'Borde / separador' },
+        ] as { campo: keyof ColoresScreen; label: string }[]
+      ).map(({ campo, label }) => {
+        const val = colores?.[campo] ?? '';
+        const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(val);
+        return (
+          <View key={campo} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <View style={{
+              width: 28, height: 28, borderRadius: 6,
+              backgroundColor: isValidHex ? val : (draft[campo as keyof TemaPersonalizado] as string ?? tema.borde),
+              borderWidth: 1, borderColor: tema.borde,
+            }} />
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 118 }}>{label}</Text>
+            <TextInput
+              style={{
+                flex: 1, backgroundColor: tema.fondo, color: tema.texto,
+                padding: 7, borderRadius: 6, fontSize: 13, fontFamily: 'monospace',
+              }}
+              value={val}
+              onChangeText={v => v === '' ? limpiarColor(campo) : setColor(campo, v)}
+              placeholder={`global: ${draft[campo as keyof TemaPersonalizado] as string ?? ''}`}
+              placeholderTextColor={tema.textoSecundario}
+              maxLength={7}
+              autoCapitalize="characters"
+            />
+          </View>
+        );
+      })}
+
+      {/* Copiar colores de otra pantalla */}
+      <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 12, alignSelf: 'center', marginRight: 4 }}>
+          Copiar colores de:
+        </Text>
+        {otras.map(p => (
+          <TouchableOpacity
+            key={p.key}
+            onPress={() =>
+              onChange({ [COLORES_KEY[pantallaKey]]: draft[COLORES_KEY[p.key]] as ColoresScreen | undefined })
+            }
+            style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+          >
+            <Text style={{ color: tema.acento, fontSize: 12 }}>{p.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // ── Wrapper que aplica el fondo del draft a cada preview ──────────────────────
 function PreviewWrapper({
   draft, fondo, children,
@@ -129,7 +267,6 @@ function PreviewWrapper({
       <ImageBackground
         source={{ uri: fondo.valor }}
         style={{ borderRadius: 10, overflow: 'hidden', minHeight: 380 }}
-        imageStyle={{ opacity: 0.3 }}
       >
         <View style={{ backgroundColor: 'transparent', padding: 14 }}>{children}</View>
       </ImageBackground>
@@ -760,7 +897,8 @@ export function TemaPersonalizadoScreen() {
     () => config.temaPersonalizado ?? { ...temaOscuro }
   );
   const [panel, setPanel] = useState<'personalizar' | 'preview'>('personalizar');
-  const [paginaPreview, setPaginaPreview] = useState<'carrera' | 'horario' | 'metricas' | 'config'>('carrera');
+  const [paginaPreview, setPaginaPreview] = useState<PantallaKey>('carrera');
+  const [pantallaEditando, setPantallaEditando] = useState<PantallaKey>('carrera');
   const [cambiosSinGuardar, setCambiosSinGuardar] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
 
@@ -852,22 +990,94 @@ export function TemaPersonalizadoScreen() {
               </View>
             )}
 
-            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES BASE</Text>
+            {/* ── COLORES GLOBALES ── */}
+            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES GLOBALES</Text>
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <ColorInput label="Fondo principal"   value={draft.fondo}            onChange={v => actualizarDraft({ fondo: v })} />
               <ColorInput label="Tarjeta / panel"   value={draft.tarjeta}          onChange={v => actualizarDraft({ tarjeta: v })} />
               <ColorInput label="Texto principal"   value={draft.texto}            onChange={v => actualizarDraft({ texto: v })} />
               <ColorInput label="Texto secundario"  value={draft.textoSecundario}  onChange={v => actualizarDraft({ textoSecundario: v })} />
               <ColorInput label="Acento (botones)"  value={draft.acento}           onChange={v => actualizarDraft({ acento: v })} />
               <ColorInput label="Borde / separador" value={draft.borde}            onChange={v => actualizarDraft({ borde: v })} />
+              <ColorInput
+                label="Labels tab bar"
+                value={draft.colorLabelsTab ?? draft.textoSecundario}
+                onChange={v => actualizarDraft({ colorLabelsTab: v })}
+              />
             </View>
 
-            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>FONDOS POR PANTALLA</Text>
+            {/* ── OPACIDAD DE SUPERFICIE ── */}
+            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 6 }}>OPACIDAD DE HEADERS CON IMAGEN</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
+              Controla la transparencia de barras de navegación cuando hay imagen de fondo (0 = invisible, 100 = sólido).
+            </Text>
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <FondoEditor label="Pantalla Carrera"       valor={draft.fondoCarrera}  onChange={v => actualizarDraft({ fondoCarrera: v })} />
-              <FondoEditor label="Pantalla Horario"       valor={draft.fondoHorario}  onChange={v => actualizarDraft({ fondoHorario: v })} />
-              <FondoEditor label="Pantalla Métricas"      valor={draft.fondoMetricas} onChange={v => actualizarDraft({ fondoMetricas: v })} />
-              <FondoEditor label="Pantalla Configuración" valor={draft.fondoConfig}   onChange={v => actualizarDraft({ fondoConfig: v })} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 80 }}>
+                  {draft.opacidadSuperficie ?? 85}%
+                </Text>
+                <TextInput
+                  style={{
+                    flex: 1, backgroundColor: tema.fondo, color: tema.texto,
+                    padding: 8, borderRadius: 6, fontSize: 14,
+                  }}
+                  value={String(draft.opacidadSuperficie ?? 85)}
+                  onChangeText={v => {
+                    const n = parseInt(v, 10);
+                    if (!isNaN(n)) actualizarDraft({ opacidadSuperficie: Math.max(0, Math.min(100, n)) });
+                  }}
+                  keyboardType="numeric"
+                  maxLength={3}
+                  placeholder="85"
+                  placeholderTextColor={tema.textoSecundario}
+                />
+                {/* Atajos rápidos */}
+                {[0, 50, 75, 85, 100].map(v => (
+                  <TouchableOpacity
+                    key={v}
+                    onPress={() => actualizarDraft({ opacidadSuperficie: v })}
+                    style={{
+                      paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6,
+                      backgroundColor: (draft.opacidadSuperficie ?? 85) === v ? tema.acento : tema.fondo,
+                    }}
+                  >
+                    <Text style={{ color: (draft.opacidadSuperficie ?? 85) === v ? '#fff' : tema.textoSecundario, fontSize: 11 }}>
+                      {v}%
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* ── COLORES Y FONDOS POR PANTALLA ── */}
+            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES Y FONDOS POR PANTALLA</Text>
+
+            {/* Tabs de selección de pantalla */}
+            <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+              {PANTALLAS.map(p => (
+                <TouchableOpacity
+                  key={p.key}
+                  onPress={() => setPantallaEditando(p.key)}
+                  style={{
+                    flex: 1, padding: 10, alignItems: 'center',
+                    backgroundColor: pantallaEditando === p.key ? tema.acento : 'transparent',
+                  }}
+                >
+                  <Text style={{
+                    color: pantallaEditando === p.key ? '#fff' : tema.textoSecundario,
+                    fontSize: 12, fontWeight: pantallaEditando === p.key ? '700' : '400',
+                  }}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <PantallaEditor
+                pantallaKey={pantallaEditando}
+                draft={draft}
+                onChange={actualizarDraft}
+              />
             </View>
 
             <TouchableOpacity
@@ -935,10 +1145,10 @@ export function TemaPersonalizadoScreen() {
 
           <ScrollView contentContainerStyle={{ padding: 16 }} style={{ flex: 1 }}>
             <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
-              {paginaPreview === 'carrera'  && <CarreraPreview  draft={draft} fondo={fondoDePreview()} />}
-              {paginaPreview === 'horario'  && <HorarioPreview  draft={draft} fondo={fondoDePreview()} />}
-              {paginaPreview === 'metricas' && <MetricasPreview draft={draft} fondo={fondoDePreview()} />}
-              {paginaPreview === 'config'   && <ConfigPreview   draft={draft} fondo={fondoDePreview()} />}
+              {paginaPreview === 'carrera'  && <CarreraPreview  draft={mergeScreenColors(draft, 'carrera')}  fondo={fondoDePreview()} />}
+              {paginaPreview === 'horario'  && <HorarioPreview  draft={mergeScreenColors(draft, 'horario')}  fondo={fondoDePreview()} />}
+              {paginaPreview === 'metricas' && <MetricasPreview draft={mergeScreenColors(draft, 'metricas')} fondo={fondoDePreview()} />}
+              {paginaPreview === 'config'   && <ConfigPreview   draft={mergeScreenColors(draft, 'config')}   fondo={fondoDePreview()} />}
             </View>
           </ScrollView>
         </View>

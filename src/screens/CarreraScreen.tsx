@@ -10,7 +10,7 @@ import { QrShareModal } from '../components/QrShareModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PerfilSheet } from '../components/PerfilSheet';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
-import { useFondoPantalla } from '../utils/useFondoPantalla';
+import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '../utils/calculos';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
@@ -31,7 +31,7 @@ export function CarreraScreen() {
   const { materias, config, decrementarPeriodoExamen, actualizarConfig, guardarMateria, perfiles, perfilActivoId } = useStore();
   const [mostrarPerfilSheet, setMostrarPerfilSheet] = useState(false);
   const [mostrarAgregar, setMostrarAgregar] = useState(false);
-  const tema = useTema();
+  const tema = useTemaPantalla('carrera');
   const navigation = useNavigation<any>();
   const [vista, setVista] = useState<Vista>('carrera');
   const [semestreActual, setSemestreActual] = useState(1);
@@ -197,12 +197,15 @@ export function CarreraScreen() {
   };
 
 
+  const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
+  const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
+  const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
   const contenido = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Selector de perfil */}
       {isWeb ? (
-        <View style={{ backgroundColor: tema.superficie, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ backgroundColor: surfaceBg, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde, flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity
             onPress={() => setMostrarPerfilSheet(true)}
             style={{
@@ -233,7 +236,7 @@ export function CarreraScreen() {
             paddingHorizontal: 16,
             paddingTop: 12,
             paddingBottom: 4,
-            backgroundColor: tema.superficie,
+            backgroundColor: surfaceBg,
           }}
         >
           <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
@@ -254,7 +257,7 @@ export function CarreraScreen() {
       )}
 
       {/* Resumen */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: tema.superficie }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: surfaceBg }}>
         {[
           { valor: creditos, label: 'créditos' },
           { valor: exoneradas, label: 'exoneradas' },
@@ -268,7 +271,7 @@ export function CarreraScreen() {
       </View>
 
       {/* Pestañas */}
-      <View style={{ flexDirection: 'row', backgroundColor: tema.superficie, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+      <View style={{ flexDirection: 'row', backgroundColor: surfaceBg, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
         {(Object.keys(VISTA_LABELS) as Vista[]).map(v => (
           <TouchableOpacity
             key={v}
@@ -519,7 +522,7 @@ export function CarreraScreen() {
 
   if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
     return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }} imageStyle={{ opacity: 0.3 }}>
+      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
         {contenido}
       </ImageBackground>
     );
