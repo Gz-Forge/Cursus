@@ -45,3 +45,7 @@ src-tauri/target/
 
 # env secrets
 .env
+
+# Google Service Account key (never commit)
+google-service-account.json
+.idea/

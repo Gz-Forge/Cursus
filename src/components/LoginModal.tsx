@@ -1,4 +1,4 @@
-// TablaApp/src/components/LoginModal.tsx
+// Cursus/src/components/LoginModal.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,

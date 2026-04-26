@@ -1,4 +1,4 @@
-// TablaApp/src/navigation/RootNavigator.tsx
+// Cursus/src/navigation/RootNavigator.tsx
 import React from 'react';
 import { View, Platform, Text } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';

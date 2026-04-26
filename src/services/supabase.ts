@@ -1,4 +1,4 @@
-// TablaApp/src/services/supabase.ts
+// Cursus/src/services/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

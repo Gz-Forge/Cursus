@@ -1,4 +1,4 @@
-// TablaApp/src/components/EvaluacionesQrModal.tsx
+// Cursus/src/components/EvaluacionesQrModal.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';

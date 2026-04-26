@@ -1,4 +1,4 @@
-// TablaApp/src/screens/TarjetaConfigScreen.tsx
+// Cursus/src/screens/TarjetaConfigScreen.tsx
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
