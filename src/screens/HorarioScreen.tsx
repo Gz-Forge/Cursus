@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, ImageBackground } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, Animated } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
+import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BloqueHorario, EvaluacionSimple } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
@@ -54,11 +55,14 @@ function fmtFechaCorta(iso: string): string {
 export function HorarioScreen() {
   const { materias, config } = useStore();
   const tema = useTemaPantalla('horario');
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
+
+  const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -208,6 +212,12 @@ export function HorarioScreen() {
   const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
   const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const isMovible = hasImgBg && !!fondoPantalla?.movible;
+  const bgHeight = Math.max(height, contentHeight);
+  const bgTranslateY = React.useMemo(
+    () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
+    [isMovible, scrollAnim],
+  );
 
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
@@ -325,7 +335,15 @@ export function HorarioScreen() {
       </View>
 
       {/* Grilla horaria */}
-      <ScrollView style={{ flex: 1 }}>
+      <Animated.ScrollView
+        style={{ flex: 1 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_, h) => setContentHeight(h)}
+      >
         <View style={{ flexDirection: 'row' }}>
           {/* Columna de horas */}
           <View style={{ width: TIME_COL_W }}>
@@ -427,7 +445,7 @@ export function HorarioScreen() {
             );
           })}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
@@ -545,12 +563,20 @@ export function HorarioScreen() {
     </View>
   );
 
-  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
-    return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
-        {innerContent}
-      </ImageBackground>
-    );
-  }
-  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{innerContent}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+      {hasImgBg && (
+        <Animated.View
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: width, height: bgHeight,
+            transform: [{ translateY: bgTranslateY }],
+          }}
+        >
+          <TiledBackground uri={fondoPantalla!.valor} width={width} height={bgHeight} />
+        </Animated.View>
+      )}
+      {innerContent}
+    </View>
+  );
 }
