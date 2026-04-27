@@ -367,7 +367,7 @@ export function EditMateriaScreen() {
     const previasOk = form.previasNecesarias.every(p => aprobadas.has(p));
 
     if (creditosOk && previasOk) {
-      setForm(f => ({ ...f, cursando: true }));
+      setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
       return;
     }
 
