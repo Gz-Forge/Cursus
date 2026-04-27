@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore';
-import { FondoPantalla, ColoresScreen } from '../types';
+import { FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import { temaOscuro, temaClaro, Tema } from '../theme/colors';
 
 export type PaginaFondo = 'carrera' | 'horario' | 'metricas' | 'config';
@@ -45,4 +45,32 @@ export function useTemaPantalla(pagina: PaginaFondo): Tema {
 export function hexOpacity(pct: number): string {
   const val = Math.round(Math.max(0, Math.min(100, pct)) * 2.55);
   return val.toString(16).padStart(2, '0').toUpperCase();
+}
+
+/**
+ * Returns one color per semestre number in semNums.
+ * Respects TemaPersonalizado.coloresSemestres (paleta | unico | por_semestre).
+ */
+export function useColoresSemestres(semNums: number[]): string[] {
+  const config = useStore(s => s.config);
+
+  const basePalette =
+    config.tema === 'claro' ? temaClaro.semestres : temaOscuro.semestres;
+
+  const cs: ColoresSemestres | undefined =
+    config.tema === 'personalizado'
+      ? config.temaPersonalizado?.coloresSemestres
+      : undefined;
+
+  if (!cs || cs.modo === 'paleta') {
+    return semNums.map((_, i) => basePalette[i % basePalette.length]);
+  }
+  if (cs.modo === 'unico') {
+    const color = cs.colorUnico ?? basePalette[0];
+    return semNums.map(() => color);
+  }
+  // por_semestre
+  return semNums.map((sem, i) =>
+    cs.porSemestre?.[sem.toString()] ?? basePalette[i % basePalette.length],
+  );
 }
