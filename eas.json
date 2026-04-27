@@ -7,6 +7,10 @@
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gyqeakdejkljerzlhacl.supabase.co/rest/v1/",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_hflZeDC6iXyQJRzqVxSgdQ_we00o-n3"
       }
     },
     "production": {
@@ -18,7 +22,9 @@
         "simulator": false
       },
       "env": {
-        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gyqeakdejkljerzlhacl.supabase.co/rest/v1/",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_hflZeDC6iXyQJRzqVxSgdQ_we00o-n3"
       }
     }
   },
