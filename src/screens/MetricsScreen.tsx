@@ -168,7 +168,7 @@ export function MetricsScreen() {
 
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
   const isMovible = hasImgBg && !!fondoPantalla?.movible;
-  const bgHeight = Math.max(height, contentHeight);
+  const bgHeight = contentHeight + height;
   const bgTranslateY = React.useMemo(
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
@@ -522,7 +522,7 @@ export function MetricsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+    <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>
       {hasImgBg && (
         <Animated.View
           style={{

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image } from 'react-native';
+import { View, Image, PixelRatio, Platform } from 'react-native';
 
 interface Props {
   uri: string;
@@ -12,7 +12,15 @@ export default function TiledBackground({ uri, width, height }: Props) {
 
   useEffect(() => {
     if (!uri) return;
-    Image.getSize(uri, (w, h) => setImgSize({ w, h }), () => setImgSize(null));
+    Image.getSize(
+      uri,
+      (w, h) => {
+        // Image.getSize returns physical pixels on native; convert to dp
+        const ratio = Platform.OS === 'web' ? 1 : PixelRatio.get();
+        setImgSize({ w: w / ratio, h: h / ratio });
+      },
+      () => setImgSize(null),
+    );
   }, [uri]);
 
   if (!imgSize || imgSize.w <= 0 || imgSize.h <= 0 || width <= 0 || height <= 0) return null;
@@ -34,6 +42,7 @@ export default function TiledBackground({ uri, width, height }: Props) {
             width: imgSize.w,
             height: imgSize.h,
           }}
+          resizeMode="stretch"
         />,
       );
     }
