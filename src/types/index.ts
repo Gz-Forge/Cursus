@@ -89,6 +89,13 @@ export interface Materia {
 export interface FondoPantalla {
   tipo: 'color' | 'imagen';
   valor: string;
+  movible?: boolean;   // imagen only — true = scrolls 1:1 with content, false/absent = fixed
+}
+
+export interface ColoresSemestres {
+  modo: 'paleta' | 'unico' | 'por_semestre';
+  colorUnico?: string;
+  porSemestre?: Record<string, string>;  // semestre number as string key → hex color
 }
 
 export interface ColoresScreen {
@@ -120,6 +127,7 @@ export interface TemaPersonalizado {
   colorLabelsTab?: string;
   // Header/surface opacity when image background is active (0–100, default 85)
   opacidadSuperficie?: number;
+  coloresSemestres?: ColoresSemestres;
 }
 
 export interface Config {
