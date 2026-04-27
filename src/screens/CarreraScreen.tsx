@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -40,6 +40,8 @@ export function CarreraScreen() {
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
   const [mostrarSoloDisponibles, setMostrarSoloDisponibles] = useState(false);
   const [subFiltroDisp, setSubFiltroDisp] = useState<'para_cursar' | 'para_examen'>('para_cursar');
+  const [textoBusqueda, setTextoBusqueda] = useState('');
+  const [modoBusqueda, setModoBusqueda] = useState<'nombre' | 'es_previa_de' | 'sus_previas'>('nombre');
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
