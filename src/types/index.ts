@@ -79,7 +79,7 @@ export interface Materia {
   tipoNotaManual: TipoNota;
   evaluaciones: Evaluacion[];
   oportunidadesExamen: number;
-  esNotaExamen?: boolean;          // true = la nota corresponde a un examen (usa umbralExamenExoneracion)
+  esNotaExamen?: boolean;          // true = nota de examen (usa umbralExamenExoneracion); omitido/false = nota de cursada normal
   tipoFormacion?: string;
   bloques?: BloqueHorario[];
   faltasMaxTeorica?: number;
