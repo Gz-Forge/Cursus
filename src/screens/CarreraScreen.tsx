@@ -119,7 +119,7 @@ export function CarreraScreen() {
     const creditosOk = creditos >= materia.creditosNecesarios;
     const previasOk = materia.previasNecesarias.every(p => aprobadas.has(p));
     if (creditosOk && previasOk) {
-      guardarMateria({ ...materia, cursando: true });
+      guardarMateria({ ...materia, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault });
       return;
     }
     const faltantes: string[] = [];
@@ -207,7 +207,7 @@ export function CarreraScreen() {
   const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
   const isMovible = hasImgBg && !!fondoPantalla?.movible;
-  const bgHeight = Math.max(screenHeight, contentHeight);
+  const bgHeight = contentHeight + screenHeight;
   const bgTranslateY = React.useMemo(
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
@@ -541,7 +541,7 @@ export function CarreraScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+    <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>
       {hasImgBg && (
         <Animated.View
           style={{

@@ -138,7 +138,7 @@ export function ConfigScreen() {
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
   const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
   const isMovible = hasImgBg && !!fondoPantalla?.movible;
-  const bgHeight = Math.max(screenHeight, contentHeight);
+  const bgHeight = contentHeight + screenHeight;
   const bgTranslateY = React.useMemo(
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
@@ -242,9 +242,9 @@ export function ConfigScreen() {
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
           {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
           {campoUmbral('Aprobación ≥', 'umbralAprobacion')}
-          {campoUmbral('Por examen ≥', 'umbralPorExamen')}
+          {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
           {campoUmbral('Nota mínima examen ≥', 'umbralExamenExoneracion')}
-          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Recursar se asigna automáticamente al resto</Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
           {toggle('Usar estado "Aprobado"', 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
@@ -638,7 +638,7 @@ export function ConfigScreen() {
     </View>
   );
   return (
-    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+    <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>
       {hasImgBg && (
         <Animated.View
           style={{

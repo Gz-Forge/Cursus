@@ -79,6 +79,7 @@ export interface Materia {
   tipoNotaManual: TipoNota;
   evaluaciones: Evaluacion[];
   oportunidadesExamen: number;
+  esNotaExamen?: boolean;          // true = nota de examen (usa umbralExamenExoneracion); omitido/false = nota de cursada normal
   tipoFormacion?: string;
   bloques?: BloqueHorario[];
   faltasMaxTeorica?: number;
@@ -136,7 +137,7 @@ export interface Config {
   notaMaxima: number;            // ej: 12, 10, 100
   umbralExoneracion: number;     // % ej: 85
   umbralAprobacion: number;      // % ej: 60
-  umbralPorExamen: number;       // % ej: 45
+  umbralPorExamen: number;       // % ej: 45 — mínimo para tener oportunidad de examen (por debajo recursa directo)
   mostrarNotaComo: TipoNota;
   umbralExamenExoneracion: number;  // % mínimo para salvar el examen, referencia, default: 55
   usarEstadoAprobado: boolean;       // si la carrera usa estado aprobado, default: true

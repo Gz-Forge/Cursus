@@ -890,7 +890,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
       {[
         { label: 'Exoneración ≥', val: '75', equiv: '9.0 / 12' },
         { label: 'Aprobación ≥',  val: '50', equiv: '6.0 / 12' },
-        { label: 'Por examen ≥',  val: '30', equiv: '3.6 / 12' },
+        { label: 'Oportunidad de Examen ≥',  val: '30', equiv: '3.6 / 12' },
         { label: 'Nota mínima examen ≥', val: '60', equiv: '7.2 / 12' },
       ].map(u => (
         <View key={u.label} style={{ marginBottom: 12 }}>

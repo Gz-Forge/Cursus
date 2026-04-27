@@ -149,7 +149,7 @@ export function EditMateriaScreen() {
   ];
 
   const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones);
-  const estado = derivarEstado(notaPct, config);
+  const estado = calcularEstadoFinal(form, config);
 
   // Auto-save para materias existentes
   const esMateriaExistente = !!materiaOriginal;
@@ -367,7 +367,7 @@ export function EditMateriaScreen() {
     const previasOk = form.previasNecesarias.every(p => aprobadas.has(p));
 
     if (creditosOk && previasOk) {
-      setForm(f => ({ ...f, cursando: true }));
+      setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
       return;
     }
 
@@ -539,9 +539,24 @@ export function EditMateriaScreen() {
         </View>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>NOTA</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
           <Text style={{ color: tema.texto }}>Ingresar manualmente</Text>
           <Switch value={form.usarNotaManual} onValueChange={v => setForm(f => ({ ...f, usarNotaManual: v }))} trackColor={{ true: tema.acento }} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{ color: tema.texto }}>Esta nota es de examen</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
+              {form.esNotaExamen
+                ? `Exonera ≥ ${config.umbralExamenExoneracion}% · Por debajo repite examen o recursa`
+                : `Exonera ≥ ${config.umbralExoneracion}% · Oportunidad de Examen ≥ ${config.umbralPorExamen}%`}
+            </Text>
+          </View>
+          <Switch
+            value={form.esNotaExamen ?? false}
+            onValueChange={v => setForm(f => ({ ...f, esNotaExamen: v }))}
+            trackColor={{ true: tema.acento }}
+          />
         </View>
 
         {form.usarNotaManual ? (
