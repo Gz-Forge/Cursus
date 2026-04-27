@@ -28,9 +28,14 @@ export function calcularNotaTotal(evaluaciones: Evaluacion[]): number | null {
 
 export function derivarEstado(
   notaPorcentaje: number | null,
-  config: Config
+  config: Config,
+  esExamen?: boolean,
 ): EstadoMateria | null {
   if (notaPorcentaje === null) return null;
+  if (esExamen) {
+    if (notaPorcentaje >= config.umbralExamenExoneracion) return 'exonerado';
+    return 'reprobado'; // calcularEstadoFinal aplica recursar si oportunidades === 0
+  }
   if (notaPorcentaje >= config.umbralExoneracion) return 'exonerado';
   if (config.usarEstadoAprobado && notaPorcentaje >= config.umbralAprobacion) return 'aprobado';
   if (notaPorcentaje >= config.umbralPorExamen) return 'reprobado';
@@ -46,7 +51,7 @@ export function calcularEstadoFinal(materia: Materia, config: Config): EstadoMat
   if (materia.cursando) return 'cursando';
   const nota = obtenerNotaFinal(materia);
   if (nota === null) return 'por_cursar';
-  const estado = derivarEstado(nota, config)!;
+  const estado = derivarEstado(nota, config, materia.esNotaExamen)!;
   if (materia.oportunidadesExamen === 0 && (estado === 'aprobado' || estado === 'reprobado')) {
     return 'recursar';
   }
