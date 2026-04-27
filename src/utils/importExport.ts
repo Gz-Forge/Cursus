@@ -267,6 +267,93 @@ Mi carrera:
 [describí tu carrera acá con toda la información disponible: materias, semestres, previas, horarios y evaluaciones]`;
 }
 
+export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';
+
+function deriveEsPreviaDe(materias: Materia[]): Materia[] {
+  const result = materias.map(m => ({ ...m, esPreviaDe: [] as number[] }));
+  result.forEach(m => {
+    m.previasNecesarias.forEach(numReq => {
+      const req = result.find(x => x.numero === numReq);
+      if (req && !req.esPreviaDe.includes(m.numero)) {
+        req.esPreviaDe.push(m.numero);
+      }
+    });
+  });
+  return result;
+}
+
+/**
+ * Merges a parsed MateriaJson array into the existing Materia list.
+ * - 'solo_nuevas':  only adds entries whose nombre doesn't already exist
+ * - 'actualizar':   updates semestre/créditos/previas/tipoFormación for matches;
+ *                   preserves evaluaciones, bloques, faltas, cursando, notas
+ * - 'reemplazar':   discards existing, returns fresh list from jsonData
+ */
+export function mergeImportar(
+  existentes: Materia[],
+  jsonData: MateriaJson[],
+  modo: ModoImport,
+  oportunidades: number,
+): Materia[] {
+  if (modo === 'reemplazar') {
+    return jsonAMaterias(jsonData, oportunidades);
+  }
+
+  const key = (s: string) => s.trim().toLowerCase();
+  const existentesPorNombre = new Map<string, Materia>(
+    existentes.map(m => [key(m.nombre), m]),
+  );
+
+  const maxNum = existentes.reduce((acc, m) => Math.max(acc, m.numero), 0);
+
+  if (modo === 'solo_nuevas') {
+    const soloNuevas = jsonData.filter(d => !existentesPorNombre.has(key(d.nombre)));
+    if (soloNuevas.length === 0) return existentes;
+    const renumbered = soloNuevas.map((d, i) => ({ ...d, numero: maxNum + i + 1 }));
+    const nuevas = jsonAMaterias(renumbered, oportunidades);
+    return deriveEsPreviaDe([...existentes, ...nuevas]);
+  }
+
+  // modo 'actualizar'
+  const entradasNuevas = jsonData.filter(d => !existentesPorNombre.has(key(d.nombre)));
+  const entradasExistentes = jsonData.filter(d => existentesPorNombre.has(key(d.nombre)));
+
+  const nuevasConNum = entradasNuevas.map((d, i) => ({ ...d, numero: maxNum + i + 1 }));
+
+  // Combined name→numero for resolving previas references
+  const nombreANumero = new Map<string, number>();
+  existentes.forEach(m => nombreANumero.set(key(m.nombre), m.numero));
+  nuevasConNum.forEach(d => nombreANumero.set(key(d.nombre), d.numero!));
+
+  const resolvePrevias = (previas: string[] | undefined): number[] =>
+    (previas ?? [])
+      .map(n => nombreANumero.get(key(n)))
+      .filter((n): n is number => n !== undefined);
+
+  const actualizadas = entradasExistentes.map(d => {
+    const existing = existentesPorNombre.get(key(d.nombre))!;
+    return {
+      ...existing,
+      semestre: d.semestre,
+      creditosQueDA: d.creditos_da ?? existing.creditosQueDA,
+      creditosNecesarios: d.creditos_necesarios ?? existing.creditosNecesarios,
+      tipoFormacion: d.tipo_formacion ?? existing.tipoFormacion,
+      previasNecesarias: resolvePrevias(d.previas),
+    };
+  });
+
+  const nuevas = jsonAMaterias(nuevasConNum, oportunidades);
+
+  const actualizadasIds = new Set(actualizadas.map(m => m.id));
+  const resultado = [
+    ...actualizadas,
+    ...existentes.filter(m => !actualizadasIds.has(m.id)),
+    ...nuevas,
+  ];
+
+  return deriveEsPreviaDe(resultado);
+}
+
 export function materiasAJson(materias: Materia[]): MateriaJson[] {
   const numeroANombre = new Map<number, string>();
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));

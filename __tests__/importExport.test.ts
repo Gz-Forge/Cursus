@@ -1,4 +1,5 @@
-import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos } from '../src/utils/importExport';
+import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar } from '../src/utils/importExport';
+import { Materia } from '../src/types';
 
 // Nuevo formato: previas = materias que esta materia desbloquea (esPreviaDe)
 // numero es opcional; oportunidades_examen no existe en el JSON
@@ -149,5 +150,78 @@ describe('extraerTiposNuevos', () => {
     ];
     const nuevos = extraerTiposNuevos(datos, []);
     expect(nuevos).toEqual(['Electiva']);
+  });
+});
+
+const makeMateria = (overrides: Partial<Materia>): Materia => ({
+  id: `m${overrides.numero}`,
+  numero: 1,
+  nombre: 'Test',
+  semestre: 1,
+  creditosQueDA: 0,
+  creditosNecesarios: 0,
+  previasNecesarias: [],
+  esPreviaDe: [],
+  cursando: false,
+  usarNotaManual: false,
+  notaManual: null,
+  tipoNotaManual: 'numero',
+  evaluaciones: [],
+  oportunidadesExamen: 3,
+  ...overrides,
+});
+
+describe('mergeImportar', () => {
+  const existentes: Materia[] = [
+    makeMateria({ id: 'm1', numero: 1, nombre: 'Álgebra', semestre: 1, creditosQueDA: 6 }),
+    makeMateria({ id: 'm2', numero: 2, nombre: 'Cálculo', semestre: 2, creditosQueDA: 8 }),
+  ];
+
+  it('reemplazar: devuelve lista completamente nueva', () => {
+    const json = [{ nombre: 'Nueva', semestre: 1, creditos_da: 4 }];
+    const result = mergeImportar(existentes, json, 'reemplazar', 3);
+    expect(result).toHaveLength(1);
+    expect(result[0].nombre).toBe('Nueva');
+  });
+
+  it('solo_nuevas: agrega solo las que no existen por nombre', () => {
+    const json = [
+      { nombre: 'Álgebra', semestre: 1, creditos_da: 6 },
+      { nombre: 'Física', semestre: 1, creditos_da: 5 },
+    ];
+    const result = mergeImportar(existentes, json, 'solo_nuevas', 3);
+    expect(result).toHaveLength(3);
+    expect(result.find(m => m.nombre === 'Álgebra')!.id).toBe('m1'); // id preservado
+    expect(result.find(m => m.nombre === 'Física')).toBeTruthy();
+  });
+
+  it('solo_nuevas: retorna existentes sin cambios si todo ya existe', () => {
+    const json = [{ nombre: 'Álgebra', semestre: 1 }];
+    const result = mergeImportar(existentes, json, 'solo_nuevas', 3);
+    expect(result).toBe(existentes); // misma referencia
+  });
+
+  it('actualizar: actualiza semestre/créditos preservando id y evaluaciones', () => {
+    const conEval: Materia[] = [
+      { ...existentes[0], evaluaciones: [{ id: 'ev1', tipo: 'simple', nombre: 'Parcial', pesoEnMateria: 100, tipoNota: 'numero', nota: 8, notaMaxima: 12 }] },
+      existentes[1],
+    ];
+    const json = [{ nombre: 'Álgebra', semestre: 3, creditos_da: 10 }];
+    const result = mergeImportar(conEval, json, 'actualizar', 3);
+    const updated = result.find(m => m.nombre === 'Álgebra')!;
+    expect(updated.id).toBe('m1');           // id preservado
+    expect(updated.semestre).toBe(3);        // actualizado
+    expect(updated.creditosQueDA).toBe(10);  // actualizado
+    expect(updated.evaluaciones).toHaveLength(1); // preservado
+  });
+
+  it('actualizar: agrega materias nuevas del JSON', () => {
+    const json = [
+      { nombre: 'Álgebra', semestre: 1 },
+      { nombre: 'Física', semestre: 2 },
+    ];
+    const result = mergeImportar(existentes, json, 'actualizar', 3);
+    expect(result).toHaveLength(3);
+    expect(result.find(m => m.nombre === 'Física')).toBeTruthy();
   });
 });
