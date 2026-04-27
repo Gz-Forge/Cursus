@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, Platform, ImageBackground } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
+import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
@@ -58,6 +59,10 @@ export function ConfigScreen() {
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<any>();
+
+  const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const toggleAcordeonHorario = (id: string) =>
     setAcordeonesHorario(p => ({ ...p, [id]: !p[id] }));
@@ -131,9 +136,24 @@ export function ConfigScreen() {
   };
 
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
+  const isMovible = hasImgBg && !!fondoPantalla?.movible;
+  const bgHeight = Math.max(screenHeight, contentHeight);
+  const bgTranslateY = React.useMemo(
+    () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
+    [isMovible, scrollAnim],
+  );
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <Animated.ScrollView
+        contentContainerStyle={{ padding: 16 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_, h) => setContentHeight(h)}
+      >
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>CUENTA Y SYNC</Text>
@@ -609,7 +629,7 @@ export function ConfigScreen() {
           )}
 
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <LoginModal visible={mostrarLogin} onCerrar={() => setMostrarLogin(false)} />
       <SyncModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
@@ -617,8 +637,20 @@ export function ConfigScreen() {
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
     </View>
   );
-  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
-    return <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>{innerContent}</ImageBackground>;
-  }
-  return <View style={{ flex: 1, ...fondoStyle }}>{innerContent}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+      {hasImgBg && (
+        <Animated.View
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: screenWidth, height: bgHeight,
+            transform: [{ translateY: bgTranslateY }],
+          }}
+        >
+          <TiledBackground uri={fondoPantalla!.valor} width={screenWidth} height={bgHeight} />
+        </Animated.View>
+      )}
+      {innerContent}
+    </View>
+  );
 }
