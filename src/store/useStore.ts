@@ -58,6 +58,7 @@ interface Store extends AppState {
 
   cargar: () => Promise<void>;
   guardarMateria: (m: Materia) => void;
+  reemplazarMaterias: (nuevas: Materia[]) => void;
   eliminarMateria: (id: string) => void;
   actualizarConfig: (c: Partial<Config>) => void;
   decrementarPeriodoExamen: () => Materia[];
@@ -92,6 +93,11 @@ export const useStore = create<Store>((set, get) => ({
     const renumeradas = renumerarMaterias(get().materias, materia);
     set({ materias: renumeradas });
     guardarPerfilEstado(get().perfilActivoId, { materias: renumeradas, config: get().config });
+  },
+
+  reemplazarMaterias: (nuevas) => {
+    set({ materias: nuevas });
+    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
   },
 
   eliminarMateria: (id) => {
