@@ -31,7 +31,7 @@ export interface MateriaJson {
   semestre: number;
   creditos_da?: number;
   creditos_necesarios?: number;
-  previas?: string[];   // nombres de materias necesarias para cursar ESTA materia (previasNecesarias)
+  previas?: string[];   // nombres de materias que esta materia desbloquea (esPreviaDe)
   numero?: number;      // si ausente se auto-asigna por orden de semestre
   tipo_formacion?: string;
   bloques?: Array<{
@@ -108,10 +108,10 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       semestre: d.semestre,
       creditosQueDA: d.creditos_da ?? 0,
       creditosNecesarios: d.creditos_necesarios ?? 0,
-      previasNecesarias: (d.previas ?? [])
+      previasNecesarias: [],
+      esPreviaDe: (d.previas ?? [])
         .map(nombre => nombreANumero.get(nombre.trim()))
         .filter((n): n is number => n !== undefined),
-      esPreviaDe: [],
       cursando: false,
       usarNotaManual: false,
       notaManual: null,
@@ -123,12 +123,12 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
     };
   });
 
-  // Derivar esPreviaDe invirtiendo previasNecesarias
+  // Derivar previasNecesarias invirtiendo esPreviaDe
   materias.forEach(m => {
-    m.previasNecesarias.forEach(numReq => {
-      const requerida = materias.find(x => x.numero === numReq);
-      if (requerida && !requerida.esPreviaDe.includes(m.numero)) {
-        requerida.esPreviaDe.push(m.numero);
+    m.esPreviaDe.forEach(numDesbloqueada => {
+      const desbloqueada = materias.find(x => x.numero === numDesbloqueada);
+      if (desbloqueada && !desbloqueada.previasNecesarias.includes(m.numero)) {
+        desbloqueada.previasNecesarias.push(m.numero);
       }
     });
   });
@@ -359,7 +359,7 @@ export function materiasAJson(materias: Materia[]): MateriaJson[] {
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));
 
   return materias.map(m => {
-    const previas = m.previasNecesarias
+    const previas = m.esPreviaDe
       .map(num => numeroANombre.get(num))
       .filter((n): n is string => n !== undefined);
 

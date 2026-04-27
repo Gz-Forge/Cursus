@@ -33,6 +33,7 @@ const configBase: Config = {
   tarjetaMostrarToggleCursando: true,
   coloresHorario: {},
   horarioMostrarEvaluaciones: true,
+  horarioPrimerDia: 'lunes',
 };
 
 describe('calcularPorcentajeEvaluacion', () => {
