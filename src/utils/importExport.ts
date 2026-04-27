@@ -311,7 +311,9 @@ export function mergeImportar(
     if (soloNuevas.length === 0) return existentes;
     const renumbered = soloNuevas.map((d, i) => ({ ...d, numero: maxNum + i + 1 }));
     const nuevas = jsonAMaterias(renumbered, oportunidades);
-    return deriveEsPreviaDe([...existentes, ...nuevas]);
+    const combined = [...existentes, ...nuevas];
+    combined.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
+    return deriveEsPreviaDe(combined);
   }
 
   // modo 'actualizar'
@@ -351,6 +353,7 @@ export function mergeImportar(
     ...nuevas,
   ];
 
+  resultado.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
   return deriveEsPreviaDe(resultado);
 }
 
