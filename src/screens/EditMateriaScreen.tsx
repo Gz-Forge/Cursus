@@ -149,7 +149,7 @@ export function EditMateriaScreen() {
   ];
 
   const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones);
-  const estado = derivarEstado(notaPct, config);
+  const estado = derivarEstado(notaPct, config, form.esNotaExamen);
 
   // Auto-save para materias existentes
   const esMateriaExistente = !!materiaOriginal;
