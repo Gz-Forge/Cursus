@@ -13,6 +13,7 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil } from '../types';
+import type { MateriaJson, ModoImport } from '../utils/importExport';
 
 type Tab = 'importar' | 'exportar';
 
@@ -62,9 +63,13 @@ export function ImportarExportarScreen() {
 
 function PanelImportar() {
   const tema = useTema();
-  const { guardarMateria, config, actualizarConfig } = useStore();
+  const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{
+    json: MateriaJson[];
+    tiposNuevos: string[];
+  } | null>(null);
 
   const handleImportarJson = async () => {
     setCargando(true);
@@ -89,26 +94,9 @@ function PanelImportar() {
 
     // Detectar formato carrera (array con nombre + semestre)
     if (Array.isArray(datos) && (datos as any[])[0]?.nombre && (datos as any[])[0]?.semestre !== undefined) {
-      const { jsonAMaterias, extraerTiposNuevos } = await import('../utils/importExport');
-      const materias = jsonAMaterias(datos as any, config.oportunidadesExamenDefault);
+      const { extraerTiposNuevos } = await import('../utils/importExport');
       const tiposNuevos = extraerTiposNuevos(datos as any, config.tiposFormacion);
-      Alert.alert(
-        'Importar carrera',
-        `Se encontraron ${materias.length} materias. ¿Reemplazar datos actuales?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Importar',
-            onPress: () => {
-              if (tiposNuevos.length > 0) {
-                const freshConfig = useStore.getState().config;
-                actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...tiposNuevos] });
-              }
-              materias.forEach(m => guardarMateria(m));
-            },
-          },
-        ]
-      );
+      setPendingImport({ json: datos as MateriaJson[], tiposNuevos });
       return;
     }
 
@@ -131,6 +119,31 @@ function PanelImportar() {
       'Formato no reconocido',
       'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Exportación completa: generada desde esta pantalla',
     );
+  };
+
+  const doImport = async (modo: ModoImport) => {
+    if (!pendingImport) return;
+    setCargando(true);
+    try {
+      const { mergeImportar } = await import('../utils/importExport');
+      const merged = mergeImportar(
+        materias,
+        pendingImport.json,
+        modo,
+        config.oportunidadesExamenDefault,
+      );
+      if (pendingImport.tiposNuevos.length > 0) {
+        const freshConfig = useStore.getState().config;
+        actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...pendingImport.tiposNuevos] });
+      }
+      reemplazarMaterias(merged);
+      setPendingImport(null);
+      Alert.alert('Importación completa', `Se procesaron ${merged.length} materias.`);
+    } catch {
+      Alert.alert('Error', 'No se pudo completar la importación.');
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
@@ -162,6 +175,56 @@ function PanelImportar() {
           }
         </TouchableOpacity>
       </View>
+
+      {pendingImport && (() => {
+        const nuevoCount = pendingImport.json.filter(
+          d => !materias.some(m => m.nombre.trim().toLowerCase() === d.nombre.trim().toLowerCase()),
+        ).length;
+        const existenteCount = pendingImport.json.length - nuevoCount;
+        const optStyle = {
+          backgroundColor: tema.fondo,
+          borderRadius: 10, padding: 14, marginBottom: 8,
+          borderWidth: 1, borderColor: tema.borde,
+        };
+        return (
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 14, marginTop: 12 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 2 }}>
+              {pendingImport.json.length} materias encontradas
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+              {nuevoCount} nuevas · {existenteCount} ya existentes
+            </Text>
+
+            <TouchableOpacity onPress={() => doImport('solo_nuevas')} style={optStyle}>
+              <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>Solo nuevas</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Agrega las {nuevoCount} materias nuevas, las existentes no se modifican
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => doImport('actualizar')} style={optStyle}>
+              <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>Actualizar estructura</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Actualiza semestre / créditos / previas. Preserva notas, evaluaciones y horarios
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => doImport('reemplazar')}
+              style={[optStyle, { borderColor: '#FF5722' }]}
+            >
+              <Text style={{ color: '#FF5722', fontWeight: '600', marginBottom: 2 }}>Reemplazar todo</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Borra las materias actuales y carga solo las del archivo
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setPendingImport(null)} style={{ alignItems: 'center', marginTop: 6 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
 
       {Platform.OS !== 'web' && (
         <>
