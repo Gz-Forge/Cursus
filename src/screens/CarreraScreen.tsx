@@ -354,151 +354,235 @@ export function CarreraScreen() {
         {/* VISTA BÚSQUEDA */}
         {vista === 'busqueda' && (
           <>
-            {/* Toggle: Todas / Solo disponibles */}
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-              <TouchableOpacity
-                onPress={() => setMostrarSoloDisponibles(false)}
-                style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                  backgroundColor: !mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
-              >
-                <Text style={{ color: !mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todas</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setMostrarSoloDisponibles(true)}
-                style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                  backgroundColor: mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
-              >
-                <Text style={{ color: mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
-              </TouchableOpacity>
+            {/* Barra de búsqueda */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, gap: 8 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>🔍</Text>
+              <TextInput
+                style={{ flex: 1, color: tema.texto, fontSize: 14 }}
+                placeholder="Buscar por nombre o número..."
+                placeholderTextColor={tema.textoSecundario}
+                value={textoBusqueda}
+                onChangeText={v => {
+                  setTextoBusqueda(v);
+                  if (!v) setModoBusqueda('nombre');
+                }}
+                autoCorrect={false}
+              />
+              {textoBusqueda.length > 0 && (
+                <TouchableOpacity onPress={() => { setTextoBusqueda(''); setModoBusqueda('nombre'); }}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 18, lineHeight: 20 }}>✕</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {mostrarSoloDisponibles ? (
-              /* ── Vista: disponibles con sub-tabs ── */
-              <>
-                {/* Sub-tabs: Para cursar / Para dar examen */}
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                  {([
-                    { key: 'para_cursar', label: '📚 Para cursar' },
-                    { key: 'para_examen', label: '📝 Para dar examen' },
-                  ] as const).map(({ key, label }) => (
-                    <TouchableOpacity
-                      key={key}
-                      onPress={() => setSubFiltroDisp(key)}
-                      style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
-                        backgroundColor: subFiltroDisp === key ? tema.acento : tema.tarjeta }}
-                    >
-                      <Text style={{ color: subFiltroDisp === key ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
-                        {label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+            {textoBusqueda.length > 0 ? (
+              /* ── Modo búsqueda activo ── */
+              (() => {
+                const q = textoBusqueda.trim().toLowerCase();
+                const matchBusqueda = (m: typeof materias[0]) =>
+                  m.nombre.toLowerCase().includes(q) || String(m.numero).includes(q);
 
-                {subFiltroDisp === 'para_cursar' && (() => {
-                  const numerosDisp = new Set(materiasDisponibles(materias, config));
-                  const lista = materias.filter(m => numerosDisp.has(m.numero));
-                  const primerSem = lista.filter(m => m.semestre % 2 === 1);
-                  const segundoSem = lista.filter(m => m.semestre % 2 === 0);
-                  return (
-                    <>
-                      {lista.length === 0 && (
-                        <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
-                          No hay materias disponibles para cursar
-                        </Text>
-                      )}
-                      {primerSem.length > 0 && (
-                        <>
-                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>
-                            1° semestre del año
-                          </Text>
-                          {renderMateriasList(primerSem)}
-                        </>
-                      )}
-                      {segundoSem.length > 0 && (
-                        <>
-                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13,
-                            marginBottom: 8, marginTop: primerSem.length > 0 ? 12 : 0 }}>
-                            2° semestre del año
-                          </Text>
-                          {renderMateriasList(segundoSem)}
-                        </>
-                      )}
-                    </>
+                const modos = [
+                  { key: 'nombre',       label: 'Nombre'      },
+                  { key: 'es_previa_de', label: 'Es previa de' },
+                  { key: 'sus_previas',  label: 'Sus previas'  },
+                ] as const;
+
+                let resultados: typeof materias = [];
+                let emptyMsg = '';
+
+                if (modoBusqueda === 'nombre') {
+                  resultados = materias.filter(m => matchBusqueda(m));
+                  emptyMsg = 'No se encontró ninguna materia con ese nombre o número';
+                } else if (modoBusqueda === 'es_previa_de') {
+                  const nums = new Set(materias.filter(m => matchBusqueda(m)).map(m => m.numero));
+                  resultados = materias.filter(m => m.previasNecesarias.some(n => nums.has(n)));
+                  emptyMsg = 'Esta materia no es requisito directo de ninguna otra';
+                } else {
+                  const nums = new Set(
+                    materias.filter(m => matchBusqueda(m)).flatMap(m => m.previasNecesarias)
                   );
-                })()}
+                  resultados = materias.filter(m => nums.has(m.numero));
+                  emptyMsg = 'Esta materia no tiene previas requeridas';
+                }
 
-                {subFiltroDisp === 'para_examen' && (() => {
-                  const paraExamen = materias.filter(m => calcularEstadoFinal(m, config) === 'reprobado');
-                  return (
-                    <>
-                      {paraExamen.length === 0 ? (
-                        <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
-                          No tenés materias pendientes de examen
-                        </Text>
-                      ) : (
-                        <>
-                          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
-                            {paraExamen.length} materia{paraExamen.length !== 1 ? 's' : ''} pendiente{paraExamen.length !== 1 ? 's' : ''} de examen
-                          </Text>
-                          {renderMateriasList(paraExamen)}
-                        </>
-                      )}
-                    </>
-                  );
-                })()}
-              </>
-            ) : (
-              /* ── Vista: todas con filtros de estado y tipo ── */
-              <>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                  <TouchableOpacity
-                    onPress={() => setFiltroEstado(null)}
-                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === null ? tema.acento : tema.tarjeta }}
-                  >
-                    <Text style={{ color: filtroEstado === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
-                  </TouchableOpacity>
-                  {(Object.keys(ESTADO_LABELS) as EstadoMateria[]).map(e => (
-                    <TouchableOpacity
-                      key={e}
-                      onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
-                      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
-                    >
-                      <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {tiposFormacion.length > 0 && (
+                return (
                   <>
-                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Tipo de formación</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                      <TouchableOpacity
-                        onPress={() => setFiltroTipo(null)}
-                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === null ? tema.acento : tema.tarjeta }}
-                      >
-                        <Text style={{ color: filtroTipo === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
-                      </TouchableOpacity>
-                      {tiposFormacion.map(t => (
+                    {/* Chips de modo */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      {modos.map(({ key, label }) => (
                         <TouchableOpacity
-                          key={t}
-                          onPress={() => setFiltroTipo(prev => prev === t ? null : t)}
-                          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === t ? tema.acento : tema.tarjeta }}
+                          key={key}
+                          onPress={() => setModoBusqueda(key)}
+                          style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
+                            backgroundColor: modoBusqueda === key ? tema.acento : tema.tarjeta }}
                         >
-                          <Text style={{ color: filtroTipo === t ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{t}</Text>
+                          <Text style={{ color: modoBusqueda === key ? '#fff' : tema.textoSecundario, fontSize: 11, fontWeight: '600' }}>
+                            {label}
+                          </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                  </>
-                )}
 
-                {renderMateriasList(
-                  materias.filter(m => {
-                    const estadoOk = filtroEstado === null || calcularEstadoFinal(m, config) === filtroEstado;
-                    const tipoOk = filtroTipo === null || m.tipoFormacion === filtroTipo;
-                    return estadoOk && tipoOk;
-                  })
+                    {resultados.length === 0 ? (
+                      <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24, fontSize: 13 }}>
+                        {emptyMsg}
+                      </Text>
+                    ) : (
+                      renderMateriasList(resultados)
+                    )}
+                  </>
+                );
+              })()
+            ) : (
+              /* ── Panel original cuando no hay búsqueda ── */
+              <>
+                {/* Toggle: Todas / Solo disponibles */}
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setMostrarSoloDisponibles(false)}
+                    style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                      backgroundColor: !mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
+                  >
+                    <Text style={{ color: !mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todas</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setMostrarSoloDisponibles(true)}
+                    style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                      backgroundColor: mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
+                  >
+                    <Text style={{ color: mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {mostrarSoloDisponibles ? (
+                  /* ── Vista: disponibles con sub-tabs ── */
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      {([
+                        { key: 'para_cursar', label: '📚 Para cursar' },
+                        { key: 'para_examen', label: '📝 Para dar examen' },
+                      ] as const).map(({ key, label }) => (
+                        <TouchableOpacity
+                          key={key}
+                          onPress={() => setSubFiltroDisp(key)}
+                          style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
+                            backgroundColor: subFiltroDisp === key ? tema.acento : tema.tarjeta }}
+                        >
+                          <Text style={{ color: subFiltroDisp === key ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {subFiltroDisp === 'para_cursar' && (() => {
+                      const numerosDisp = new Set(materiasDisponibles(materias, config));
+                      const lista = materias.filter(m => numerosDisp.has(m.numero));
+                      const primerSem = lista.filter(m => m.semestre % 2 === 1);
+                      const segundoSem = lista.filter(m => m.semestre % 2 === 0);
+                      return (
+                        <>
+                          {lista.length === 0 && (
+                            <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
+                              No hay materias disponibles para cursar
+                            </Text>
+                          )}
+                          {primerSem.length > 0 && (
+                            <>
+                              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>
+                                1° semestre del año
+                              </Text>
+                              {renderMateriasList(primerSem)}
+                            </>
+                          )}
+                          {segundoSem.length > 0 && (
+                            <>
+                              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13,
+                                marginBottom: 8, marginTop: primerSem.length > 0 ? 12 : 0 }}>
+                                2° semestre del año
+                              </Text>
+                              {renderMateriasList(segundoSem)}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {subFiltroDisp === 'para_examen' && (() => {
+                      const paraExamen = materias.filter(m => calcularEstadoFinal(m, config) === 'reprobado');
+                      return (
+                        <>
+                          {paraExamen.length === 0 ? (
+                            <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24 }}>
+                              No tenés materias pendientes de examen
+                            </Text>
+                          ) : (
+                            <>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
+                                {paraExamen.length} materia{paraExamen.length !== 1 ? 's' : ''} pendiente{paraExamen.length !== 1 ? 's' : ''} de examen
+                              </Text>
+                              {renderMateriasList(paraExamen)}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  /* ── Vista: todas con filtros de estado y tipo ── */
+                  <>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      <TouchableOpacity
+                        onPress={() => setFiltroEstado(null)}
+                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === null ? tema.acento : tema.tarjeta }}
+                      >
+                        <Text style={{ color: filtroEstado === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
+                      </TouchableOpacity>
+                      {(Object.keys(ESTADO_LABELS) as EstadoMateria[]).map(e => (
+                        <TouchableOpacity
+                          key={e}
+                          onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
+                          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
+                        >
+                          <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {tiposFormacion.length > 0 && (
+                      <>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Tipo de formación</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                          <TouchableOpacity
+                            onPress={() => setFiltroTipo(null)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === null ? tema.acento : tema.tarjeta }}
+                          >
+                            <Text style={{ color: filtroTipo === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
+                          </TouchableOpacity>
+                          {tiposFormacion.map(t => (
+                            <TouchableOpacity
+                              key={t}
+                              onPress={() => setFiltroTipo(prev => prev === t ? null : t)}
+                              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === t ? tema.acento : tema.tarjeta }}
+                            >
+                              <Text style={{ color: filtroTipo === t ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{t}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </>
+                    )}
+
+                    {renderMateriasList(
+                      materias.filter(m => {
+                        const estadoOk = filtroEstado === null || calcularEstadoFinal(m, config) === filtroEstado;
+                        const tipoOk = filtroTipo === null || m.tipoFormacion === filtroTipo;
+                        return estadoOk && tipoOk;
+                      })
+                    )}
+                  </>
                 )}
               </>
             )}
