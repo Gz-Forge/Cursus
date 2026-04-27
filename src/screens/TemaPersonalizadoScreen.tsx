@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { temaOscuro } from '../theme/colors';
-import { TemaPersonalizado, FondoPantalla, ColoresScreen } from '../types';
+import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
 // ── Color picker ──────────────────────────────────────────────────────────────
@@ -114,6 +114,31 @@ function FondoEditor({
           <TouchableOpacity onPress={() => onChange(undefined)} style={{ alignItems: 'center' }}>
             <Text style={{ color: '#F44336', fontSize: 12 }}>Quitar imagen</Text>
           </TouchableOpacity>
+          {valor?.valor ? (
+            <TouchableOpacity
+              onPress={() => onChange({ ...valor!, movible: !valor?.movible })}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+                marginTop: 10, padding: 10,
+                backgroundColor: tema.tarjeta, borderRadius: 8,
+              }}
+            >
+              <View style={{
+                width: 42, height: 24, borderRadius: 12,
+                backgroundColor: valor?.movible ? tema.acento : tema.borde,
+                justifyContent: 'center', paddingHorizontal: 3,
+              }}>
+                <View style={{
+                  width: 18, height: 18, borderRadius: 9,
+                  backgroundColor: '#fff',
+                  alignSelf: valor?.movible ? 'flex-end' : 'flex-start',
+                }} />
+              </View>
+              <Text style={{ color: tema.texto, fontSize: 13 }}>
+                {valor?.movible ? 'Se mueve al hacer scroll' : 'Imagen fija'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
     </View>
@@ -177,6 +202,14 @@ function PantallaEditor({
   };
 
   const otras = PANTALLAS.filter(p => p.key !== pantallaKey);
+
+  const materiasAll = useStore(s => s.materias);
+  const semestresUnicos = pantallaKey === 'carrera'
+    ? [...new Set(materiasAll.map(m => m.semestre))].sort((a, b) => a - b)
+    : [];
+  const cs = draft.coloresSemestres;
+  const setCS = (v: Partial<ColoresSemestres>) =>
+    onChange({ coloresSemestres: { modo: 'paleta', ...(cs ?? {}), ...v } });
 
   return (
     <View>
@@ -254,6 +287,77 @@ function PantallaEditor({
           </TouchableOpacity>
         ))}
       </View>
+
+      {pantallaKey === 'carrera' && (
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 8 }}>
+            COLORES DE SEMESTRES
+          </Text>
+          <View style={{
+            flexDirection: 'row', backgroundColor: tema.fondo,
+            borderRadius: 8, overflow: 'hidden', marginBottom: 12,
+          }}>
+            {(['paleta', 'unico', 'por_semestre'] as ColoresSemestres['modo'][]).map(m => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => setCS({ modo: m })}
+                style={{
+                  flex: 1, padding: 9, alignItems: 'center',
+                  backgroundColor: (cs?.modo ?? 'paleta') === m ? tema.acento : 'transparent',
+                }}
+              >
+                <Text style={{
+                  color: (cs?.modo ?? 'paleta') === m ? '#fff' : tema.textoSecundario,
+                  fontSize: 11,
+                }}>
+                  {m === 'paleta' ? 'Paleta' : m === 'unico' ? 'Un color' : 'Por sem.'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {(cs?.modo ?? 'paleta') === 'unico' && (
+            <ColorInput
+              label="Color único"
+              value={cs?.colorUnico ?? draft.acento}
+              onChange={v => setCS({ colorUnico: v })}
+            />
+          )}
+
+          {(cs?.modo ?? 'paleta') === 'por_semestre' && (
+            <View>
+              {semestresUnicos.length === 0 && (
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 8 }}>
+                  No hay materias cargadas aún
+                </Text>
+              )}
+              {semestresUnicos.map(sem => (
+                <View key={sem} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <View style={{
+                    width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: tema.borde,
+                    backgroundColor: cs?.porSemestre?.[sem.toString()] || tema.borde,
+                  }} />
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 80 }}>Sem. {sem}</Text>
+                  <TextInput
+                    style={{
+                      flex: 1, backgroundColor: tema.fondo, color: tema.texto,
+                      padding: 7, borderRadius: 6, fontSize: 13, fontFamily: 'monospace',
+                    }}
+                    value={cs?.porSemestre?.[sem.toString()] ?? ''}
+                    onChangeText={v =>
+                      setCS({ porSemestre: { ...(cs?.porSemestre ?? {}), [sem.toString()]: v } })
+                    }
+                    placeholder="#RRGGBB"
+                    placeholderTextColor={tema.textoSecundario}
+                    maxLength={7}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -1011,14 +1115,14 @@ export function TemaPersonalizadoScreen() {
               Controla la transparencia de barras de navegación cuando hay imagen de fondo (0 = invisible, 100 = sólido).
             </Text>
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 80 }}>
-                  {draft.opacidadSuperficie ?? 85}%
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 13, flex: 1 }}>
+                  Opacidad: {draft.opacidadSuperficie ?? 85}%
                 </Text>
                 <TextInput
                   style={{
-                    flex: 1, backgroundColor: tema.fondo, color: tema.texto,
-                    padding: 8, borderRadius: 6, fontSize: 14,
+                    width: 70, backgroundColor: tema.fondo, color: tema.texto,
+                    padding: 8, borderRadius: 6, fontSize: 14, textAlign: 'center',
                   }}
                   value={String(draft.opacidadSuperficie ?? 85)}
                   onChangeText={v => {
@@ -1030,17 +1134,18 @@ export function TemaPersonalizadoScreen() {
                   placeholder="85"
                   placeholderTextColor={tema.textoSecundario}
                 />
-                {/* Atajos rápidos */}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                 {[0, 50, 75, 85, 100].map(v => (
                   <TouchableOpacity
                     key={v}
                     onPress={() => actualizarDraft({ opacidadSuperficie: v })}
                     style={{
-                      paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6,
+                      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
                       backgroundColor: (draft.opacidadSuperficie ?? 85) === v ? tema.acento : tema.fondo,
                     }}
                   >
-                    <Text style={{ color: (draft.opacidadSuperficie ?? 85) === v ? '#fff' : tema.textoSecundario, fontSize: 11 }}>
+                    <Text style={{ color: (draft.opacidadSuperficie ?? 85) === v ? '#fff' : tema.textoSecundario, fontSize: 12 }}>
                       {v}%
                     </Text>
                   </TouchableOpacity>

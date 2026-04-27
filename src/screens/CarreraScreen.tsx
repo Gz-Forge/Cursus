@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, ImageBackground } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -10,7 +10,8 @@ import { QrShareModal } from '../components/QrShareModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PerfilSheet } from '../components/PerfilSheet';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
-import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
+import TiledBackground from '../components/TiledBackground';
+import { useFondoPantalla, useTemaPantalla, hexOpacity, useColoresSemestres } from '../utils/useFondoPantalla';
 import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '../utils/calculos';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
@@ -42,6 +43,10 @@ export function CarreraScreen() {
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
+
+  const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const isWeb = Platform.OS === 'web';
   const fondoPantalla = useFondoPantalla('carrera');
@@ -83,7 +88,7 @@ export function CarreraScreen() {
   };
 
   const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
-  const coloresSem = (tema as any).semestres ?? temaOscuro.semestres;
+  const coloresSem = useColoresSemestres(semestres);
 
   const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
 
@@ -201,6 +206,12 @@ export function CarreraScreen() {
   const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
   const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const isMovible = hasImgBg && !!fondoPantalla?.movible;
+  const bgHeight = Math.max(screenHeight, contentHeight);
+  const bgTranslateY = React.useMemo(
+    () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
+    [isMovible, scrollAnim],
+  );
   const contenido = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Selector de perfil */}
@@ -283,7 +294,16 @@ export function CarreraScreen() {
         ))}
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12 }}>
+      <Animated.ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 12 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_, h) => setContentHeight(h)}
+      >
         {/* VISTA CARRERA */}
         {vista === 'carrera' && (
           <>
@@ -302,7 +322,7 @@ export function CarreraScreen() {
                 materias={materias.filter(m => m.semestre === sem)}
                 todasLasMaterias={materias}
                 config={config}
-                colorAcento={coloresSem[i % coloresSem.length]}
+                colorAcento={coloresSem[i] ?? coloresSem[i % coloresSem.length]}
                 onEditar={irAEditar}
                 expandidoExterno={isExpandido(sem)}
                 onToggle={() => toggleSemestre(sem)}
@@ -482,7 +502,7 @@ export function CarreraScreen() {
             )}
           </>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <FabSpeedDial
         acciones={[
@@ -520,12 +540,20 @@ export function CarreraScreen() {
     </View>
   );
 
-  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
-    return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
-        {contenido}
-      </ImageBackground>
-    );
-  }
-  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{contenido}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+      {hasImgBg && (
+        <Animated.View
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: screenWidth, height: bgHeight,
+            transform: [{ translateY: bgTranslateY }],
+          }}
+        >
+          <TiledBackground uri={fondoPantalla!.valor} width={screenWidth} height={bgHeight} />
+        </Animated.View>
+      )}
+      {contenido}
+    </View>
+  );
 }

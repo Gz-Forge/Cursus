@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform, ImageBackground } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform, Animated } from 'react-native';
+import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
@@ -29,9 +30,12 @@ function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
 export function MetricsScreen() {
   const { materias, config } = useStore();
   const tema = useTemaPantalla('metricas');
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [semestreTorta, setSemestreTorta] = useState<number | null>(null);
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
+
+  const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
 
   const isWeb = Platform.OS === 'web';
   const fondoPantalla = useFondoPantalla('metricas');
@@ -163,6 +167,12 @@ export function MetricsScreen() {
     : { width: '100%' as const };
 
   const fondoStyle = fondoPantalla?.tipo === 'color' ? { backgroundColor: fondoPantalla.valor } : {};
+  const isMovible = hasImgBg && !!fondoPantalla?.movible;
+  const bgHeight = Math.max(height, contentHeight);
+  const bgTranslateY = React.useMemo(
+    () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
+    [isMovible, scrollAnim],
+  );
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
 
@@ -180,7 +190,15 @@ export function MetricsScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <Animated.ScrollView
+        contentContainerStyle={{ padding: 16 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onContentSizeChange={(_, h) => setContentHeight(h)}
+      >
 
         {/* ══════════ PANEL GENERAL ══════════ */}
         {panelActivo === 'general' && (
@@ -499,16 +517,24 @@ export function MetricsScreen() {
           </>
         )}
 
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 
-  if (fondoPantalla?.tipo === 'imagen' && fondoPantalla.valor) {
-    return (
-      <ImageBackground source={{ uri: fondoPantalla.valor }} style={{ flex: 1 }}>
-        {innerContent}
-      </ImageBackground>
-    );
-  }
-  return <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>{innerContent}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: hasImgBg ? undefined : tema.fondo, ...fondoStyle }}>
+      {hasImgBg && (
+        <Animated.View
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width, height: bgHeight,
+            transform: [{ translateY: bgTranslateY }],
+          }}
+        >
+          <TiledBackground uri={fondoPantalla!.valor} width={width} height={bgHeight} />
+        </Animated.View>
+      )}
+      {innerContent}
+    </View>
+  );
 }
