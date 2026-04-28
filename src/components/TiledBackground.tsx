@@ -25,8 +25,13 @@ export default function TiledBackground({ uri, width, height }: Props) {
 
   if (!imgSize || imgSize.w <= 0 || imgSize.h <= 0 || width <= 0 || height <= 0) return null;
 
-  const cols = Math.ceil(width / imgSize.w);
-  const rows = Math.ceil(height / imgSize.h);
+  // Only scale DOWN when the image is larger than the container (fixes zoom+clipping).
+  // Never scale UP: small pattern images tile at natural size to avoid pixelation.
+  const scale = imgSize.w > width ? width / imgSize.w : 1;
+  const tileW = imgSize.w * scale;
+  const tileH = imgSize.h * scale;
+  const cols = Math.ceil(width / tileW);
+  const rows = Math.ceil(height / tileH);
   const tiles: React.ReactElement[] = [];
 
   for (let r = 0; r < rows; r++) {
@@ -37,10 +42,10 @@ export default function TiledBackground({ uri, width, height }: Props) {
           source={{ uri }}
           style={{
             position: 'absolute',
-            top: r * imgSize.h,
-            left: c * imgSize.w,
-            width: imgSize.w,
-            height: imgSize.h,
+            top: r * tileH,
+            left: c * tileW,
+            width: tileW,
+            height: tileH,
           }}
           resizeMode="stretch"
         />,
