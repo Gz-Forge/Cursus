@@ -54,4 +54,15 @@ describe('calcularLayoutSuperposicion', () => {
     const result = calcularLayoutSuperposicion([]);
     expect(result.size).toBe(0);
   });
+
+  it('bloque aislado en otro tramo no hereda totalSubCols del grupo anterior', () => {
+    const result = calcularLayoutSuperposicion([
+      { id: 'a', horaInicio: 480, horaFin: 600 },  // 8-10 (solapan con b)
+      { id: 'b', horaInicio: 540, horaFin: 660 },  // 9-11
+      { id: 'c', horaInicio: 780, horaFin: 900 },  // 13-15 (aislado)
+    ]);
+    expect(result.get('c')!.totalSubCols).toBe(1);
+    expect(result.get('a')!.totalSubCols).toBe(2);
+    expect(result.get('b')!.totalSubCols).toBe(2);
+  });
 });
