@@ -10,6 +10,14 @@ import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
   parsearJSONMultiMateria, leerArchivo,
 } from '../utils/horarioImportExport';
+import { calcularLayoutSuperposicion, LayoutBloque } from '../utils/horarioLayout';
+import {
+  LongPressGestureHandler,
+  PanGestureHandler,
+  State,
+  type PanGestureHandlerGestureEvent,
+  type LongPressGestureHandlerStateChangeEvent,
+} from 'react-native-gesture-handler';
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const HORA_DEF_INICIO = 7 * 60;
@@ -63,6 +71,22 @@ export function HorarioScreen() {
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
+
+  const timeColRef     = React.useRef<ScrollView>(null);
+  const headerHRef     = React.useRef<ScrollView>(null);
+  const gridHRef       = React.useRef<ScrollView>(null);
+  const vScrollOffRef  = React.useRef(0);
+  const hScrollOffRef  = React.useRef(0);
+  const outerViewRef   = React.useRef<View>(null);
+  const outerOriginRef = React.useRef({ x: 0, y: 0 });
+
+  // --- Estado de modo edición ---
+  const [cardEnEdicion, setCardEnEdicion] = useState<string | null>(null);
+  const [draftBloque, setDraftBloque]     = useState<BloqueHorario | null>(null);
+  const [ghostPos, setGhostPos]           = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const cardRefs         = React.useRef<Map<string, View>>(new Map());
+  const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
+  const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -159,7 +183,7 @@ export function HorarioScreen() {
   const totalMins    = horaFin - horaInicio;
   const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
-  const dayColW      = (width - TIME_COL_W) / 7;
+  const BASE_DAY_COL_W = (width - TIME_COL_W) / 7;
 
   // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
   const semanaBase   = startOfWeek(new Date());
@@ -182,6 +206,28 @@ export function HorarioScreen() {
   const evaluacionesEstaSemana = todasLasEvaluaciones.filter(
     ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
   );
+
+  // Layout de superposición por día (memoizado)
+  const layoutPorDia = React.useMemo(() => {
+    const map = new Map<string, Map<string, LayoutBloque>>();
+    for (const fecha of fechasSemanaDisplay) {
+      const bloquesDia = bloquesEstaSemana.filter(b => b.fecha === fecha);
+      map.set(fecha, calcularLayoutSuperposicion(bloquesDia));
+    }
+    return map;
+  }, [bloquesEstaSemana, fechasSemanaDisplay.join(',')]);
+
+  const dayColWidths = React.useMemo(() =>
+    fechasSemanaDisplay.map(fecha => {
+      const layout = layoutPorDia.get(fecha)!;
+      if (layout.size === 0) return BASE_DAY_COL_W;
+      const maxCols = Math.max(...[...layout.values()].map(l => l.totalSubCols));
+      return BASE_DAY_COL_W * maxCols;
+    }),
+    [layoutPorDia, BASE_DAY_COL_W]
+  );
+
+  const totalGridW = dayColWidths.reduce((a, b) => a + b, 0);
 
   const obtenerColorBloque = (materiaId: string, tipo: BloqueHorario['tipo']): { fondo: string; texto: string } => {
     const configurado = config.coloresHorario?.[materiaId]?.[tipo];
@@ -218,6 +264,40 @@ export function HorarioScreen() {
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
   );
+
+  function calcularDestino(ghostScreenX: number, ghostScreenY: number): { fecha: string; horaInicio: number } {
+    const relX = ghostScreenX - outerOriginRef.current.x + hScrollOffRef.current;
+    const relY = ghostScreenY - outerOriginRef.current.y + vScrollOffRef.current;
+
+    let acum   = TIME_COL_W;
+    let diaIdx = fechasSemanaDisplay.length - 1;
+    for (let i = 0; i < fechasSemanaDisplay.length; i++) {
+      acum += dayColWidths[i];
+      if (relX < acum) { diaIdx = i; break; }
+    }
+
+    const minsDesdeInicio = relY / PX_POR_MIN;
+    const nuevaHoraInicio = snap30(horaInicio + minsDesdeInicio);
+
+    return {
+      fecha: fechasSemanaDisplay[Math.max(0, Math.min(diaIdx, fechasSemanaDisplay.length - 1))],
+      horaInicio: Math.max(horaInicio, Math.min(nuevaHoraInicio, horaFin - 30)),
+    };
+  }
+
+  function snap30(mins: number): number {
+    return Math.round(mins / 30) * 30;
+  }
+
+  function persistirBloque(bloque: BloqueHorario) {
+    const materia = materiasEnCurso.find(m => m.bloques?.some(b => b.id === bloque.id));
+    if (!materia) return;
+    const { guardarMateria } = useStore.getState();
+    guardarMateria({
+      ...materia,
+      bloques: materia.bloques!.map(b => b.id === bloque.id ? bloque : b),
+    });
+  }
 
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
@@ -309,143 +389,319 @@ export function HorarioScreen() {
         )}
       </View>
 
-      {/* Cabecera con días y fechas */}
-      <View style={{
-        flexDirection: 'row', backgroundColor: surfaceBg,
-        paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: tema.borde,
-      }}>
-        <View style={{ width: TIME_COL_W }} />
-        {fechasSemanaDisplay.map((fecha, i) => {
-          const esHoy = fecha === hoyIso;
-          return (
-            <View key={i} style={{ width: dayColW, alignItems: 'center' }}>
-              <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
-                {DIAS_CORTO[ORDEN_DIAS[i]]}
-              </Text>
-              <Text style={{
-                color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
-                backgroundColor: esHoy ? tema.acento : undefined,
-                borderRadius: 8, paddingHorizontal: 3,
-              }}>
-                {fmtFechaCorta(fecha)}
-              </Text>
-            </View>
-          );
-        })}
+      {/* Cabecera con días y fechas — sincronizada con scroll horizontal de la grilla */}
+      <View style={{ flexDirection: 'row', backgroundColor: surfaceBg, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+        <View style={{ width: TIME_COL_W, paddingVertical: 4 }} />
+        <ScrollView
+          ref={headerHRef}
+          horizontal
+          scrollEnabled={false}
+          showsHorizontalScrollIndicator={false}
+          style={{ flex: 1 }}
+        >
+          <View style={{ width: totalGridW, flexDirection: 'row', paddingVertical: 4 }}>
+            {fechasSemanaDisplay.map((fecha, i) => {
+              const esHoy = fecha === hoyIso;
+              return (
+                <View key={i} style={{ width: dayColWidths[i], alignItems: 'center' }}>
+                  <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
+                    {DIAS_CORTO[ORDEN_DIAS[i]]}
+                  </Text>
+                  <Text style={{
+                    color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
+                    backgroundColor: esHoy ? tema.acento : undefined,
+                    borderRadius: 8, paddingHorizontal: 3,
+                  }}>
+                    {fmtFechaCorta(fecha)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
 
-      {/* Grilla horaria */}
-      <Animated.ScrollView
-        style={{ flex: 1 }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
-          { useNativeDriver: true },
-        )}
-        scrollEventThrottle={16}
-        onContentSizeChange={(_, h) => setContentHeight(h)}
-      >
-        <View style={{ flexDirection: 'row' }}>
-          {/* Columna de horas */}
-          <View style={{ width: TIME_COL_W }}>
-            {horas.map(h => (
-              <View key={h} style={{ height: HORA_PX, paddingTop: 2 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 9, textAlign: 'right', paddingRight: 3 }}>
-                  {h}:00
-                </Text>
-              </View>
-            ))}
-          </View>
+      {/* Grilla horaria — columna horas fija + scroll horizontal + scroll vertical */}
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        {/* Columna de horas — fija, sincronizada verticalmente con la grilla */}
+        <ScrollView
+          ref={timeColRef}
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          style={{ width: TIME_COL_W }}
+          contentContainerStyle={{ height: TOTAL_HEIGHT }}
+        >
+          {horas.map(h => (
+            <View key={h} style={{ height: HORA_PX, paddingTop: 2 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 9, textAlign: 'right', paddingRight: 3 }}>
+                {h}:00
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
 
-          {/* Columnas por día */}
-          {fechasSemanaDisplay.map((fecha, diaIdx) => {
-            const esHoy = fecha === hoyIso;
-            return (
-              <View key={diaIdx} style={{
-                width: dayColW, height: TOTAL_HEIGHT, position: 'relative',
-                borderLeftWidth: 1,
-                borderLeftColor: esHoy ? tema.acento : tema.borde,
-                backgroundColor: esHoy ? `${tema.acento}0A` : undefined,
-              }}>
-                {/* Líneas de hora */}
-                {horas.map((_, i) => (
-                  <View key={i} style={{
-                    position: 'absolute', top: i * HORA_PX,
-                    left: 0, right: 0, height: 1,
-                    backgroundColor: tema.borde, opacity: 0.5,
-                  }} />
-                ))}
-                {/* Líneas de media hora */}
-                {horas.map((_, i) => (
-                  <View key={`m${i}`} style={{
-                    position: 'absolute', top: i * HORA_PX + HORA_PX / 2,
-                    left: 0, right: 0, height: 1,
-                    backgroundColor: tema.borde, opacity: 0.2,
-                  }} />
-                ))}
+        {/* Área de días: scroll vertical + scroll horizontal */}
+        <Animated.ScrollView
+          style={{ flex: 1 }}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
+            {
+              useNativeDriver: true,
+              listener: (e: any) => {
+                const y = e.nativeEvent.contentOffset.y;
+                vScrollOffRef.current = y;
+                timeColRef.current?.scrollTo({ y, animated: false });
+              },
+            }
+          )}
+          scrollEventThrottle={16}
+          onContentSizeChange={(_, h) => setContentHeight(h)}
+        >
+          <ScrollView
+            ref={gridHRef}
+            horizontal
+            showsHorizontalScrollIndicator={totalGridW > width - TIME_COL_W}
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              const x = e.nativeEvent.contentOffset.x;
+              hScrollOffRef.current = x;
+              headerHRef.current?.scrollTo({ x, animated: false });
+            }}
+          >
+            <View style={{ width: totalGridW, height: TOTAL_HEIGHT, flexDirection: 'row' }}>
+              {fechasSemanaDisplay.map((fecha, diaIdx) => {
+                const esHoy     = fecha === hoyIso;
+                const colW      = dayColWidths[diaIdx];
+                const layoutDia = layoutPorDia.get(fecha)!;
 
-                {/* Bloques de este día */}
-                {bloquesEstaSemana
-                  .filter(b => b.fecha === fecha)
-                  .map(b => {
-                    const top    = (b.horaInicio - horaInicio) * PX_POR_MIN;
-                    const height = Math.max((b.horaFin - b.horaInicio) * PX_POR_MIN, 16);
-                    const { fondo, texto } = obtenerColorBloque(b.materia.id, b.tipo);
-                    return (
-                      <View key={b.id} style={{
-                        position: 'absolute', top, height,
-                        left: 1, right: 1,
-                        backgroundColor: fondo, borderRadius: 3,
-                        padding: 2, overflow: 'hidden',
-                      }}>
-                        <Text
-                          style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                          numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
-                          ellipsizeMode="tail"
-                        >
-                          {sigla(b.tipo)} - {b.materia.nombre}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                return (
+                  <View key={diaIdx} style={{
+                    width: colW, height: TOTAL_HEIGHT, position: 'relative',
+                    borderLeftWidth: 1,
+                    borderLeftColor: esHoy ? tema.acento : tema.borde,
+                    backgroundColor: esHoy ? `${tema.acento}0A` : undefined,
+                  }}>
+                    {/* Líneas de hora */}
+                    {horas.map((_, i) => (
+                      <View key={i} style={{
+                        position: 'absolute', top: i * HORA_PX,
+                        left: 0, right: 0, height: 1,
+                        backgroundColor: tema.borde, opacity: 0.5,
+                      }} />
+                    ))}
+                    {/* Líneas de media hora */}
+                    {horas.map((_, i) => (
+                      <View key={`m${i}`} style={{
+                        position: 'absolute', top: i * HORA_PX + HORA_PX / 2,
+                        left: 0, right: 0, height: 1,
+                        backgroundColor: tema.borde, opacity: 0.2,
+                      }} />
+                    ))}
 
-                {/* Evaluaciones de este día */}
-                {evaluacionesEstaSemana
-                  .filter(ev => ev.fecha === fecha)
-                  .map(ev => {
-                    const horaI  = ev.hora!;
-                    const horaF  = ev.horaFin ?? horaI + 60;
-                    const top    = (horaI - horaInicio) * PX_POR_MIN;
-                    const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
-                    const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
-                    const fondoColor  = colorConfig?.fondo ?? '#FF9800';
-                    const textoColor  = colorConfig?.texto ?? '#fff';
-                    return (
-                      <View key={ev.id} style={{
-                        position: 'absolute', top, height,
-                        left: 1, right: 1,
-                        backgroundColor: fondoColor,
-                        borderRadius: 3,
-                        borderWidth: 1.5,
-                        borderColor: textoColor,
-                        borderStyle: 'dashed',
-                        padding: 2,
-                        overflow: 'hidden',
-                      }}>
-                        <Text
-                          style={{ color: textoColor, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                          numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
-                          ellipsizeMode="tail"
-                        >
-                          {ev.materia.nombre}{ev.nombre ? ` - ${ev.nombre}` : ''}
-                        </Text>
-                      </View>
-                    );
-                  })}
-              </View>
-            );
-          })}
-        </View>
-      </Animated.ScrollView>
+                    {/* Bloques de este día */}
+                    {bloquesEstaSemana
+                      .filter(b => b.fecha === fecha)
+                      .map(b => {
+                        const lyt        = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
+                        const subColW    = colW / lyt.totalSubCols;
+                        const bloqueDraft = cardEnEdicion === b.id && draftBloque ? draftBloque : b;
+                        const top        = (bloqueDraft.horaInicio - horaInicio) * PX_POR_MIN;
+                        const height     = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
+                        const left       = 1 + lyt.subCol * subColW;
+                        const bWidth     = subColW - 2;
+                        const { fondo, texto } = obtenerColorBloque(b.materia.id, b.tipo);
+                        const enEdicion  = cardEnEdicion === b.id;
+
+                        return (
+                          <LongPressGestureHandler
+                            key={b.id}
+                            minDurationMs={3000}
+                            enabled={cardEnEdicion === null}
+                            onHandlerStateChange={(e: LongPressGestureHandlerStateChangeEvent) => {
+                              if (e.nativeEvent.state === State.ACTIVE) {
+                                setCardEnEdicion(b.id);
+                                setDraftBloque({ ...b });
+                              }
+                            }}
+                          >
+                            <View
+                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); }}
+                              style={{
+                                position: 'absolute', top, height,
+                                left, width: bWidth,
+                                backgroundColor: fondo, borderRadius: 3,
+                                overflow: 'hidden',
+                                zIndex: enEdicion ? 100 : 1,
+                                opacity: enEdicion && ghostPos ? 0.3 : 1,
+                              }}
+                            >
+                              {enEdicion ? (
+                                <>
+                                  {/* Handle superior — resize horaInicio */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio   = resizeStartRef.current.horaFin - 30;
+                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.min(nuevoInicio, maxInicio) } : d);
+                                    }}
+                                    onEnded={() => {
+                                      if (draftBloque) persistirBloque(draftBloque);
+                                    }}
+                                  >
+                                    <View style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderTopWidth: 4, borderTopColor: '#fff',
+                                    }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+
+                                  {/* Zona central — drag para mover */}
+                                  <PanGestureHandler
+                                    activeOffsetX={[-10, 10]}
+                                    onBegan={() => {
+                                      const cardRef = cardRefs.current.get(b.id);
+                                      cardRef?.measureInWindow((cx, cy, cw, ch) => {
+                                        ghostOriginRef.current = { x: cx, y: cy };
+                                        setGhostPos({
+                                          x: cx - outerOriginRef.current.x,
+                                          y: cy - outerOriginRef.current.y,
+                                          w: cw,
+                                          h: ch,
+                                        });
+                                      });
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!ghostOriginRef.current) return;
+                                      setGhostPos(prev => prev ? {
+                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                        w: prev.w,
+                                        h: prev.h,
+                                      } : prev);
+                                    }}
+                                    onEnded={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!ghostOriginRef.current || !draftBloque) {
+                                        setGhostPos(null);
+                                        return;
+                                      }
+                                      const destX = ghostOriginRef.current.x + e.nativeEvent.translationX;
+                                      const destY = ghostOriginRef.current.y + e.nativeEvent.translationY;
+                                      const { fecha, horaInicio: nuevoInicio } = calcularDestino(destX, destY);
+                                      const duracion = draftBloque.horaFin - draftBloque.horaInicio;
+                                      const bloqueActualizado: BloqueHorario = {
+                                        ...draftBloque,
+                                        fecha,
+                                        horaInicio: nuevoInicio,
+                                        horaFin: nuevoInicio + duracion,
+                                      };
+                                      persistirBloque(bloqueActualizado);
+                                      setDraftBloque(bloqueActualizado);
+                                      setGhostPos(null);
+                                      setCardEnEdicion(null);
+                                    }}
+                                    onFailed={() => setGhostPos(null)}
+                                    onCancelled={() => setGhostPos(null)}
+                                  >
+                                    <View style={{ flex: 1, padding: 2 }}>
+                                      <Text
+                                        style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                                        numberOfLines={Math.max(1, Math.floor((height - 36) / 11))}
+                                        ellipsizeMode="tail"
+                                      >
+                                        {sigla(b.tipo)} - {b.materia.nombre}
+                                      </Text>
+                                      <Text style={{ color: texto, fontSize: 7, opacity: 0.8 }}>
+                                        {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
+                                      </Text>
+                                    </View>
+                                  </PanGestureHandler>
+
+                                  {/* Handle inferior — resize horaFin */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin   = resizeStartRef.current.horaInicio + 30;
+                                      setDraftBloque(d => d ? { ...d, horaFin: Math.max(nuevaFin, minFin) } : d);
+                                    }}
+                                    onEnded={() => {
+                                      if (draftBloque) persistirBloque(draftBloque);
+                                    }}
+                                  >
+                                    <View style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderBottomWidth: 4, borderBottomColor: '#fff',
+                                    }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+                                </>
+                              ) : (
+                                <View style={{ padding: 2, flex: 1 }}>
+                                  <Text
+                                    style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {sigla(b.tipo)} - {b.materia.nombre}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </LongPressGestureHandler>
+                        );
+                      })}
+
+                    {/* Evaluaciones de este día */}
+                    {evaluacionesEstaSemana
+                      .filter(ev => ev.fecha === fecha)
+                      .map(ev => {
+                        const horaI  = ev.hora!;
+                        const horaF  = ev.horaFin ?? horaI + 60;
+                        const top    = (horaI - horaInicio) * PX_POR_MIN;
+                        const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
+                        const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
+                        const fondoColor  = colorConfig?.fondo ?? '#FF9800';
+                        const textoColor  = colorConfig?.texto ?? '#fff';
+                        return (
+                          <View key={ev.id} style={{
+                            position: 'absolute', top, height,
+                            left: 1, right: 1,
+                            backgroundColor: fondoColor,
+                            borderRadius: 3,
+                            borderWidth: 1.5,
+                            borderColor: textoColor,
+                            borderStyle: 'dashed',
+                            padding: 2,
+                            overflow: 'hidden',
+                          }}>
+                            <Text
+                              style={{ color: textoColor, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                              numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                              ellipsizeMode="tail"
+                            >
+                              {ev.materia.nombre}{ev.nombre ? ` - ${ev.nombre}` : ''}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </Animated.ScrollView>
+      </View>
 
       <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
@@ -564,7 +820,15 @@ export function HorarioScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>
+    <View
+      ref={outerViewRef}
+      onLayout={() => {
+        outerViewRef.current?.measureInWindow((x, y) => {
+          outerOriginRef.current = { x, y };
+        });
+      }}
+      style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}
+    >
       {hasImgBg && (
         <Animated.View
           style={{
@@ -577,6 +841,54 @@ export function HorarioScreen() {
         </Animated.View>
       )}
       {innerContent}
+
+      {/* Overlay tap-fuera: cancela modo edición */}
+      {cardEnEdicion !== null && (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setCardEnEdicion(null);
+            setDraftBloque(null);
+            setGhostPos(null);
+          }}
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 50,
+          }}
+        />
+      )}
+
+      {/* Ghost card durante drag central */}
+      {ghostPos && draftBloque && cardEnEdicion && (() => {
+        const bloqueVis = draftBloque;
+        const materia   = materiasEnCurso.find(m => m.bloques?.some(b => b.id === bloqueVis.id));
+        if (!materia) return null;
+        const { fondo, texto } = obtenerColorBloque(materia.id, bloqueVis.tipo);
+        return (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top:  ghostPos.y,
+              left: ghostPos.x,
+              width:  ghostPos.w,
+              height: ghostPos.h,
+              zIndex: 999,
+              opacity: 0.85,
+              backgroundColor: fondo,
+              borderRadius: 3,
+              borderWidth: 2,
+              borderColor: '#fff',
+              padding: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Text style={{ color: texto, fontSize: 8, fontWeight: '700' }}>
+              {sigla(bloqueVis.tipo)} - {materia.nombre}
+            </Text>
+          </View>
+        );
+      })()}
     </View>
   );
 }
