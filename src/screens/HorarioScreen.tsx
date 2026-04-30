@@ -265,6 +265,26 @@ export function HorarioScreen() {
     [isMovible, scrollAnim],
   );
 
+  function calcularDestino(ghostScreenX: number, ghostScreenY: number): { fecha: string; horaInicio: number } {
+    const relX = ghostScreenX - outerOriginRef.current.x + hScrollOffRef.current;
+    const relY = ghostScreenY - outerOriginRef.current.y + vScrollOffRef.current;
+
+    let acum   = TIME_COL_W;
+    let diaIdx = fechasSemanaDisplay.length - 1;
+    for (let i = 0; i < fechasSemanaDisplay.length; i++) {
+      acum += dayColWidths[i];
+      if (relX < acum) { diaIdx = i; break; }
+    }
+
+    const minsDesdeInicio = relY / PX_POR_MIN;
+    const nuevaHoraInicio = snap30(horaInicio + minsDesdeInicio);
+
+    return {
+      fecha: fechasSemanaDisplay[Math.max(0, Math.min(diaIdx, fechasSemanaDisplay.length - 1))],
+      horaInicio: Math.max(horaInicio, Math.min(nuevaHoraInicio, horaFin - 30)),
+    };
+  }
+
   function snap30(mins: number): number {
     return Math.round(mins / 30) * 30;
   }
@@ -541,19 +561,66 @@ export function HorarioScreen() {
                                     </View>
                                   </PanGestureHandler>
 
-                                  {/* Contenido central (sin gesto de drag aún — se agrega en Task 5) */}
-                                  <View style={{ flex: 1, padding: 2 }}>
-                                    <Text
-                                      style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 36) / 11))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {sigla(b.tipo)} - {b.materia.nombre}
-                                    </Text>
-                                    <Text style={{ color: texto, fontSize: 7, opacity: 0.8 }}>
-                                      {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
-                                    </Text>
-                                  </View>
+                                  {/* Zona central — drag para mover */}
+                                  <PanGestureHandler
+                                    activeOffsetX={[-10, 10]}
+                                    onBegan={() => {
+                                      const cardRef = cardRefs.current.get(b.id);
+                                      cardRef?.measureInWindow((cx, cy, cw, ch) => {
+                                        ghostOriginRef.current = { x: cx, y: cy };
+                                        setGhostPos({
+                                          x: cx - outerOriginRef.current.x,
+                                          y: cy - outerOriginRef.current.y,
+                                          w: cw,
+                                          h: ch,
+                                        });
+                                      });
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!ghostOriginRef.current) return;
+                                      setGhostPos(prev => prev ? {
+                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                        w: prev.w,
+                                        h: prev.h,
+                                      } : prev);
+                                    }}
+                                    onEnded={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!ghostOriginRef.current || !draftBloque) {
+                                        setGhostPos(null);
+                                        return;
+                                      }
+                                      const destX = ghostOriginRef.current.x + e.nativeEvent.translationX;
+                                      const destY = ghostOriginRef.current.y + e.nativeEvent.translationY;
+                                      const { fecha, horaInicio: nuevoInicio } = calcularDestino(destX, destY);
+                                      const duracion = draftBloque.horaFin - draftBloque.horaInicio;
+                                      const bloqueActualizado: BloqueHorario = {
+                                        ...draftBloque,
+                                        fecha,
+                                        horaInicio: nuevoInicio,
+                                        horaFin: nuevoInicio + duracion,
+                                      };
+                                      persistirBloque(bloqueActualizado);
+                                      setDraftBloque(bloqueActualizado);
+                                      setGhostPos(null);
+                                      setCardEnEdicion(null);
+                                    }}
+                                    onFailed={() => setGhostPos(null)}
+                                    onCancelled={() => setGhostPos(null)}
+                                  >
+                                    <View style={{ flex: 1, padding: 2 }}>
+                                      <Text
+                                        style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                                        numberOfLines={Math.max(1, Math.floor((height - 36) / 11))}
+                                        ellipsizeMode="tail"
+                                      >
+                                        {sigla(b.tipo)} - {b.materia.nombre}
+                                      </Text>
+                                      <Text style={{ color: texto, fontSize: 7, opacity: 0.8 }}>
+                                        {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
+                                      </Text>
+                                    </View>
+                                  </PanGestureHandler>
 
                                   {/* Handle inferior — resize horaFin */}
                                   <PanGestureHandler
