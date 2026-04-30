@@ -11,6 +11,13 @@ import {
   parsearJSONMultiMateria, leerArchivo,
 } from '../utils/horarioImportExport';
 import { calcularLayoutSuperposicion, LayoutBloque } from '../utils/horarioLayout';
+import {
+  LongPressGestureHandler,
+  PanGestureHandler,
+  State,
+  type PanGestureHandlerGestureEvent,
+  type LongPressGestureHandlerStateChangeEvent,
+} from 'react-native-gesture-handler';
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const HORA_DEF_INICIO = 7 * 60;
@@ -475,28 +482,116 @@ export function HorarioScreen() {
                     {bloquesEstaSemana
                       .filter(b => b.fecha === fecha)
                       .map(b => {
-                        const lyt     = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
-                        const subColW = colW / lyt.totalSubCols;
-                        const top     = (b.horaInicio - horaInicio) * PX_POR_MIN;
-                        const height  = Math.max((b.horaFin - b.horaInicio) * PX_POR_MIN, 16);
-                        const left    = 1 + lyt.subCol * subColW;
-                        const bWidth  = subColW - 2;
+                        const lyt        = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
+                        const subColW    = colW / lyt.totalSubCols;
+                        const bloqueDraft = cardEnEdicion === b.id && draftBloque ? draftBloque : b;
+                        const top        = (bloqueDraft.horaInicio - horaInicio) * PX_POR_MIN;
+                        const height     = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
+                        const left       = 1 + lyt.subCol * subColW;
+                        const bWidth     = subColW - 2;
                         const { fondo, texto } = obtenerColorBloque(b.materia.id, b.tipo);
+                        const enEdicion  = cardEnEdicion === b.id;
+
                         return (
-                          <View key={b.id} style={{
-                            position: 'absolute', top, height,
-                            left, width: bWidth,
-                            backgroundColor: fondo, borderRadius: 3,
-                            padding: 2, overflow: 'hidden',
-                          }}>
-                            <Text
-                              style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                              numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
-                              ellipsizeMode="tail"
+                          <LongPressGestureHandler
+                            key={b.id}
+                            minDurationMs={3000}
+                            enabled={cardEnEdicion === null}
+                            onHandlerStateChange={(e: LongPressGestureHandlerStateChangeEvent) => {
+                              if (e.nativeEvent.state === State.ACTIVE) {
+                                setCardEnEdicion(b.id);
+                                setDraftBloque({ ...b });
+                              }
+                            }}
+                          >
+                            <View
+                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); }}
+                              style={{
+                                position: 'absolute', top, height,
+                                left, width: bWidth,
+                                backgroundColor: fondo, borderRadius: 3,
+                                overflow: 'hidden',
+                                zIndex: enEdicion ? 100 : 1,
+                                opacity: enEdicion && ghostPos ? 0.3 : 1,
+                              }}
                             >
-                              {sigla(b.tipo)} - {b.materia.nombre}
-                            </Text>
-                          </View>
+                              {enEdicion ? (
+                                <>
+                                  {/* Handle superior — resize horaInicio */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio   = resizeStartRef.current.horaFin - 30;
+                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.min(nuevoInicio, maxInicio) } : d);
+                                    }}
+                                    onEnded={() => {
+                                      if (draftBloque) persistirBloque(draftBloque);
+                                    }}
+                                  >
+                                    <View style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderTopWidth: 4, borderTopColor: '#fff',
+                                    }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+
+                                  {/* Contenido central (sin gesto de drag aún — se agrega en Task 5) */}
+                                  <View style={{ flex: 1, padding: 2 }}>
+                                    <Text
+                                      style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 36) / 11))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {sigla(b.tipo)} - {b.materia.nombre}
+                                    </Text>
+                                    <Text style={{ color: texto, fontSize: 7, opacity: 0.8 }}>
+                                      {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
+                                    </Text>
+                                  </View>
+
+                                  {/* Handle inferior — resize horaFin */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin   = resizeStartRef.current.horaInicio + 30;
+                                      setDraftBloque(d => d ? { ...d, horaFin: Math.max(nuevaFin, minFin) } : d);
+                                    }}
+                                    onEnded={() => {
+                                      if (draftBloque) persistirBloque(draftBloque);
+                                    }}
+                                  >
+                                    <View style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderBottomWidth: 4, borderBottomColor: '#fff',
+                                    }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+                                </>
+                              ) : (
+                                <View style={{ padding: 2, flex: 1 }}>
+                                  <Text
+                                    style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {sigla(b.tipo)} - {b.materia.nombre}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </LongPressGestureHandler>
                         );
                       })}
 
