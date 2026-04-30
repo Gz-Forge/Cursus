@@ -87,6 +87,9 @@ export function HorarioScreen() {
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
+  const gridAreaRef      = React.useRef<View>(null);
+  const gridAreaTopRef   = React.useRef(0);
+  const [gridW, setGridW] = useState(width - TIME_COL_W);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -183,7 +186,7 @@ export function HorarioScreen() {
   const totalMins    = horaFin - horaInicio;
   const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
-  const BASE_DAY_COL_W = (width - TIME_COL_W) / 7;
+  const BASE_DAY_COL_W = gridW / 7;
 
   // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
   const semanaBase   = startOfWeek(new Date());
@@ -267,7 +270,7 @@ export function HorarioScreen() {
 
   function calcularDestino(ghostScreenX: number, ghostScreenY: number): { fecha: string; horaInicio: number } {
     const relX = ghostScreenX - outerOriginRef.current.x + hScrollOffRef.current;
-    const relY = ghostScreenY - outerOriginRef.current.y + vScrollOffRef.current;
+    const relY = ghostScreenY - gridAreaTopRef.current + vScrollOffRef.current;
 
     let acum   = TIME_COL_W;
     let diaIdx = fechasSemanaDisplay.length - 1;
@@ -422,7 +425,15 @@ export function HorarioScreen() {
       </View>
 
       {/* Grilla horaria — columna horas fija + scroll horizontal + scroll vertical */}
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      <View
+        ref={gridAreaRef}
+        onLayout={() => {
+          gridAreaRef.current?.measureInWindow((_, y) => {
+            gridAreaTopRef.current = y;
+          });
+        }}
+        style={{ flex: 1, flexDirection: 'row' }}
+      >
         {/* Columna de horas — fija, sincronizada verticalmente con la grilla */}
         <ScrollView
           ref={timeColRef}
@@ -443,6 +454,7 @@ export function HorarioScreen() {
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
           style={{ flex: 1 }}
+          onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
