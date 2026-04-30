@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -324,7 +325,12 @@ export function generarEjemploJSON(): string {
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
-  return FileSystem.readAsStringAsync(resultado.assets[0].uri);
+  const uri = resultado.assets[0].uri;
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    return response.text();
+  }
+  return FileSystem.readAsStringAsync(uri);
 }
 
 export async function compartirArchivo(
@@ -332,6 +338,18 @@ export async function compartirArchivo(
   contenido: string,
   mimeType: string,
 ): Promise<void> {
+  if (Platform.OS === 'web') {
+    const blob = new Blob([contenido], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return;
+  }
   const ruta = (FileSystem.documentDirectory ?? '') + nombre;
   await FileSystem.writeAsStringAsync(ruta, contenido, {
     encoding: FileSystem.EncodingType.UTF8,
