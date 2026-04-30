@@ -144,7 +144,12 @@ export function HorarioScreen() {
           m.nombre.toLowerCase() === imp.nombre.toLowerCase()
         );
         if (materia) {
-          guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...imp.bloques] });
+          const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
+          const existentes = new Set((materia.bloques ?? []).map(clave));
+          const nuevos = imp.bloques.filter(b => !existentes.has(clave(b)));
+          if (nuevos.length > 0) {
+            guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...nuevos] });
+          }
         }
       });
       cerrarModal();
@@ -200,9 +205,11 @@ export function HorarioScreen() {
     : [1, 2, 3, 4, 5, 6, 0];
   const fechasSemanaDisplay = ORDEN_DIAS.map(i => fechasSemana[i]);
 
-  // Bloques filtrados a esta semana
-  const bloquesEstaSemana = todosLosBloques.filter(
-    b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]
+  // Bloques filtrados a esta semana (memoizado para estabilizar la referencia)
+  const bloquesEstaSemana = React.useMemo(
+    () => todosLosBloques.filter(b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6]]
   );
 
   // Evaluaciones filtradas a esta semana
@@ -359,7 +366,7 @@ export function HorarioScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                {fmtFechaCorta(fechasSemana[0])} — {fmtFechaCorta(fechasSemana[6])}
+                {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
               </Text>
               <TouchableOpacity onPress={() => setWeekOffset(0)}>
                 <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
@@ -533,6 +540,9 @@ export function HorarioScreen() {
                               if (e.nativeEvent.state === State.ACTIVE) {
                                 setCardEnEdicion(b.id);
                                 setDraftBloque({ ...b });
+                                cardRefs.current.get(b.id)?.measureInWindow((cx, cy) => {
+                                  ghostOriginRef.current = { x: cx, y: cy };
+                                });
                               }
                             }}
                           >
@@ -559,7 +569,7 @@ export function HorarioScreen() {
                                       const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
                                       const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
                                       const maxInicio   = resizeStartRef.current.horaFin - 30;
-                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.min(nuevoInicio, maxInicio) } : d);
+                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.max(horaInicio, Math.min(nuevoInicio, maxInicio)) } : d);
                                     }}
                                     onEnded={() => {
                                       if (draftBloque) persistirBloque(draftBloque);
@@ -576,16 +586,18 @@ export function HorarioScreen() {
                                   {/* Zona central — drag para mover */}
                                   <PanGestureHandler
                                     activeOffsetX={[-10, 10]}
+                                    activeOffsetY={[-10, 10]}
                                     onBegan={() => {
-                                      const cardRef = cardRefs.current.get(b.id);
-                                      cardRef?.measureInWindow((cx, cy, cw, ch) => {
-                                        ghostOriginRef.current = { x: cx, y: cy };
-                                        setGhostPos({
-                                          x: cx - outerOriginRef.current.x,
-                                          y: cy - outerOriginRef.current.y,
-                                          w: cw,
-                                          h: ch,
-                                        });
+                                      if (!ghostOriginRef.current) return;
+                                      const { x: cx, y: cy } = ghostOriginRef.current;
+                                      const lyt = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
+                                      const subColW = colW / lyt.totalSubCols;
+                                      const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
+                                      setGhostPos({
+                                        x: cx - outerOriginRef.current.x,
+                                        y: cy - outerOriginRef.current.y,
+                                        w: subColW - 2,
+                                        h: bh,
                                       });
                                     }}
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
@@ -644,7 +656,7 @@ export function HorarioScreen() {
                                       const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
                                       const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
                                       const minFin   = resizeStartRef.current.horaInicio + 30;
-                                      setDraftBloque(d => d ? { ...d, horaFin: Math.max(nuevaFin, minFin) } : d);
+                                      setDraftBloque(d => d ? { ...d, horaFin: Math.min(horaFin, Math.max(nuevaFin, minFin)) } : d);
                                     }}
                                     onEnded={() => {
                                       if (draftBloque) persistirBloque(draftBloque);
@@ -770,7 +782,7 @@ export function HorarioScreen() {
             {seleccionadas.size > 0 && (
               <ScrollView horizontal style={{ marginTop: 10, backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, maxHeight: 80 }}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 9, fontFamily: 'monospace' }} numberOfLines={5}>
-                  {exportarJSONMultiMateria(materias.filter(m => seleccionadas.has(m.id))).slice(0, 300)}…
+                  {(() => { const j = exportarJSONMultiMateria(materias.filter(m => seleccionadas.has(m.id))); return j.length > 300 ? j.slice(0, 300) + '…' : j; })()}
                 </Text>
               </ScrollView>
             )}
