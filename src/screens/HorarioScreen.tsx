@@ -89,7 +89,7 @@ export function HorarioScreen() {
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const gridAreaRef      = React.useRef<View>(null);
   const gridAreaTopRef   = React.useRef(0);
-  const [gridW, setGridW] = useState(width - TIME_COL_W);
+  const [gridW, setGridW] = useState(width);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -186,7 +186,7 @@ export function HorarioScreen() {
   const totalMins    = horaFin - horaInicio;
   const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
-  const BASE_DAY_COL_W = gridW / 7;
+  const BASE_DAY_COL_W = (gridW - TIME_COL_W) / 7;
 
   // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
   const semanaBase   = startOfWeek(new Date());
@@ -427,7 +427,8 @@ export function HorarioScreen() {
       {/* Grilla horaria — columna horas fija + scroll horizontal + scroll vertical */}
       <View
         ref={gridAreaRef}
-        onLayout={() => {
+        onLayout={(e) => {
+          setGridW(e.nativeEvent.layout.width);
           gridAreaRef.current?.measureInWindow((_, y) => {
             gridAreaTopRef.current = y;
           });
@@ -454,7 +455,6 @@ export function HorarioScreen() {
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
           style={{ flex: 1 }}
-          onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
