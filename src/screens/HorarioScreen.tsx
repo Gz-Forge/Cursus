@@ -73,6 +73,14 @@ export function HorarioScreen() {
   const outerViewRef   = React.useRef<View>(null);
   const outerOriginRef = React.useRef({ x: 0, y: 0 });
 
+  // --- Estado de modo edición ---
+  const [cardEnEdicion, setCardEnEdicion] = useState<string | null>(null);
+  const [draftBloque, setDraftBloque]     = useState<BloqueHorario | null>(null);
+  const [ghostPos, setGhostPos]           = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const cardRefs         = React.useRef<Map<string, View>>(new Map());
+  const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
+  const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
+
   const cerrarModal = () => {
     setModalExport(false);
     setSeleccionadas(new Set());
@@ -249,6 +257,20 @@ export function HorarioScreen() {
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
   );
+
+  function snap30(mins: number): number {
+    return Math.round(mins / 30) * 30;
+  }
+
+  function persistirBloque(bloque: BloqueHorario) {
+    const materia = materiasEnCurso.find(m => m.bloques?.some(b => b.id === bloque.id));
+    if (!materia) return;
+    const { guardarMateria } = useStore.getState();
+    guardarMateria({
+      ...materia,
+      bloques: materia.bloques!.map(b => b.id === bloque.id ? bloque : b),
+    });
+  }
 
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
@@ -636,7 +658,15 @@ export function HorarioScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}>
+    <View
+      ref={outerViewRef}
+      onLayout={() => {
+        outerViewRef.current?.measureInWindow((x, y) => {
+          outerOriginRef.current = { x, y };
+        });
+      }}
+      style={{ flex: 1, backgroundColor: tema.fondo, ...fondoStyle }}
+    >
       {hasImgBg && (
         <Animated.View
           style={{
@@ -649,6 +679,54 @@ export function HorarioScreen() {
         </Animated.View>
       )}
       {innerContent}
+
+      {/* Overlay tap-fuera: cancela modo edición */}
+      {cardEnEdicion !== null && (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setCardEnEdicion(null);
+            setDraftBloque(null);
+            setGhostPos(null);
+          }}
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 50,
+          }}
+        />
+      )}
+
+      {/* Ghost card durante drag central */}
+      {ghostPos && draftBloque && cardEnEdicion && (() => {
+        const bloqueVis = draftBloque;
+        const materia   = materiasEnCurso.find(m => m.bloques?.some(b => b.id === bloqueVis.id));
+        if (!materia) return null;
+        const { fondo, texto } = obtenerColorBloque(materia.id, bloqueVis.tipo);
+        return (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top:  ghostPos.y,
+              left: ghostPos.x,
+              width:  ghostPos.w,
+              height: ghostPos.h,
+              zIndex: 999,
+              opacity: 0.85,
+              backgroundColor: fondo,
+              borderRadius: 3,
+              borderWidth: 2,
+              borderColor: '#fff',
+              padding: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Text style={{ color: texto, fontSize: 8, fontWeight: '700' }}>
+              {sigla(bloqueVis.tipo)} - {materia.nombre}
+            </Text>
+          </View>
+        );
+      })()}
     </View>
   );
 }
