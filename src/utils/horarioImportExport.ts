@@ -130,7 +130,9 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     fecha: bloque.fecha as string,
     horaInicio: bloque.horaInicio as number,
     horaFin: bloque.horaFin as number,
-    tipo: (bloque.tipo as TipoBloque) ?? 'otro',
+    tipo: (['teorica', 'practica', 'parcial', 'otro'] as const).includes(bloque.tipo as TipoBloque)
+      ? (bloque.tipo as TipoBloque)
+      : 'otro',
   };
 }
 
@@ -325,6 +327,7 @@ export function generarEjemploJSON(): string {
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
+  if (!resultado.assets || resultado.assets.length === 0) return null;
   const uri = resultado.assets[0].uri;
   if (Platform.OS === 'web') {
     const response = await fetch(uri);

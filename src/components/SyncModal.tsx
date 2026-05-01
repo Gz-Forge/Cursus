@@ -37,7 +37,7 @@ export function SyncModal({ visible, onCerrar }: Props) {
 
   useEffect(() => {
     if (visible && user) cargarRemotos();
-  }, [visible]);
+  }, [visible, user]);
 
   const cargarRemotos = async () => {
     setCargando(true);

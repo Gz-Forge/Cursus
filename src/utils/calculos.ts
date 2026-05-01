@@ -51,7 +51,8 @@ export function calcularEstadoFinal(materia: Materia, config: Config): EstadoMat
   if (materia.cursando) return 'cursando';
   const nota = obtenerNotaFinal(materia);
   if (nota === null) return 'por_cursar';
-  const estado = derivarEstado(nota, config, materia.esNotaExamen)!;
+  const estado = derivarEstado(nota, config, materia.esNotaExamen);
+  if (estado === null) return 'por_cursar';
   if (materia.oportunidadesExamen === 0 && (estado === 'aprobado' || estado === 'reprobado')) {
     return 'recursar';
   }

@@ -14,7 +14,7 @@ import { SyncModal } from '../components/SyncModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { calcularEstadoFinal } from '../utils/calculos';
-import { TipoBloque, ColorBloque } from '../types';
+import { TipoBloque, ColorBloque, EvaluacionSimple } from '../types';
 
 // ── Paleta de colores predeterminados (misma que HorarioScreen) ──────────────
 const COLORES_BLOQUES_DEFAULT = [
@@ -71,7 +71,7 @@ export function ConfigScreen() {
     if (calcularEstadoFinal(m, config) !== 'cursando') return false;
     const tieneBloques = (m.bloques ?? []).length > 0;
     const tieneEvalsEnHorario = config.horarioMostrarEvaluaciones &&
-      m.evaluaciones.some(ev => ev.tipo === 'simple' && (ev as any).fecha);
+      m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
     return tieneBloques || tieneEvalsEnHorario;
   });
 
@@ -80,7 +80,7 @@ export function ConfigScreen() {
       <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
       <TextInput
         style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, ...(esNumero ? { width: 80 } : {}) }}
-        value={String((config as any)[key])}
+        value={String(config[key])}
         keyboardType={esNumero ? 'numeric' : 'default'}
         onChangeText={v => actualizarConfig({ [key]: esNumero ? Number(v) : v } as any)}
       />
@@ -88,7 +88,7 @@ export function ConfigScreen() {
   );
 
   const campoUmbral = (label: string, key: keyof typeof config) => {
-    const val = (config as any)[key] as number;
+    const val = config[key] as number;
     const equiv = ((val / 100) * config.notaMaxima).toFixed(1);
     return (
       <View style={{ marginBottom: 14 }}>

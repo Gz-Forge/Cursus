@@ -54,7 +54,7 @@ export function RootNavigator() {
 
   return (
     <View style={{ flex: 1, flexDirection: Platform.OS === 'web' ? 'row' : 'column' }}>
-      {Platform.OS === 'web' && <WebSidebar navRef={navRef as any} />}
+      {Platform.OS === 'web' && <WebSidebar navRef={navRef} />}
       <NavigationContainer ref={navRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Tabs" component={TabNavigator} />

@@ -8,6 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  type DimensionValue,
 } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -94,7 +95,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                   paddingTop: 24,
                   paddingBottom: 24,
                   width: 360,
-                  maxWidth: '90%' as any,
+                  maxWidth: '90%' as DimensionValue,
                   shadowColor: '#000',
                   shadowOpacity: 0.3,
                   shadowRadius: 16,

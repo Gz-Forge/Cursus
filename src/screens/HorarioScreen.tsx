@@ -87,9 +87,12 @@ export function HorarioScreen() {
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
+  const draftBloqueRef   = React.useRef<BloqueHorario | null>(null);
   const gridAreaRef      = React.useRef<View>(null);
   const gridAreaTopRef   = React.useRef(0);
   const [gridW, setGridW] = useState(width);
+
+  React.useEffect(() => { draftBloqueRef.current = draftBloque; }, [draftBloque]);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -229,7 +232,7 @@ export function HorarioScreen() {
 
   const dayColWidths = React.useMemo(() =>
     fechasSemanaDisplay.map(fecha => {
-      const layout = layoutPorDia.get(fecha)!;
+      const layout = layoutPorDia.get(fecha) ?? new Map<string, LayoutBloque>();
       if (layout.size === 0) return BASE_DAY_COL_W;
       const maxCols = Math.max(...[...layout.values()].map(l => l.totalSubCols));
       return BASE_DAY_COL_W * maxCols;
@@ -413,7 +416,7 @@ export function HorarioScreen() {
             {fechasSemanaDisplay.map((fecha, i) => {
               const esHoy = fecha === hoyIso;
               return (
-                <View key={i} style={{ width: dayColWidths[i], alignItems: 'center' }}>
+                <View key={fecha} style={{ width: dayColWidths[i], alignItems: 'center' }}>
                   <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
                     {DIAS_CORTO[ORDEN_DIAS[i]]}
                   </Text>
@@ -491,10 +494,10 @@ export function HorarioScreen() {
               {fechasSemanaDisplay.map((fecha, diaIdx) => {
                 const esHoy     = fecha === hoyIso;
                 const colW      = dayColWidths[diaIdx];
-                const layoutDia = layoutPorDia.get(fecha)!;
+                const layoutDia = layoutPorDia.get(fecha) ?? new Map<string, LayoutBloque>();
 
                 return (
-                  <View key={diaIdx} style={{
+                  <View key={fecha} style={{
                     width: colW, height: TOTAL_HEIGHT, position: 'relative',
                     borderLeftWidth: 1,
                     borderLeftColor: esHoy ? tema.acento : tema.borde,
@@ -502,7 +505,7 @@ export function HorarioScreen() {
                   }}>
                     {/* Líneas de hora */}
                     {horas.map((_, i) => (
-                      <View key={i} style={{
+                      <View key={`hora-${i}`} style={{
                         position: 'absolute', top: i * HORA_PX,
                         left: 0, right: 0, height: 1,
                         backgroundColor: tema.borde, opacity: 0.5,
@@ -572,7 +575,7 @@ export function HorarioScreen() {
                                       setDraftBloque(d => d ? { ...d, horaInicio: Math.max(horaInicio, Math.min(nuevoInicio, maxInicio)) } : d);
                                     }}
                                     onEnded={() => {
-                                      if (draftBloque) persistirBloque(draftBloque);
+                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
                                     }}
                                   >
                                     <View style={{
@@ -659,7 +662,7 @@ export function HorarioScreen() {
                                       setDraftBloque(d => d ? { ...d, horaFin: Math.min(horaFin, Math.max(nuevaFin, minFin)) } : d);
                                     }}
                                     onEnded={() => {
-                                      if (draftBloque) persistirBloque(draftBloque);
+                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
                                     }}
                                   >
                                     <View style={{

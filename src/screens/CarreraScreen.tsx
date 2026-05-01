@@ -148,6 +148,7 @@ export function CarreraScreen() {
       const nombres = sinOportunidades.map(m => m.nombre).join(', ');
       Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez al montar para verificar períodos de examen pendientes
   }, []);
 
   const handleImportar = async () => {
