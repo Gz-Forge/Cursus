@@ -87,10 +87,15 @@ export function HorarioScreen() {
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
-  const draftBloqueRef   = React.useRef<BloqueHorario | null>(null);
-  const gridAreaRef      = React.useRef<View>(null);
-  const gridAreaTopRef   = React.useRef(0);
-  const [gridW, setGridW] = useState(width);
+  const draftBloqueRef          = React.useRef<BloqueHorario | null>(null);
+  const gridAreaRef             = React.useRef<View>(null);
+  const gridAreaTopRef          = React.useRef(0);
+  const [gridW, setGridW]       = useState(width - TIME_COL_W);
+  // Refs para evitar stale closures en callbacks de gesture handlers (RNGH no re-adjunta handlers en cada render)
+  const fechasSemanaDisplayRef  = React.useRef<string[]>([]);
+  const dayColWidthsRef         = React.useRef<number[]>([]);
+  const horaInicioRef           = React.useRef(HORA_DEF_INICIO);
+  const horaFinRef              = React.useRef(HORA_DEF_FIN);
 
   React.useEffect(() => { draftBloqueRef.current = draftBloque; }, [draftBloque]);
 
@@ -194,7 +199,7 @@ export function HorarioScreen() {
   const totalMins    = horaFin - horaInicio;
   const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
-  const BASE_DAY_COL_W = (gridW - TIME_COL_W) / 7;
+  const BASE_DAY_COL_W = gridW / 7;
 
   // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
   const semanaBase   = startOfWeek(new Date());
@@ -242,6 +247,11 @@ export function HorarioScreen() {
 
   const totalGridW = dayColWidths.reduce((a, b) => a + b, 0);
 
+  // Mantener refs sincronizados para uso en callbacks de RNGH (evita stale closures)
+  React.useEffect(() => { fechasSemanaDisplayRef.current = fechasSemanaDisplay; }, [fechasSemanaDisplay]);
+  React.useEffect(() => { dayColWidthsRef.current = dayColWidths; }, [dayColWidths]);
+  React.useEffect(() => { horaInicioRef.current = horaInicio; horaFinRef.current = horaFin; }, [horaInicio, horaFin]);
+
   const obtenerColorBloque = (materiaId: string, tipo: BloqueHorario['tipo']): { fondo: string; texto: string } => {
     const configurado = config.coloresHorario?.[materiaId]?.[tipo];
     if (configurado) return configurado;
@@ -279,22 +289,31 @@ export function HorarioScreen() {
   );
 
   function calcularDestino(ghostScreenX: number, ghostScreenY: number): { fecha: string; horaInicio: number } {
+    // Usar refs para evitar stale closures (RNGH puede no re-adjuntar handlers en cada render)
+    const fechas    = fechasSemanaDisplayRef.current;
+    const colWidths = dayColWidthsRef.current;
+    const hInicio   = horaInicioRef.current;
+    const hFin      = horaFinRef.current;
+
+    // relX: posición relativa al borde izquierdo del contenedor externo + scroll horizontal
+    // acum arranca en TIME_COL_W para saltear la columna de etiquetas de hora
     const relX = ghostScreenX - outerOriginRef.current.x + hScrollOffRef.current;
     const relY = ghostScreenY - gridAreaTopRef.current + vScrollOffRef.current;
 
     let acum   = TIME_COL_W;
-    let diaIdx = fechasSemanaDisplay.length - 1;
-    for (let i = 0; i < fechasSemanaDisplay.length; i++) {
-      acum += dayColWidths[i];
+    let diaIdx = 0;
+    for (let i = 0; i < fechas.length; i++) {
+      acum += colWidths[i];
       if (relX < acum) { diaIdx = i; break; }
+      diaIdx = i; // actualizar para que el último día sea el default cuando relX supera todo
     }
 
     const minsDesdeInicio = relY / PX_POR_MIN;
-    const nuevaHoraInicio = snap30(horaInicio + minsDesdeInicio);
+    const nuevaHoraInicio = snap30(hInicio + minsDesdeInicio);
 
     return {
-      fecha: fechasSemanaDisplay[Math.max(0, Math.min(diaIdx, fechasSemanaDisplay.length - 1))],
-      horaInicio: Math.max(horaInicio, Math.min(nuevaHoraInicio, horaFin - 30)),
+      fecha: fechas[Math.max(0, Math.min(diaIdx, fechas.length - 1))],
+      horaInicio: Math.max(hInicio, Math.min(nuevaHoraInicio, hFin - 30)),
     };
   }
 
@@ -437,8 +456,7 @@ export function HorarioScreen() {
       {/* Grilla horaria — columna horas fija + scroll horizontal + scroll vertical */}
       <View
         ref={gridAreaRef}
-        onLayout={(e) => {
-          setGridW(e.nativeEvent.layout.width);
+        onLayout={() => {
           gridAreaRef.current?.measureInWindow((_, y) => {
             gridAreaTopRef.current = y;
           });
@@ -465,6 +483,7 @@ export function HorarioScreen() {
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
           style={{ flex: 1 }}
+          onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
@@ -537,7 +556,7 @@ export function HorarioScreen() {
                         return (
                           <LongPressGestureHandler
                             key={b.id}
-                            minDurationMs={3000}
+                            minDurationMs={500}
                             enabled={cardEnEdicion === null}
                             onHandlerStateChange={(e: LongPressGestureHandlerStateChangeEvent) => {
                               if (e.nativeEvent.state === State.ACTIVE) {
