@@ -13,8 +13,7 @@ const TABS = [
 ];
 
 interface Props {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  navRef: React.RefObject<NavigationContainerRef<any>>;
+  navRef: { current: NavigationContainerRef<any> | null };
 }
 
 export function WebSidebar({ navRef }: Props) {

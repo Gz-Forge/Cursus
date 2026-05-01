@@ -45,7 +45,7 @@ export function LoginModal({ visible, onCerrar }: Props) {
   useEffect(() => {
     if (modo !== 'qr' || Platform.OS !== 'web') return;
 
-    const channelId = (crypto as any).randomUUID() as string;
+    const channelId = crypto.randomUUID();
     const exp = Date.now() + 120_000;
     setQrChannel(channelId);
     setQrExp(exp);

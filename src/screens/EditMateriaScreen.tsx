@@ -159,7 +159,8 @@ export function EditMateriaScreen() {
     if (!esMateriaExistente) return;
     if (!form.nombre.trim()) return;
     guardarMateria(form);
-  }, [form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, esMateriaExistente, guardarMateria]);
 
   const guardar = () => { guardarMateria(form); navigation.goBack(); };
 
