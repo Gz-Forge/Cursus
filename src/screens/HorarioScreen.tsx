@@ -91,6 +91,7 @@ export function HorarioScreen() {
   const gridAreaRef             = React.useRef<View>(null);
   const gridAreaTopRef          = React.useRef(0);
   const [gridW, setGridW]       = useState(width - TIME_COL_W);
+  const [headerAvailW, setHeaderAvailW] = useState(width - TIME_COL_W);
   // Refs para evitar stale closures en callbacks de gesture handlers (RNGH no re-adjunta handlers en cada render)
   const fechasSemanaDisplayRef  = React.useRef<string[]>([]);
   const dayColWidthsRef         = React.useRef<number[]>([]);
@@ -430,8 +431,9 @@ export function HorarioScreen() {
           scrollEnabled={false}
           showsHorizontalScrollIndicator={false}
           style={{ flex: 1 }}
+          onLayout={(e) => setHeaderAvailW(e.nativeEvent.layout.width)}
         >
-          <View style={{ width: totalGridW, flexDirection: 'row', paddingVertical: 4 }}>
+          <View style={{ width: Math.max(totalGridW, headerAvailW), flexDirection: 'row', paddingVertical: 4 }}>
             {fechasSemanaDisplay.map((fecha, i) => {
               const esHoy = fecha === hoyIso;
               return (
@@ -456,7 +458,10 @@ export function HorarioScreen() {
       {/* Grilla horaria — columna horas fija + scroll horizontal + scroll vertical */}
       <View
         ref={gridAreaRef}
-        onLayout={() => {
+        onLayout={(e) => {
+          // Medir gridW desde el View (más confiable que desde el ScrollView en Android)
+          const w = e.nativeEvent.layout.width - TIME_COL_W;
+          if (w > 0) setGridW(w);
           gridAreaRef.current?.measureInWindow((_, y) => {
             gridAreaTopRef.current = y;
           });
@@ -483,7 +488,6 @@ export function HorarioScreen() {
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
           style={{ flex: 1 }}
-          onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
@@ -501,8 +505,9 @@ export function HorarioScreen() {
           <ScrollView
             ref={gridHRef}
             horizontal
-            showsHorizontalScrollIndicator={totalGridW > width - TIME_COL_W}
+            showsHorizontalScrollIndicator={totalGridW > gridW}
             scrollEventThrottle={16}
+            contentContainerStyle={{ paddingRight: 2 }}
             onScroll={(e) => {
               const x = e.nativeEvent.contentOffset.x;
               hScrollOffRef.current = x;
@@ -632,16 +637,20 @@ export function HorarioScreen() {
                                       } : prev);
                                     }}
                                     onEnded={(e: PanGestureHandlerGestureEvent) => {
-                                      if (!ghostOriginRef.current || !draftBloque) {
+                                      if (!draftBloqueRef.current) {
                                         setGhostPos(null);
                                         return;
                                       }
-                                      const destX = ghostOriginRef.current.x + e.nativeEvent.translationX;
-                                      const destY = ghostOriginRef.current.y + e.nativeEvent.translationY;
-                                      const { fecha, horaInicio: nuevoInicio } = calcularDestino(destX, destY);
-                                      const duracion = draftBloque.horaFin - draftBloque.horaInicio;
+                                      // Usar absoluteX/Y del gesto — coordenadas absolutas de pantalla
+                                      // más precisas que ghostOriginRef + translationX/Y
+                                      const { fecha, horaInicio: nuevoInicio } = calcularDestino(
+                                        e.nativeEvent.absoluteX,
+                                        e.nativeEvent.absoluteY,
+                                      );
+                                      const draft = draftBloqueRef.current!;
+                                      const duracion = draft.horaFin - draft.horaInicio;
                                       const bloqueActualizado: BloqueHorario = {
-                                        ...draftBloque,
+                                        ...draft,
                                         fecha,
                                         horaInicio: nuevoInicio,
                                         horaFin: nuevoInicio + duracion,
