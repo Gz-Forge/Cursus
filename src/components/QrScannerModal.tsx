@@ -14,9 +14,10 @@ interface Props {
   visible: boolean;
   onCerrar: () => void;
   onEvaluacionesDetectadas?: (evaluaciones: Evaluacion[]) => void;
+  onDeviceSyncDetectado?: (data: { channel: string; exp: number }) => void;
 }
 
-export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: Props) {
+export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, onDeviceSyncDetectado }: Props) {
   const tema = useTema();
   const { guardarMateria, config, actualizarConfig } = useStore();
   const { session, signIn } = useAuthStore();
@@ -144,6 +145,17 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: 
     // Detectar payload de QR login
     try {
       const parsed = JSON.parse(data);
+      if (parsed.type === 'cursus-device-sync' && onDeviceSyncDetectado) {
+        procesando.current = true;
+        if (Date.now() > parsed.exp) {
+          Alert.alert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
+          procesando.current = false;
+          return;
+        }
+        onDeviceSyncDetectado({ channel: parsed.channel, exp: parsed.exp });
+        onCerrar();
+        return;
+      }
       if (parsed.type === 'cursus-qr-login') {
         procesando.current = true;
         handleQrLogin(parsed);
