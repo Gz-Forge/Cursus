@@ -16,6 +16,8 @@ import {
   PanGestureHandler,
   State,
   type PanGestureHandlerGestureEvent,
+  type PanGestureHandlerEventPayload,
+  type HandlerStateChangeEvent,
   type LongPressGestureHandlerStateChangeEvent,
 } from 'react-native-gesture-handler';
 
@@ -661,16 +663,17 @@ export function HorarioScreen() {
                                         h: prev.h,
                                       } : prev);
                                     }}
-                                    onEnded={(e: PanGestureHandlerGestureEvent) => {
+                                    onEnded={(e) => {
                                       if (!draftBloqueRef.current) {
                                         setGhostPos(null);
                                         return;
                                       }
                                       // Usar absoluteX/Y del gesto — coordenadas absolutas de pantalla
                                       // más precisas que ghostOriginRef + translationX/Y
+                                      const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
                                       const { fecha, horaInicio: nuevoInicio } = calcularDestino(
-                                        e.nativeEvent.absoluteX,
-                                        e.nativeEvent.absoluteY,
+                                        ne.absoluteX,
+                                        ne.absoluteY,
                                       );
                                       const draft = draftBloqueRef.current!;
                                       const duracion = draft.horaFin - draft.horaInicio;
