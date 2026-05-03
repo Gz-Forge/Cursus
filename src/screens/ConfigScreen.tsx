@@ -8,10 +8,6 @@ import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto } from '../utils/importExport';
 import { useNavigation } from '@react-navigation/native';
 import { generarPromptHorario } from '../utils/horarioImportExport';
-import { useAuthStore } from '../store/useAuthStore';
-import { LoginModal } from '../components/LoginModal';
-import { SyncModal } from '../components/SyncModal';
-import { QrScannerModal } from '../components/QrScannerModal';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { calcularEstadoFinal } from '../utils/calculos';
 import { TipoBloque, ColorBloque, EvaluacionSimple } from '../types';
@@ -49,10 +45,6 @@ export function ConfigScreen() {
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
-  const { user, signOut } = useAuthStore();
-  const [mostrarLogin, setMostrarLogin] = useState(false);
-  const [mostrarSync, setMostrarSync] = useState(false);
-  const [mostrarScanner, setMostrarScanner] = useState(false);
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
   const [promptEvalExpandido, setPromptEvalExpandido] = useState(false);
   const [promptCompletoExpandido, setPromptCompletoExpandido] = useState(false);
@@ -155,49 +147,6 @@ export function ConfigScreen() {
         onContentSizeChange={(_, h) => setContentHeight(h)}
       >
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
-
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>CUENTA Y SYNC</Text>
-          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 16, marginBottom: 20 }}>
-            {user ? (
-              <>
-                <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 4 }}>{user.email}</Text>
-                <TouchableOpacity
-                  onPress={() => setMostrarSync(true)}
-                  style={{ backgroundColor: tema.acento, padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 8 }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Sincronizar perfiles</Text>
-                </TouchableOpacity>
-                {Platform.OS !== 'web' && (
-                  <TouchableOpacity
-                    onPress={() => setMostrarScanner(true)}
-                    style={{ backgroundColor: tema.tarjeta, padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 8, borderWidth: 1, borderColor: tema.acento }}
-                  >
-                    <Text style={{ color: tema.acento, fontWeight: '600' }}>📷  Escanear QR de la web</Text>
-                  </TouchableOpacity>
-                )}
-                {Platform.OS !== 'web' && (
-                  <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginBottom: 8 }}>
-                    Requiere conexión a internet
-                  </Text>
-                )}
-                <TouchableOpacity onPress={signOut} style={{ alignItems: 'center' }}>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cerrar sesión</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12 }}>
-                  Iniciá sesión para sincronizar tus perfiles entre dispositivos.
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setMostrarLogin(true)}
-                  style={{ backgroundColor: tema.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Iniciar sesión / Registrarse</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
@@ -631,9 +580,6 @@ export function ConfigScreen() {
         </View>
       </Animated.ScrollView>
 
-      <LoginModal visible={mostrarLogin} onCerrar={() => setMostrarLogin(false)} />
-      <SyncModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
-      <QrScannerModal visible={mostrarScanner} onCerrar={() => setMostrarScanner(false)} />
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
     </View>
   );
