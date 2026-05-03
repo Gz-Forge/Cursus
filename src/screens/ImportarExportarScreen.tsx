@@ -11,6 +11,7 @@ import { QrScannerModal } from '../components/QrScannerModal';
 import { construirPayload } from '../utils/exportPayload';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
+import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil } from '../types';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
@@ -65,6 +66,7 @@ function PanelImportar() {
   const tema = useTema();
   const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
+  const [mostrarSync, setMostrarSync] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
@@ -251,6 +253,25 @@ function PanelImportar() {
           <QrScannerModal visible={mostrarScanner} onCerrar={() => setMostrarScanner(false)} />
         </>
       )}
+
+      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
+        SINCRONIZAR DISPOSITIVOS
+      </Text>
+      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
+          Copiá todos tus datos (perfiles, materias, notas, configuración) desde otro dispositivo o hacia él.
+        </Text>
+        <TouchableOpacity
+          onPress={() => setMostrarSync(true)}
+          style={{
+            backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10,
+            alignItems: 'center', borderWidth: 1, borderColor: tema.acento,
+          }}
+        >
+          <Text style={{ color: tema.acento, fontWeight: '700' }}>🔄 Sincronizar con otro dispositivo</Text>
+        </TouchableOpacity>
+      </View>
+      <SyncDispositivosModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
     </View>
   );
 }
