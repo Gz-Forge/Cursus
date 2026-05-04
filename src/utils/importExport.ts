@@ -374,3 +374,132 @@ export function materiasAJson(materias: Materia[]): MateriaJson[] {
     return entry;
   });
 }
+
+export interface ConfigJsonResult {
+  aplicados: string[];
+  ignorados: { campo: string; motivo: string }[];
+}
+
+export function aplicarConfigJson(
+  datos: unknown,
+  actualizarConfig: (partial: Partial<import('../types').Config>) => void,
+): ConfigJsonResult {
+  const aplicados: string[] = [];
+  const ignorados: { campo: string; motivo: string }[] = [];
+
+  if (
+    typeof datos !== 'object' || datos === null ||
+    (datos as any).cursus_config !== 1
+  ) {
+    throw new Error('Formato no reconocido. El JSON debe tener "cursus_config": 1.');
+  }
+
+  const d = datos as Record<string, unknown>;
+  const update: Partial<import('../types').Config> = {};
+
+  const num = (key: string, min: number, max: number) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (typeof v !== 'number' || !isFinite(v) || v < min || v > max) {
+      ignorados.push({ campo: key, motivo: `debe ser número entre ${min} y ${max}` });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  const bool = (key: string) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (typeof v !== 'boolean') {
+      ignorados.push({ campo: key, motivo: 'debe ser true o false' });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  const oneOf = (key: string, options: string[]) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (typeof v !== 'string' || !options.includes(v)) {
+      ignorados.push({ campo: key, motivo: `debe ser uno de: ${options.join(', ')}` });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  const str = (key: string, maxLen?: number) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (typeof v !== 'string' || (maxLen !== undefined && v.length > maxLen)) {
+      ignorados.push({ campo: key, motivo: maxLen !== undefined ? `debe ser texto de máx ${maxLen} caracteres` : 'debe ser texto' });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  const strArr = (key: string) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (!Array.isArray(v) || !v.every((x: unknown) => typeof x === 'string')) {
+      ignorados.push({ campo: key, motivo: 'debe ser array de textos' });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  const isoDateArr = (key: string) => {
+    const v = d[key];
+    if (v === undefined) return;
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    if (!Array.isArray(v) || !v.every((x: unknown) => typeof x === 'string' && re.test(x) && !isNaN(new Date(x).getTime()))) {
+      ignorados.push({ campo: key, motivo: 'debe ser array de fechas YYYY-MM-DD' });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
+  num('notaMaxima', 1, 1000);
+  num('umbralExoneracion', 0, 100);
+  num('umbralAprobacion', 0, 100);
+  num('umbralPorExamen', 0, 100);
+  num('umbralExamenExoneracion', 0, 100);
+  bool('usarEstadoAprobado');
+  bool('aprobadoHabilitaPrevias');
+  num('oportunidadesExamenDefault', 1, 99);
+  strArr('tiposFormacion');
+  oneOf('modoExamen', ['manual', 'automatico']);
+  isoDateArr('fechasLimiteExamen');
+  str('labelTeorica');
+  str('abrevTeorica', 3);
+  str('labelPractica');
+  str('abrevPractica', 3);
+  str('labelParcial');
+  str('abrevParcial', 3);
+  str('labelOtro');
+  str('abrevOtro', 3);
+  bool('mostrarNombreCompletoEnBloque');
+  bool('horarioMostrarEvaluaciones');
+  oneOf('horarioPrimerDia', ['lunes', 'domingo']);
+  oneOf('tarjetaCreditosBadge', ['da', 'necesita', 'ambos']);
+  oneOf('tarjetaBadgeOrden', ['da_primero', 'necesita_primero']);
+  bool('tarjetaMostrarNota');
+  oneOf('tarjetaNota', ['numero', 'porcentaje']);
+  oneOf('tarjetaPrevias', ['todas', 'faltantes', 'ninguna']);
+  oneOf('tarjetaPreviasFormato', ['numero_nombre', 'nombre']);
+  bool('tarjetaAvisoPrevias');
+  bool('tarjetaTipoFormacion');
+  oneOf('tarjetaCreditosExtendida', ['da', 'necesita', 'ambos']);
+  bool('tarjetaMostrarToggleCursando');
+
+  if (aplicados.length > 0) {
+    actualizarConfig(update);
+  }
+
+  return { aplicados, ignorados };
+}
