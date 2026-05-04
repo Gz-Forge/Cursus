@@ -5,10 +5,11 @@ import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto } from '../utils/importExport';
+import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto, generarPromptConfig } from '../utils/importExport';
 import { useNavigation } from '@react-navigation/native';
 import { generarPromptHorario } from '../utils/horarioImportExport';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
+import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
 import { TipoBloque, ColorBloque, EvaluacionSimple } from '../types';
 
@@ -46,8 +47,10 @@ export function ConfigScreen() {
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
+  const [mostrarSync, setMostrarSync] = useState(false);
   const [promptEvalExpandido, setPromptEvalExpandido] = useState(false);
   const [promptCompletoExpandido, setPromptCompletoExpandido] = useState(false);
+  const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<any>();
@@ -443,9 +446,16 @@ export function ConfigScreen() {
 
           <TouchableOpacity
             onPress={() => navigation.navigate('ImportarExportar' as never)}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.borde }}
+            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: tema.borde }}
           >
             <Text style={{ color: tema.texto, fontWeight: '600' }}>📦 Gestionar importación y exportación →</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setMostrarSync(true)}
+            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.acento }}
+          >
+            <Text style={{ color: tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
           </TouchableOpacity>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
@@ -577,10 +587,40 @@ export function ConfigScreen() {
             </View>
           )}
 
+          <TouchableOpacity
+            onPress={() => setPromptConfigExpandido(v => !v)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar configuración</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                Usalo para configurar la app desde cero o ajustar tu config. La IA te preguntará solo lo que necesite.
+              </Text>
+            </View>
+            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptConfigExpandido ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {promptConfigExpandido && (
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
+                  {generarPromptConfig()}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => Clipboard.setStringAsync(generarPromptConfig())}
+                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
         </View>
       </Animated.ScrollView>
 
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
+      <SyncDispositivosModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
     </View>
   );
   return (
