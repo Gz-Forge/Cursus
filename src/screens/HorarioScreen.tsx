@@ -16,6 +16,8 @@ import {
   PanGestureHandler,
   State,
   type PanGestureHandlerGestureEvent,
+  type PanGestureHandlerEventPayload,
+  type HandlerStateChangeEvent,
   type LongPressGestureHandlerStateChangeEvent,
 } from 'react-native-gesture-handler';
 
@@ -42,9 +44,14 @@ function isoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function startOfWeek(date: Date): Date {
+function startOfWeek(date: Date, primerDia: 'lunes' | 'domingo' = 'domingo'): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay()); // retrocede al domingo
+  if (primerDia === 'lunes') {
+    const day = d.getDay(); // 0=Dom, 1=Lun, ..., 6=Sáb
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); // retrocede al lunes
+  } else {
+    d.setDate(d.getDate() - d.getDay()); // retrocede al domingo
+  }
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -202,17 +209,14 @@ export function HorarioScreen() {
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
   const BASE_DAY_COL_W = gridW / 7;
 
-  // Fechas de la semana mostrada (siempre anclada al Dom como índice 0)
-  const semanaBase   = startOfWeek(new Date());
+  // Fechas de la semana mostrada (anclada al primer día configurado)
+  const semanaBase   = startOfWeek(new Date(), config.horarioPrimerDia as 'lunes' | 'domingo');
   const semanaInicio = addDays(semanaBase, weekOffset * 7);
   const fechasSemana = Array.from({ length: 7 }, (_, i) => isoDate(addDays(semanaInicio, i)));
   const hoyIso       = isoDate(new Date());
 
-  // Orden de visualización según config: Lun-Dom → [1,2,3,4,5,6,0] / Dom-Sáb → [0,1,2,3,4,5,6]
-  const ORDEN_DIAS = config.horarioPrimerDia === 'domingo'
-    ? [0, 1, 2, 3, 4, 5, 6]
-    : [1, 2, 3, 4, 5, 6, 0];
-  const fechasSemanaDisplay = ORDEN_DIAS.map(i => fechasSemana[i]);
+  // El array ya empieza en el día correcto; el orden de display es siempre 0-6
+  const fechasSemanaDisplay = fechasSemana;
 
   // Bloques filtrados a esta semana (memoizado para estabilizar la referencia)
   const bloquesEstaSemana = React.useMemo(
@@ -252,6 +256,15 @@ export function HorarioScreen() {
   React.useEffect(() => { fechasSemanaDisplayRef.current = fechasSemanaDisplay; }, [fechasSemanaDisplay]);
   React.useEffect(() => { dayColWidthsRef.current = dayColWidths; }, [dayColWidths]);
   React.useEffect(() => { horaInicioRef.current = horaInicio; horaFinRef.current = horaFin; }, [horaInicio, horaFin]);
+
+  // Resetear scroll horizontal a 0 al cambiar semana o al recalcular el ancho del grid.
+  // gridW cambia después del primer layout (onLayout asíncrono), lo que puede causar que
+  // el contenido quede desplazado si totalGridW supera el ancho visible por un instante.
+  React.useEffect(() => {
+    gridHRef.current?.scrollTo({ x: 0, animated: false });
+    hScrollOffRef.current = 0;
+    headerHRef.current?.scrollTo({ x: 0, animated: false });
+  }, [weekOffset, gridW]);
 
   const obtenerColorBloque = (materiaId: string, tipo: BloqueHorario['tipo']): { fondo: string; texto: string } => {
     const configurado = config.coloresHorario?.[materiaId]?.[tipo];
@@ -439,7 +452,7 @@ export function HorarioScreen() {
               return (
                 <View key={fecha} style={{ width: dayColWidths[i], alignItems: 'center' }}>
                   <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
-                    {DIAS_CORTO[ORDEN_DIAS[i]]}
+                    {DIAS_CORTO[new Date(fecha + 'T12:00:00').getDay()]}
                   </Text>
                   <Text style={{
                     color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
@@ -466,14 +479,18 @@ export function HorarioScreen() {
             gridAreaTopRef.current = y;
           });
         }}
-        style={{ flex: 1, flexDirection: 'row' }}
+        style={{ flex: 1 }}
       >
-        {/* Columna de horas — fija, sincronizada verticalmente con la grilla */}
+        {/* Columna de horas — fija, posición absoluta para evitar errores de flex en Android */}
         <ScrollView
           ref={timeColRef}
           scrollEnabled={false}
           showsVerticalScrollIndicator={false}
-          style={{ width: TIME_COL_W }}
+          style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: TIME_COL_W, zIndex: 1,
+            backgroundColor: hasImgBg ? surfaceBg : tema.fondo,
+          }}
           contentContainerStyle={{ height: TOTAL_HEIGHT }}
         >
           {horas.map(h => (
@@ -487,7 +504,7 @@ export function HorarioScreen() {
 
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
-          style={{ flex: 1 }}
+          style={{ flex: 1, marginLeft: TIME_COL_W }}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
@@ -507,7 +524,6 @@ export function HorarioScreen() {
             horizontal
             showsHorizontalScrollIndicator={totalGridW > gridW}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingRight: 2 }}
             onScroll={(e) => {
               const x = e.nativeEvent.contentOffset.x;
               hScrollOffRef.current = x;
@@ -569,6 +585,20 @@ export function HorarioScreen() {
                                 setDraftBloque({ ...b });
                                 cardRefs.current.get(b.id)?.measureInWindow((cx, cy) => {
                                   ghostOriginRef.current = { x: cx, y: cy };
+                                  // Recalibrar las referencias de origen usando la posición
+                                  // conocida del bloque. Esto corrige cualquier desfase entre
+                                  // measureInWindow del contenedor y absoluteX/Y de RNGH
+                                  // (presente en Android con edgeToEdgeEnabled: true).
+                                  const blockTopInGrid = (b.horaInicio - horaInicioRef.current) * PX_POR_MIN;
+                                  const prevColsWidth = dayColWidthsRef.current
+                                    .slice(0, diaIdx)
+                                    .reduce((s, w) => s + w, 0);
+                                  const blockLeftInGrid = TIME_COL_W + prevColsWidth + 1 + lyt.subCol * subColW;
+                                  gridAreaTopRef.current = cy - blockTopInGrid + vScrollOffRef.current;
+                                  outerOriginRef.current = {
+                                    x: cx - blockLeftInGrid + hScrollOffRef.current,
+                                    y: outerOriginRef.current.y,
+                                  };
                                 });
                               }
                             }}
@@ -636,16 +666,16 @@ export function HorarioScreen() {
                                         h: prev.h,
                                       } : prev);
                                     }}
-                                    onEnded={(e: PanGestureHandlerGestureEvent) => {
+                                    onEnded={(e) => {
                                       if (!draftBloqueRef.current) {
                                         setGhostPos(null);
                                         return;
                                       }
-                                      // Usar absoluteX/Y del gesto — coordenadas absolutas de pantalla
-                                      // más precisas que ghostOriginRef + translationX/Y
+                                      const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
+                                      const ghostTopY = ghostOriginRef.current!.y + ne.translationY;
                                       const { fecha, horaInicio: nuevoInicio } = calcularDestino(
-                                        e.nativeEvent.absoluteX,
-                                        e.nativeEvent.absoluteY,
+                                        ne.absoluteX,
+                                        ghostTopY,
                                       );
                                       const draft = draftBloqueRef.current!;
                                       const duracion = draft.horaFin - draft.horaInicio;

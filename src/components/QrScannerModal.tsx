@@ -1,38 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Alert, Platform, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Alert, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTema } from '../theme/ThemeContext';
 import LZString from 'lz-string';
 import { decodeCarrera, esChunkQR, joinChunks } from '../utils/qrPayload';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { useStore } from '../store/useStore';
-import { useAuthStore } from '../store/useAuthStore';
-import { supabase } from '../services/supabase';
 import { Evaluacion } from '../types';
 
 interface Props {
   visible: boolean;
   onCerrar: () => void;
   onEvaluacionesDetectadas?: (evaluaciones: Evaluacion[]) => void;
+  onDeviceSyncDetectado?: (data: { channel: string; exp: number }) => void;
 }
 
-export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: Props) {
+export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, onDeviceSyncDetectado }: Props) {
   const tema = useTema();
   const { guardarMateria, config, actualizarConfig } = useStore();
-  const { session, signIn } = useAuthStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [totalEsperado, setTotalEsperado] = useState<number | null>(null);
   const procesando = useRef(false);
   const chunksRef = useRef<(string | undefined)[]>([]);
   const [chunksListos, setChunksListos] = useState(0);
-
-  // QR-login state
-  const [qrLoginChannel, setQrLoginChannel] = useState<string | null>(null);
-  const [qrLoginEmail, setQrLoginEmail] = useState('');
-  const [qrLoginPassword, setQrLoginPassword] = useState('');
-  const [qrLoginError, setQrLoginError] = useState<string | null>(null);
-  const [qrLoginCargando, setQrLoginCargando] = useState(false);
-  const [qrLoginExito, setQrLoginExito] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -40,77 +30,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: 
       setTotalEsperado(null);
       setChunksListos(0);
       procesando.current = false;
-      setQrLoginChannel(null);
-      setQrLoginEmail('');
-      setQrLoginPassword('');
-      setQrLoginError(null);
-      setQrLoginCargando(false);
-      setQrLoginExito(false);
     }
   }, [visible]);
-
-  // ── Enviar sesión por Realtime Broadcast ─────────────────────────────────
-  const enviarSesion = async (channel: string, accessToken: string, refreshToken: string) => {
-    setQrLoginExito(false);
-    try {
-      const ch = supabase.channel(`qr-login:${channel}`);
-      await ch.subscribe();
-      await ch.send({
-        type: 'broadcast',
-        event: 'session',
-        payload: { access_token: accessToken, refresh_token: refreshToken },
-      });
-      await supabase.removeChannel(ch);
-      setQrLoginExito(true);
-      setTimeout(() => onCerrar(), 1200);
-    } catch {
-      Alert.alert('Error', 'No se pudo conectar con la web. Verificá tu conexión.');
-      procesando.current = false;
-      setQrLoginChannel(null);
-    }
-  };
-
-  // ── Manejo del QR de login ───────────────────────────────────────────────
-  const handleQrLogin = async (payload: { type: string; channel: string; exp: number }) => {
-    if (Date.now() > payload.exp) {
-      Alert.alert('QR expirado', 'Regenerá el QR en la web e intentá de nuevo.');
-      procesando.current = false;
-      return;
-    }
-
-    if (session) {
-      // Ya logueado: broadcast inmediato
-      await enviarSesion(payload.channel, session.access_token, session.refresh_token);
-    } else {
-      // No logueado: mostrar form inline
-      setQrLoginChannel(payload.channel);
-    }
-  };
-
-  // ── Submit del form inline ───────────────────────────────────────────────
-  const handleQrLoginSubmit = async () => {
-    if (!qrLoginEmail.trim() || !qrLoginPassword.trim()) {
-      setQrLoginError('Completá email y contraseña.');
-      return;
-    }
-    setQrLoginCargando(true);
-    setQrLoginError(null);
-    const err = await signIn(qrLoginEmail.trim(), qrLoginPassword);
-    if (err) {
-      setQrLoginCargando(false);
-      setQrLoginError(err);
-      return;
-    }
-    // signIn actualiza el store; obtener sesión fresca
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      setQrLoginCargando(false);
-      setQrLoginError('No se pudo obtener la sesión. Intentá de nuevo.');
-      return;
-    }
-    await enviarSesion(qrLoginChannel!, data.session.access_token, data.session.refresh_token);
-    setQrLoginCargando(false);
-  };
 
   // ── Lógica de escaneo ────────────────────────────────────────────────────
   const importar = (encoded: string) => {
@@ -144,9 +65,15 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: 
     // Detectar payload de QR login
     try {
       const parsed = JSON.parse(data);
-      if (parsed.type === 'cursus-qr-login') {
+      if (parsed.type === 'cursus-device-sync' && onDeviceSyncDetectado) {
         procesando.current = true;
-        handleQrLogin(parsed);
+        if (Date.now() > parsed.exp) {
+          Alert.alert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
+          procesando.current = false;
+          return;
+        }
+        onDeviceSyncDetectado({ channel: parsed.channel, exp: parsed.exp });
+        onCerrar();
         return;
       }
       if (parsed.type === 'cursus-evaluaciones' && onEvaluacionesDetectadas) {
@@ -201,72 +128,6 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas }: 
             style={{ backgroundColor: tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10 }}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Cerrar</Text>
           </TouchableOpacity>
-        </View>
-      </Modal>
-    );
-  }
-
-  // ── Form inline: login para QR (móvil sin sesión) ─────────────────────────
-  if (qrLoginChannel !== null) {
-    return (
-      <Modal visible animationType="slide" onRequestClose={() => { setQrLoginChannel(null); procesando.current = false; onCerrar(); }}>
-        <View style={{ flex: 1, backgroundColor: tema.fondo, justifyContent: 'center', padding: 24 }}>
-          {qrLoginExito ? (
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 56, marginBottom: 16 }}>✅</Text>
-              <Text style={{ color: '#4CAF50', fontSize: 18, fontWeight: '700', textAlign: 'center' }}>
-                ¡Sesión compartida con la web!
-              </Text>
-            </View>
-          ) : (
-            <>
-              <Text style={{ color: tema.acento, fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-                Iniciar sesión
-              </Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
-                Iniciá sesión para compartir tu cuenta con la web.{'\n'}Requiere conexión a internet.
-              </Text>
-
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Email</Text>
-              <TextInput
-                value={qrLoginEmail}
-                onChangeText={setQrLoginEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 12, borderRadius: 8, marginBottom: 12 }}
-              />
-
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Contraseña</Text>
-              <TextInput
-                value={qrLoginPassword}
-                onChangeText={setQrLoginPassword}
-                secureTextEntry
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 12, borderRadius: 8, marginBottom: 16 }}
-              />
-
-              {qrLoginError && (
-                <Text style={{ color: '#F44336', fontSize: 13, marginBottom: 12, textAlign: 'center' }}>{qrLoginError}</Text>
-              )}
-
-              <TouchableOpacity
-                onPress={handleQrLoginSubmit}
-                disabled={qrLoginCargando}
-                style={{ backgroundColor: tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 }}
-              >
-                {qrLoginCargando
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Entrar y compartir sesión</Text>
-                }
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => { setQrLoginChannel(null); procesando.current = false; onCerrar(); }}
-                style={{ alignItems: 'center' }}
-              >
-                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
-              </TouchableOpacity>
-            </>
-          )}
         </View>
       </Modal>
     );

@@ -44,6 +44,7 @@ const CONFIG_DEFAULT_PARCIAL = {
   tarjetaMostrarToggleCursando: true,
   coloresHorario: {} as Record<string, Partial<Record<import('../types').TipoBloque, import('../types').ColorBloque>>>,
   horarioMostrarEvaluaciones: true,
+  horarioPrimerDia: 'lunes' as const,
 };
 
 /**
