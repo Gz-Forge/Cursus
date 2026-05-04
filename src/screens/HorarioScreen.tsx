@@ -479,14 +479,18 @@ export function HorarioScreen() {
             gridAreaTopRef.current = y;
           });
         }}
-        style={{ flex: 1, flexDirection: 'row' }}
+        style={{ flex: 1 }}
       >
-        {/* Columna de horas — fija, sincronizada verticalmente con la grilla */}
+        {/* Columna de horas — fija, posición absoluta para evitar errores de flex en Android */}
         <ScrollView
           ref={timeColRef}
           scrollEnabled={false}
           showsVerticalScrollIndicator={false}
-          style={{ width: TIME_COL_W }}
+          style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: TIME_COL_W, zIndex: 1,
+            backgroundColor: hasImgBg ? surfaceBg : tema.fondo,
+          }}
           contentContainerStyle={{ height: TOTAL_HEIGHT }}
         >
           {horas.map(h => (
@@ -500,7 +504,7 @@ export function HorarioScreen() {
 
         {/* Área de días: scroll vertical + scroll horizontal */}
         <Animated.ScrollView
-          style={{ flex: 1 }}
+          style={{ flex: 1, marginLeft: TIME_COL_W }}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
             {
@@ -520,7 +524,6 @@ export function HorarioScreen() {
             horizontal
             showsHorizontalScrollIndicator={totalGridW > gridW}
             scrollEventThrottle={16}
-            contentContainerStyle={{ paddingRight: 2 }}
             onScroll={(e) => {
               const x = e.nativeEvent.contentOffset.x;
               hScrollOffRef.current = x;
@@ -668,12 +671,11 @@ export function HorarioScreen() {
                                         setGhostPos(null);
                                         return;
                                       }
-                                      // Usar absoluteX/Y del gesto — coordenadas absolutas de pantalla
-                                      // más precisas que ghostOriginRef + translationX/Y
                                       const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
+                                      const ghostTopY = ghostOriginRef.current!.y + ne.translationY;
                                       const { fecha, horaInicio: nuevoInicio } = calcularDestino(
                                         ne.absoluteX,
-                                        ne.absoluteY,
+                                        ghostTopY,
                                       );
                                       const draft = draftBloqueRef.current!;
                                       const duracion = draft.horaFin - draft.horaInicio;
