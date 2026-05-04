@@ -13,8 +13,7 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil } from '../types';
-import type { MateriaJson, ModoImport } from '../utils/importExport';
-import type { ConfigJsonResult } from '../utils/importExport';
+import type { MateriaJson, ModoImport, ConfigJsonResult } from '../utils/importExport';
 
 type Tab = 'importar' | 'exportar';
 
@@ -177,6 +176,11 @@ function PanelImportar() {
         'Formato no reconocido',
         'El archivo no parece ser un JSON de configuración de Cursus.\n\nAsegurate de generarlo con el prompt "Generar configuración" en Configuración → Prompts para IA.',
       );
+      return;
+    }
+
+    if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
+      Alert.alert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
       return;
     }
 
