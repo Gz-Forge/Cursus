@@ -504,6 +504,49 @@ export function aplicarConfigJson(
   return { aplicados, ignorados };
 }
 
+/**
+ * Serializa los campos configurables del Config actual al formato cursus_config v1,
+ * listo para exportar y volver a importar con aplicarConfigJson.
+ * No incluye campos internos como tema, temaPersonalizado, coloresHorario, fechasEjecutadas.
+ */
+export function configAJson(config: import('../types').Config): Record<string, unknown> {
+  return {
+    cursus_config: 1,
+    notaMaxima: config.notaMaxima,
+    umbralExoneracion: config.umbralExoneracion,
+    umbralAprobacion: config.umbralAprobacion,
+    umbralPorExamen: config.umbralPorExamen,
+    umbralExamenExoneracion: config.umbralExamenExoneracion,
+    usarEstadoAprobado: config.usarEstadoAprobado,
+    aprobadoHabilitaPrevias: config.aprobadoHabilitaPrevias,
+    oportunidadesExamenDefault: config.oportunidadesExamenDefault,
+    tiposFormacion: config.tiposFormacion,
+    modoExamen: config.modoExamen,
+    fechasLimiteExamen: config.fechasLimiteExamen,
+    labelTeorica: config.labelTeorica,
+    abrevTeorica: config.abrevTeorica,
+    labelPractica: config.labelPractica,
+    abrevPractica: config.abrevPractica,
+    labelParcial: config.labelParcial,
+    abrevParcial: config.abrevParcial,
+    labelOtro: config.labelOtro,
+    abrevOtro: config.abrevOtro,
+    mostrarNombreCompletoEnBloque: config.mostrarNombreCompletoEnBloque,
+    horarioMostrarEvaluaciones: config.horarioMostrarEvaluaciones,
+    horarioPrimerDia: config.horarioPrimerDia,
+    tarjetaCreditosBadge: config.tarjetaCreditosBadge,
+    tarjetaBadgeOrden: config.tarjetaBadgeOrden,
+    tarjetaMostrarNota: config.tarjetaMostrarNota,
+    tarjetaNota: config.tarjetaNota,
+    tarjetaPrevias: config.tarjetaPrevias,
+    tarjetaPreviasFormato: config.tarjetaPreviasFormato,
+    tarjetaAvisoPrevias: config.tarjetaAvisoPrevias,
+    tarjetaTipoFormacion: config.tarjetaTipoFormacion,
+    tarjetaCreditosExtendida: config.tarjetaCreditosExtendida,
+    tarjetaMostrarToggleCursando: config.tarjetaMostrarToggleCursando,
+  };
+}
+
 export function generarPromptConfig(): string {
   return `Sos un asistente de configuración de la app Cursus, una app de seguimiento académico universitario.
 
