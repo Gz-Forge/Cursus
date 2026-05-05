@@ -225,3 +225,120 @@ describe('mergeImportar', () => {
     expect(result.find(m => m.nombre === 'Física')).toBeTruthy();
   });
 });
+
+import { aplicarConfigJson } from '../src/utils/importExport';
+
+describe('aplicarConfigJson', () => {
+  it('lanza error si falta cursus_config: 1', () => {
+    expect(() => aplicarConfigJson({}, () => {})).toThrow();
+    expect(() => aplicarConfigJson({ cursus_config: 2 }, () => {})).toThrow();
+    expect(() => aplicarConfigJson(null, () => {})).toThrow();
+  });
+
+  it('aplica notaMaxima válida', () => {
+    const calls: any[] = [];
+    const r = aplicarConfigJson({ cursus_config: 1, notaMaxima: 10 }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ notaMaxima: 10 });
+    expect(r.aplicados).toContain('notaMaxima');
+  });
+
+  it('ignora notaMaxima fuera de rango', () => {
+    const r1 = aplicarConfigJson({ cursus_config: 1, notaMaxima: 0 }, () => {});
+    expect(r1.aplicados).not.toContain('notaMaxima');
+    expect(r1.ignorados.some((x: any) => x.campo === 'notaMaxima')).toBe(true);
+    const r2 = aplicarConfigJson({ cursus_config: 1, notaMaxima: 9999 }, () => {});
+    expect(r2.ignorados.some((x: any) => x.campo === 'notaMaxima')).toBe(true);
+  });
+
+  it('aplica umbralExoneracion válido', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, umbralExoneracion: 85 }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ umbralExoneracion: 85 });
+  });
+
+  it('ignora umbral fuera de rango', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, umbralExoneracion: 101 }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'umbralExoneracion')).toBe(true);
+  });
+
+  it('aplica usarEstadoAprobado booleano', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, usarEstadoAprobado: false }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ usarEstadoAprobado: false });
+  });
+
+  it('ignora booleano con tipo incorrecto', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, usarEstadoAprobado: 'si' }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'usarEstadoAprobado')).toBe(true);
+  });
+
+  it('aplica modoExamen con valor válido', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, modoExamen: 'manual' }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ modoExamen: 'manual' });
+  });
+
+  it('ignora modoExamen con valor no permitido', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, modoExamen: 'aleatorio' }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'modoExamen')).toBe(true);
+  });
+
+  it('aplica fechasLimiteExamen con formato correcto', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, fechasLimiteExamen: ['2025-07-15', '2025-12-10'] }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ fechasLimiteExamen: ['2025-07-15', '2025-12-10'] });
+  });
+
+  it('ignora fechas con formato incorrecto', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, fechasLimiteExamen: ['15/07/2025'] }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'fechasLimiteExamen')).toBe(true);
+  });
+
+  it('ignora abrev con más de 3 caracteres', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, abrevTeorica: 'TEOR' }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'abrevTeorica')).toBe(true);
+  });
+
+  it('aplica abrev con 3 o menos caracteres', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, abrevTeorica: 'T' }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ abrevTeorica: 'T' });
+  });
+
+  it('aplica tiposFormacion como array de strings', () => {
+    const calls: any[] = [];
+    aplicarConfigJson({ cursus_config: 1, tiposFormacion: ['Básica', 'Específica'] }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ tiposFormacion: ['Básica', 'Específica'] });
+  });
+
+  it('ignora tiposFormacion si no es array de strings', () => {
+    const r = aplicarConfigJson({ cursus_config: 1, tiposFormacion: [1, 2] }, () => {});
+    expect(r.ignorados.some((x: any) => x.campo === 'tiposFormacion')).toBe(true);
+  });
+
+  it('no llama actualizarConfig si no hay campos válidos', () => {
+    let llamado = false;
+    aplicarConfigJson({ cursus_config: 1 }, () => { llamado = true; });
+    expect(llamado).toBe(false);
+  });
+
+  it('aplica múltiples campos en una sola llamada', () => {
+    const calls: any[] = [];
+    const r = aplicarConfigJson({
+      cursus_config: 1,
+      notaMaxima: 12,
+      usarEstadoAprobado: true,
+      horarioPrimerDia: 'domingo',
+    }, p => calls.push(p));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ notaMaxima: 12, usarEstadoAprobado: true, horarioPrimerDia: 'domingo' });
+    expect(r.aplicados).toHaveLength(3);
+  });
+
+  it('ignora campos desconocidos silenciosamente', () => {
+    const calls: any[] = [];
+    const r = aplicarConfigJson({ cursus_config: 1, campoInventado: 'x', notaMaxima: 10 }, p => calls.push(p));
+    expect(calls[0]).not.toHaveProperty('campoInventado');
+    expect(r.aplicados).toEqual(['notaMaxima']);
+  });
+});

@@ -11,10 +11,9 @@ import { QrScannerModal } from '../components/QrScannerModal';
 import { construirPayload } from '../utils/exportPayload';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
-import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil } from '../types';
-import type { MateriaJson, ModoImport } from '../utils/importExport';
+import type { MateriaJson, ModoImport, ConfigJsonResult } from '../utils/importExport';
 
 type Tab = 'importar' | 'exportar';
 
@@ -66,7 +65,6 @@ function PanelImportar() {
   const tema = useTema();
   const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
-  const [mostrarSync, setMostrarSync] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
@@ -146,6 +144,54 @@ function PanelImportar() {
     } finally {
       setCargando(false);
     }
+  };
+
+  const handleImportarConfig = async () => {
+    setCargando(true);
+    let contenido: string | null = null;
+    try {
+      contenido = await fileIO.importarArchivo();
+    } catch {
+      Alert.alert('Error', 'No se pudo abrir el archivo.');
+      setCargando(false);
+      return;
+    }
+    setCargando(false);
+    if (!contenido) return;
+
+    let datos: unknown;
+    try {
+      datos = JSON.parse(contenido);
+    } catch {
+      Alert.alert('Error', 'El archivo no es un JSON válido.');
+      return;
+    }
+
+    let resultado: ConfigJsonResult;
+    try {
+      const { aplicarConfigJson } = await import('../utils/importExport');
+      resultado = aplicarConfigJson(datos, actualizarConfig);
+    } catch {
+      Alert.alert(
+        'Formato no reconocido',
+        'El archivo no parece ser un JSON de configuración de Cursus.\n\nAsegurate de generarlo con el prompt "Generar configuración" en Configuración → Prompts para IA.',
+      );
+      return;
+    }
+
+    if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
+      Alert.alert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
+      return;
+    }
+
+    const resumen = [
+      `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
+      resultado.ignorados.length > 0
+        ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos:\n${resultado.ignorados.map(x => `• ${x.campo}: ${x.motivo}`).join('\n')}`
+        : null,
+    ].filter(Boolean).join('\n\n');
+
+    Alert.alert('Configuración importada', resumen);
   };
 
   return (
@@ -255,23 +301,33 @@ function PanelImportar() {
       )}
 
       <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
-        SINCRONIZAR DISPOSITIVOS
+        CONFIGURACIÓN DESDE JSON
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Copiá todos tus datos (perfiles, materias, notas, configuración) desde otro dispositivo o hacia él.
+          Importá un JSON generado con el prompt{' '}
+          <Text style={{ color: tema.texto }}>"Generar configuración"</Text>
+          {' '}(Configuración → Prompts para IA) para configurar la app de una vez.{'\n\n'}
+          Solo se actualizan los campos presentes en el JSON; el resto queda como está.
         </Text>
         <TouchableOpacity
-          onPress={() => setMostrarSync(true)}
+          onPress={handleImportarConfig}
+          disabled={cargando}
           style={{
-            backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10,
-            alignItems: 'center', borderWidth: 1, borderColor: tema.acento,
+            backgroundColor: tema.tarjeta,
+            padding: 14, borderRadius: 10,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: tema.acento,
           }}
         >
-          <Text style={{ color: tema.acento, fontWeight: '700' }}>🔄 Sincronizar con otro dispositivo</Text>
+          {cargando
+            ? <ActivityIndicator color={tema.acento} />
+            : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Importar configuración JSON</Text>
+          }
         </TouchableOpacity>
       </View>
-      <SyncDispositivosModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
+
     </View>
   );
 }

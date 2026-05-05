@@ -12,7 +12,7 @@ interface Props {
   visible: boolean;
   onCerrar: () => void;
   onEvaluacionesDetectadas?: (evaluaciones: Evaluacion[]) => void;
-  onDeviceSyncDetectado?: (data: { channel: string; exp: number }) => void;
+  onDeviceSyncDetectado?: (data: { code: string; exp: number }) => void;
 }
 
 export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, onDeviceSyncDetectado }: Props) {
@@ -72,7 +72,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           procesando.current = false;
           return;
         }
-        onDeviceSyncDetectado({ channel: parsed.channel, exp: parsed.exp });
+        onDeviceSyncDetectado({ code: parsed.code, exp: parsed.exp });
         onCerrar();
         return;
       }
