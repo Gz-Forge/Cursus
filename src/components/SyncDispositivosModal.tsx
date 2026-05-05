@@ -1,5 +1,5 @@
 // src/components/SyncDispositivosModal.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal, View, Text, TouchableOpacity, ActivityIndicator,
   Alert, Platform, TextInput,
@@ -8,16 +8,14 @@ import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
 import { supabase } from '../services/supabase';
 import {
-  capturarSnapshot, aplicarSnapshot, comprimirPayload,
-  descomprimirPayload, partirEnChunks,
+  capturarSnapshot, aplicarSnapshot,
+  comprimirPayload, descomprimirPayload,
 } from '../utils/deviceSnapshot';
 import { QrScannerModal } from './QrScannerModal';
 
 type Estado =
   | 'idle'
-  | 'emisor_generando'
-  | 'emisor_esperando'
-  | 'emisor_enviando'
+  | 'emisor_subiendo'
   | 'emisor_listo'
   | 'receptor_escaneando'
   | 'receptor_descargando'
@@ -31,146 +29,141 @@ interface Props {
 }
 
 const EXPIRY_MS = 10 * 60 * 1000; // 10 minutos
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function genCode(): string {
+  return Array.from({ length: 8 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
+}
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const tema = useTema();
   const [estado, setEstado] = useState<Estado>('idle');
-  const [channelCode, setChannelCode] = useState('');
-  const [qrValue, setQrValue] = useState('');
-  const [progreso, setProgreso] = useState({ enviado: 0, total: 0 });
+  const [code, setCode] = useState('');
+  const [expiryTs, setExpiryTs] = useState(0);
   const [codigoManual, setCodigoManual] = useState('');
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const canalRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const chunksRecibidosRef = useRef<(string | undefined)[]>([]);
 
-  // Limpiar al cerrar
-  useEffect(() => {
-    if (!visible) resetear();
-  }, [visible]);
-
-  const resetear = () => {
-    if (canalRef.current) {
-      supabase.removeChannel(canalRef.current);
-      canalRef.current = null;
-    }
+  const resetear = useCallback(() => {
     setEstado('idle');
-    setChannelCode('');
-    setQrValue('');
-    setProgreso({ enviado: 0, total: 0 });
+    setCode('');
+    setExpiryTs(0);
     setCodigoManual('');
     setMostrarScanner(false);
     setErrorMsg('');
-    chunksRecibidosRef.current = [];
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) resetear();
+  }, [visible, resetear]);
 
   // ── EMISOR ──────────────────────────────────────────────────────────────────
 
   const iniciarEmisor = async () => {
-    setEstado('emisor_generando');
+    setEstado('emisor_subiendo');
     try {
-      const code = crypto.randomUUID().slice(0, 8).toUpperCase();
-      const exp = Date.now() + EXPIRY_MS;
       const payload = await capturarSnapshot();
-      const compressed = comprimirPayload(payload);
-      const chunks = partirEnChunks(compressed);
+      const datos = comprimirPayload(payload);
+      const expira_en = new Date(Date.now() + EXPIRY_MS).toISOString();
 
-      const canal = supabase
-        .channel(`sync-dispositivos:${code}`)
-        .on('broadcast', { event: 'ready' }, async () => {
-          setEstado('emisor_enviando');
-          setProgreso({ enviado: 0, total: chunks.length });
-          try {
-            for (let i = 0; i < chunks.length; i++) {
-              await canal.send({
-                type: 'broadcast',
-                event: 'chunk',
-                payload: { i, t: chunks.length, d: chunks[i] },
-              });
-              setProgreso({ enviado: i + 1, total: chunks.length });
-            }
-            await canal.send({ type: 'broadcast', event: 'fin', payload: {} });
-            setEstado('emisor_listo');
-          } catch {
-            setErrorMsg('Error al enviar los datos. Intentá de nuevo.');
-            setEstado('error');
-          }
-        })
-        .subscribe();
+      // Generar código único (reintenta si colisiona, prácticamente nunca ocurre)
+      let nuevoCode = '';
+      let codigoLibre = false;
+      for (let intento = 0; intento < 5; intento++) {
+        nuevoCode = genCode();
+        const { data: existente } = await supabase
+          .from('sync_temporal')
+          .select('code')
+          .eq('code', nuevoCode)
+          .maybeSingle();
+        if (!existente) { codigoLibre = true; break; }
+      }
+      if (!codigoLibre) throw new Error('No se pudo generar un código único. Intentá de nuevo.');
 
-      canalRef.current = canal;
-      setChannelCode(code);
-      setQrValue(JSON.stringify({ type: 'cursus-device-sync', channel: code, exp }));
-      setEstado('emisor_esperando');
+      const { error } = await supabase
+        .from('sync_temporal')
+        .insert({ code: nuevoCode, datos, expira_en });
+
+      if (error) throw error;
+
+      const ts = Date.now() + EXPIRY_MS;
+      setExpiryTs(ts);
+      setCode(nuevoCode);
+      setEstado('emisor_listo');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Error generando el snapshot.');
+      setErrorMsg(e?.message ?? 'Error subiendo los datos. Verificá tu conexión.');
       setEstado('error');
     }
   };
 
   // ── RECEPTOR ────────────────────────────────────────────────────────────────
 
-  const conectarComoReceptor = (code: string) => {
-    const trimmed = code.trim().toUpperCase();
-    if (trimmed.length < 4) {
-      Alert.alert('Código inválido', 'Ingresá el código de 8 caracteres del dispositivo emisor.');
+  const descargarComoReceptor = async (inputCode: string) => {
+    const trimmed = inputCode.trim().toUpperCase();
+    if (trimmed.length !== 8) {
+      Alert.alert('Código inválido', 'El código debe tener exactamente 8 caracteres.');
       return;
     }
     setEstado('receptor_descargando');
-    const chunks: (string | undefined)[] = [];
-    chunksRecibidosRef.current = chunks;
+    try {
+      const { data, error } = await supabase
+        .from('sync_temporal')
+        .select('datos, expira_en')
+        .eq('code', trimmed)
+        .maybeSingle();
 
-    const canal = supabase
-      .channel(`sync-dispositivos:${trimmed}`)
-      .on('broadcast', { event: 'chunk' }, ({ payload }: any) => {
-        chunks[payload.i] = payload.d;
-        setProgreso({ enviado: chunks.filter(Boolean).length, total: payload.t });
-      })
-      .on('broadcast', { event: 'fin' }, async () => {
-        const compressed = chunksRecibidosRef.current.join('');
-        setEstado('receptor_aplicando');
-        try {
-          const payload = descomprimirPayload(compressed);
-          Alert.alert(
-            'Confirmar sincronización',
-            `Se van a reemplazar TODOS tus datos locales con los del dispositivo emisor (${payload.meta.perfiles.length} perfil(es)). Esta acción no se puede deshacer.`,
-            [
-              {
-                text: 'Cancelar',
-                style: 'cancel',
-                onPress: () => { resetear(); },
-              },
-              {
-                text: 'Reemplazar todo',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await aplicarSnapshot(payload);
-                    setEstado('receptor_listo');
-                  } catch (e: any) {
-                    setErrorMsg(e?.message ?? 'Error aplicando los datos.');
-                    setEstado('error');
-                  }
-                },
-              },
-            ]
-          );
-        } catch (e: any) {
-          setErrorMsg('Los datos recibidos están corruptos.');
-          setEstado('error');
-        }
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await canal.send({ type: 'broadcast', event: 'ready', payload: {} });
-        }
-      });
+      if (error) throw error;
 
-    canalRef.current = canal;
+      if (!data) {
+        setErrorMsg('Código inválido o expirado. Verificá el código e intentá de nuevo.');
+        setEstado('error');
+        return;
+      }
+
+      if (new Date(data.expira_en) < new Date()) {
+        setErrorMsg('El código expiró. El emisor debe generar uno nuevo.');
+        setEstado('error');
+        return;
+      }
+
+      const syncPayload = descomprimirPayload(data.datos);
+
+      Alert.alert(
+        'Confirmar sincronización',
+        `Se van a reemplazar TODOS tus datos locales con los del dispositivo emisor (${syncPayload.meta.perfiles.length} perfil(es)).\n\nEsta acción no se puede deshacer.`,
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+            onPress: () => resetear(),
+          },
+          {
+            text: 'Reemplazar todo',
+            style: 'destructive',
+            onPress: async () => {
+              setEstado('receptor_aplicando');
+              try {
+                await aplicarSnapshot(syncPayload);
+                // Borrar la fila: código de un solo uso
+                const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', trimmed);
+                if (deleteError) console.warn('No se pudo borrar la sesión de sync:', deleteError.message);
+                setEstado('receptor_listo');
+              } catch (e: any) {
+                setErrorMsg(e?.message ?? 'Error aplicando los datos.');
+                setEstado('error');
+              }
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Error descargando los datos. Verificá tu conexión.');
+      setEstado('error');
+    }
   };
 
-  const handleSyncDetectado = ({ channel }: { channel: string; exp: number }) => {
-    conectarComoReceptor(channel);
+  const handleSyncDetectado = ({ code: scannedCode }: { code: string; exp: number }) => {
+    descargarComoReceptor(scannedCode);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -178,6 +171,13 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const btnStyle = (color = tema.acento) => ({
     backgroundColor: color,
     padding: 14, borderRadius: 10, alignItems: 'center' as const, marginBottom: 10,
+  });
+
+  // Valor del QR: JSON con type + code + exp para que el scanner valide expiración
+  const qrPayload = JSON.stringify({
+    type: 'cursus-device-sync',
+    code,
+    exp: expiryTs,
   });
 
   const renderContenido = () => {
@@ -189,7 +189,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               Sincronizar dispositivos
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
-              Elegí tu rol. El emisor tiene los datos que querés copiar; el receptor los recibirá.
+              El emisor tiene los datos que querés copiar. El receptor los recibirá.
             </Text>
             <TouchableOpacity onPress={iniciarEmisor} style={btnStyle()}>
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>📤  Soy el EMISOR</Text>
@@ -198,14 +198,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => {
-                if (Platform.OS !== 'web') {
-                  setEstado('receptor_escaneando');
-                  setMostrarScanner(true);
-                } else {
-                  setEstado('receptor_escaneando');
-                }
-              }}
+              onPress={() => setEstado('receptor_escaneando')}
               style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acento }]}
             >
               <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
@@ -216,61 +209,42 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
-      case 'emisor_generando':
+      case 'emisor_subiendo':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
             <ActivityIndicator color={tema.acento} size="large" />
-            <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Preparando datos...</Text>
-          </View>
-        );
-
-      case 'emisor_esperando':
-        return (
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
-              Esperando receptor...
-            </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16, textAlign: 'center' }}>
-              En el otro dispositivo, elegí "Soy el RECEPTOR" y{'\n'}
-              {Platform.OS !== 'web'
-                ? 'escaneá este QR o escribí el código.'
-                : 'escribí el código.'}
-            </Text>
-            {Platform.OS !== 'web' && qrValue ? (
-              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                <QRCode value={qrValue} size={180} color="#121212" backgroundColor="#fff" />
-              </View>
-            ) : null}
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 24, marginBottom: 8 }}>
-              <Text style={{ color: tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
-                {channelCode}
-              </Text>
-            </View>
-            <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Código válido por 10 minutos</Text>
-          </View>
-        );
-
-      case 'emisor_enviando':
-        return (
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
-            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Enviando datos...</Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4 }}>
-              {progreso.enviado} / {progreso.total} bloques
-            </Text>
+            <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Subiendo datos...</Text>
           </View>
         );
 
       case 'emisor_listo':
         return (
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <Text style={{ fontSize: 52 }}>✅</Text>
-            <Text style={{ color: '#4CAF50', fontWeight: '700', fontSize: 16, marginTop: 8 }}>
-              ¡Datos enviados!
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
+              Código listo
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-              El receptor ya tiene una copia de todos tus datos.
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16, textAlign: 'center' }}>
+              En el otro dispositivo elegí "Soy el RECEPTOR"{'\n'}
+              y escaneá el QR o escribí el código.
             </Text>
+
+            {/* QR — visible en móvil y escritorio */}
+            {code ? (
+              <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                <QRCode value={qrPayload} size={180} color="#121212" backgroundColor="#fff" />
+              </View>
+            ) : null}
+
+            {/* Código escrito */}
+            <View style={{
+              backgroundColor: tema.tarjeta, borderRadius: 10,
+              paddingVertical: 10, paddingHorizontal: 24, marginBottom: 6,
+            }}>
+              <Text style={{ color: tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
+                {code}
+              </Text>
+            </View>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Válido por 10 minutos · uso único</Text>
           </View>
         );
 
@@ -280,11 +254,14 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 12, textAlign: 'center' }}>
               Conectar con el emisor
             </Text>
+
+            {/* Escanear QR solo en móvil */}
             {Platform.OS !== 'web' && (
               <TouchableOpacity onPress={() => setMostrarScanner(true)} style={btnStyle()}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>📷  Escanear QR del emisor</Text>
               </TouchableOpacity>
             )}
+
             <Text style={{ color: tema.textoSecundario, fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
               {Platform.OS !== 'web' ? 'O ingresá el código manualmente:' : 'Ingresá el código del dispositivo emisor:'}
             </Text>
@@ -302,9 +279,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               }}
             />
             <TouchableOpacity
-              onPress={() => conectarComoReceptor(codigoManual)}
-              disabled={codigoManual.trim().length < 4}
-              style={btnStyle(codigoManual.trim().length >= 4 ? tema.acento : tema.borde)}
+              onPress={() => descargarComoReceptor(codigoManual)}
+              disabled={codigoManual.trim().length < 8}
+              style={btnStyle(codigoManual.trim().length >= 8 ? tema.acento : tema.borde)}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>Conectar</Text>
             </TouchableOpacity>
@@ -315,14 +292,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
             <ActivityIndicator color={tema.acento} size="large" />
-            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>
-              Recibiendo datos...
-            </Text>
-            {progreso.total > 0 && (
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4 }}>
-                {progreso.enviado} / {progreso.total} bloques
-              </Text>
-            )}
+            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Descargando datos...</Text>
           </View>
         );
 
@@ -365,7 +335,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     }
   };
 
-  const puedeVolver = ['emisor_listo', 'receptor_listo', 'error', 'emisor_esperando', 'receptor_escaneando'].includes(estado);
+  const puedeVolver = [
+    'emisor_listo', 'receptor_listo', 'error', 'receptor_escaneando',
+  ].includes(estado);
 
   return (
     <>
@@ -375,7 +347,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             backgroundColor: tema.superficie,
             borderTopLeftRadius: 20, borderTopRightRadius: 20,
             padding: 24, paddingBottom: 36,
-            ...(Platform.OS === 'web' ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' } : {}),
+            ...(Platform.OS === 'web'
+              ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
+              : {}),
           }}>
             {renderContenido()}
             {puedeVolver && (
@@ -387,12 +361,12 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         </View>
       </Modal>
 
-      {/* Scanner para receptor móvil */}
+      {/* Scanner: solo para receptor móvil */}
       <QrScannerModal
         visible={mostrarScanner}
         onCerrar={() => {
           setMostrarScanner(false);
-          if (estado === 'receptor_escaneando') setEstado('idle');
+          // Quedarse en receptor_escaneando para poder reintentar o escribir el código
         }}
         onDeviceSyncDetectado={handleSyncDetectado}
       />

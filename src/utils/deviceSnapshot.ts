@@ -5,8 +5,6 @@ import { cargarMeta, guardarMeta, cargarPerfilEstado, guardarPerfilEstado } from
 import { materiasAJson, jsonAMaterias, MateriaJson } from './importExport';
 import { useStore } from '../store/useStore';
 
-export const SYNC_CHUNK_SIZE = 100_000; // 100KB por chunk
-
 export interface DeviceSyncPayload {
   version: 1;
   type: 'cursus-device-sync';
@@ -66,12 +64,4 @@ export function descomprimirPayload(compressed: string): DeviceSyncPayload {
   const json = LZString.decompressFromBase64(compressed);
   if (!json) throw new Error('Payload de sincronización inválido o corrupto');
   return JSON.parse(json) as DeviceSyncPayload;
-}
-
-export function partirEnChunks(compressed: string): string[] {
-  const chunks: string[] = [];
-  for (let i = 0; i < compressed.length; i += SYNC_CHUNK_SIZE) {
-    chunks.push(compressed.slice(i, i + SYNC_CHUNK_SIZE));
-  }
-  return chunks;
 }

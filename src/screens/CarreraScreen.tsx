@@ -480,7 +480,7 @@ export function CarreraScreen() {
 
                     {subFiltroDisp === 'para_cursar' && (() => {
                       const numerosDisp = new Set(materiasDisponibles(materias, config));
-                      const lista = materias.filter(m => numerosDisp.has(m.numero));
+                      const lista = materias.filter(m => numerosDisp.has(m.numero) && calcularEstadoFinal(m, config) !== 'cursando');
                       const primerSem = lista.filter(m => m.semestre % 2 === 1);
                       const segundoSem = lista.filter(m => m.semestre % 2 === 0);
                       return (
