@@ -170,6 +170,10 @@ export interface Config {
   coloresHorario: Record<string, Partial<Record<TipoBloque, ColorBloque>>>;
   horarioMostrarEvaluaciones: boolean;
   horarioPrimerDia: 'lunes' | 'domingo';
+  // Métricas personalizables
+  metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
+  cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
+  cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
 }
 
 export interface AppState {
