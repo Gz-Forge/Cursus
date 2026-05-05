@@ -49,6 +49,9 @@ const CONFIG_DEFAULT: Config = {
   coloresHorario: {},
   horarioMostrarEvaluaciones: true,
   horarioPrimerDia: 'lunes',
+  metricasOcultas: [],
+  cuelloBotellaUmbral: 3,
+  cuelloBotellaSoloSiguiente: false,
 };
 
 interface Store extends AppState {

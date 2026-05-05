@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Platform, Animated } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, useWindowDimensions,
+  Platform, Animated, Modal, Switch,
+} from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
@@ -21,6 +24,22 @@ const ORDEN_ESTADOS: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 're
 
 type Panel = 'general' | 'graficos';
 
+const METRICAS_GENERAL = [
+  { id: 'progreso',           label: 'Progreso general' },
+  { id: 'avance_año',         label: 'Avance por año' },
+  { id: 'materias_estado',    label: 'Materias por estado' },
+  { id: 'creditos_semestre',  label: 'Créditos por semestre' },
+  { id: 'cuello_botella',     label: 'Cuello de botella' },
+  { id: 'promedio_acumulado', label: 'Promedio acumulado' },
+];
+const METRICAS_GRAFICOS = [
+  { id: 'promedio_semestre',   label: 'Promedio por semestre' },
+  { id: 'distribucion_rangos', label: 'Distribución por rango' },
+  { id: 'mapa_carrera',        label: 'Mapa de carrera' },
+  { id: 'notas_obtenidas',     label: 'Notas obtenidas' },
+  { id: 'tipos_formacion',     label: 'Tipos de formación' },
+];
+
 function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
   const n = Math.max(1, maxVal);
   const sections = Math.min(n, 5);
@@ -28,11 +47,12 @@ function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
 }
 
 export function MetricsScreen() {
-  const { materias, config } = useStore();
+  const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('metricas');
   const { width, height } = useWindowDimensions();
   const [semestreTorta, setSemestreTorta] = useState<number | null>(null);
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
+  const [modalPersonalizar, setModalPersonalizar] = useState(false);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
@@ -42,6 +62,16 @@ export function MetricsScreen() {
   const hasImgBg = fondoPantalla?.tipo === 'imagen' && !!fondoPantalla.valor;
   const opacidadPct = useStore(s => s.config.temaPersonalizado?.opacidadSuperficie ?? 85);
   const surfaceBg = hasImgBg ? tema.superficie + hexOpacity(opacidadPct) : tema.superficie;
+
+  // ── Visibilidad de métricas ───────────────────────────────────────────────
+  const metricasOcultas = config.metricasOcultas ?? [];
+  const esVisible = (id: string) => !metricasOcultas.includes(id);
+  const toggleMetrica = (id: string) => {
+    const ocultas = metricasOcultas.includes(id)
+      ? metricasOcultas.filter(x => x !== id)
+      : [...metricasOcultas, id];
+    actualizarConfig({ metricasOcultas: ocultas });
+  };
 
   // ── Base ─────────────────────────────────────────────────────────────────
   const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
@@ -79,9 +109,53 @@ export function MetricsScreen() {
     return { año, mats, crTotal, crObt, pct, conteo: conteoMats };
   });
 
+  // ── Cuello de botella ─────────────────────────────────────────────────────
+  const umbralCuello = config.cuelloBotellaUmbral ?? 3;
+  const soloSiguiente = config.cuelloBotellaSoloSiguiente ?? false;
+
+  // Semestre más bajo con al menos una materia no terminada
+  const siguienteSem = semestres.find(sem =>
+    materias.filter(m => m.semestre === sem).some(m => {
+      const e = calcularEstadoFinal(m, config);
+      return e !== 'aprobado' && e !== 'exonerado';
+    })
+  ) ?? null;
+
+  const numerosEnSigSem = new Set(
+    siguienteSem !== null
+      ? materias.filter(m => m.semestre === siguienteSem).map(m => m.numero)
+      : []
+  );
+
+  const materiasPorNumero = new Map(materias.map(m => [m.numero, m]));
+
+  const cuellosBotella = materias
+    .filter(m => {
+      if (m.esPreviaDe.length < umbralCuello) return false;
+      const e = calcularEstadoFinal(m, config);
+      if (e === 'aprobado' || e === 'exonerado') return false;
+      if (soloSiguiente && siguienteSem !== null) {
+        return m.esPreviaDe.some(num => numerosEnSigSem.has(num));
+      }
+      return true;
+    })
+    .sort((a, b) => b.esPreviaDe.length - a.esPreviaDe.length);
+
+  // ── Promedio acumulado ────────────────────────────────────────────────────
+  const promedioAcumuladoData = semestres.map(sem => {
+    const matsHastaSem = materias.filter(m => m.semestre <= sem && obtenerNotaFinal(m) !== null);
+    if (matsHastaSem.length === 0) return null;
+    const crTot = matsHastaSem.reduce((a, m) => a + m.creditosQueDA, 0);
+    const avg = crTot > 0
+      ? matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m)! * m.creditosQueDA, 0) / crTot
+      : matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m)!, 0) / matsHastaSem.length;
+    return {
+      value: parseFloat(((avg / 100) * config.notaMaxima).toFixed(2)),
+      label: `${sem}°`,
+    };
+  }).filter(Boolean) as { value: number; label: string }[];
+
   // ── Ancho de gráficos ─────────────────────────────────────────────────────
-  // En web: sidebar 200px + padding scroll 32 + padding tarjeta 28 + margen 20 → cada columna ≈ (width-200)/2 - 60
-  // En móvil: padding scrollview 32 + padding tarjeta 28 + margen eje Y 20 = 80
   const chartWidth = isWeb ? Math.max(200, (width - 200) / 2 - 60) : width - 80;
 
   // ── Gráfico 1: Promedio por semestre (línea) ─────────────────────────────
@@ -173,21 +247,160 @@ export function MetricsScreen() {
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
   );
+
+  // ── Modal Personalizar ────────────────────────────────────────────────────
+  const renderModalPersonalizar = () => (
+    <Modal
+      visible={modalPersonalizar}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setModalPersonalizar(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{
+          backgroundColor: tema.superficie,
+          borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          padding: 20, paddingBottom: 36, maxHeight: '85%',
+          ...(isWeb
+            ? { maxWidth: 480, alignSelf: 'center' as const, width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
+            : {}),
+        }}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16 }}>Personalizar métricas</Text>
+            <TouchableOpacity onPress={() => setModalPersonalizar(false)}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Panel General */}
+            <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 12, marginBottom: 6, letterSpacing: 0.5 }}>
+              PANEL GENERAL
+            </Text>
+
+            {METRICAS_GENERAL.map(m => (
+              <View key={m.id}>
+                <View style={{
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde,
+                }}>
+                  <Text style={{ color: tema.texto, fontSize: 14 }}>{m.label}</Text>
+                  <Switch
+                    value={esVisible(m.id)}
+                    onValueChange={() => toggleMetrica(m.id)}
+                    trackColor={{ false: tema.borde, true: tema.acento }}
+                    thumbColor="#fff"
+                  />
+                </View>
+
+                {/* Sub-configuración: cuello de botella */}
+                {m.id === 'cuello_botella' && esVisible('cuello_botella') && (
+                  <View style={{
+                    backgroundColor: tema.tarjeta, borderRadius: 10,
+                    padding: 12, marginTop: 4, marginBottom: 6, marginLeft: 16,
+                  }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
+                      Marcar cuando es previa de N o más materias:
+                    </Text>
+
+                    {/* Control +/- umbral */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                      <TouchableOpacity
+                        onPress={() => actualizarConfig({ cuelloBotellaUmbral: Math.max(1, umbralCuello - 1) })}
+                        style={{
+                          width: 34, height: 34, borderRadius: 17,
+                          backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center',
+                          borderWidth: 1, borderColor: tema.borde,
+                        }}
+                      >
+                        <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>−</Text>
+                      </TouchableOpacity>
+                      <View style={{ paddingHorizontal: 20, alignItems: 'center' }}>
+                        <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 24 }}>{umbralCuello}</Text>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>materias</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => actualizarConfig({ cuelloBotellaUmbral: umbralCuello + 1 })}
+                        style={{
+                          width: 34, height: 34, borderRadius: 17,
+                          backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center',
+                          borderWidth: 1, borderColor: tema.borde,
+                        }}
+                      >
+                        <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Toggle solo siguiente semestre */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 12 }}>
+                        Solo las que afectan al próximo semestre incompleto
+                      </Text>
+                      <Switch
+                        value={soloSiguiente}
+                        onValueChange={v => actualizarConfig({ cuelloBotellaSoloSiguiente: v })}
+                        trackColor={{ false: tema.borde, true: tema.acento }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            {/* Panel Gráficos */}
+            <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 12, marginTop: 20, marginBottom: 6, letterSpacing: 0.5 }}>
+              PANEL GRÁFICOS
+            </Text>
+            {METRICAS_GRAFICOS.map(m => (
+              <View key={m.id} style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde,
+              }}>
+                <Text style={{ color: tema.texto, fontSize: 14 }}>{m.label}</Text>
+                <Switch
+                  value={esVisible(m.id)}
+                  onValueChange={() => toggleMetrica(m.id)}
+                  trackColor={{ false: tema.borde, true: tema.acento }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
 
-      {/* ── Pestañas ── */}
-      <View style={{ flexDirection: 'row', backgroundColor: surfaceBg,
-        borderBottomWidth: 1, borderBottomColor: tema.borde }}>
-        {(['general', 'graficos'] as Panel[]).map(p => (
-          <TouchableOpacity key={p} onPress={() => setPanelActivo(p)}
-            style={{ flex: 1, padding: 12, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: panelActivo === p ? tema.acento : 'transparent' }}>
-            <Text style={{ color: panelActivo === p ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
-              {p === 'general' ? 'General' : 'Gráficos'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* ── Pestañas + botón personalizar ── */}
+      <View style={{
+        flexDirection: 'row', backgroundColor: surfaceBg,
+        borderBottomWidth: 1, borderBottomColor: tema.borde, alignItems: 'center',
+      }}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {(['general', 'graficos'] as Panel[]).map(p => (
+            <TouchableOpacity key={p} onPress={() => setPanelActivo(p)}
+              style={{
+                flex: 1, padding: 12, alignItems: 'center',
+                borderBottomWidth: 2, borderBottomColor: panelActivo === p ? tema.acento : 'transparent',
+              }}>
+              <Text style={{ color: panelActivo === p ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
+                {p === 'general' ? 'General' : 'Gráficos'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity
+          onPress={() => setModalPersonalizar(true)}
+          style={{ paddingHorizontal: 14, paddingVertical: 10 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontSize: 18 }}>⚙️</Text>
+        </TouchableOpacity>
       </View>
 
       <Animated.ScrollView
@@ -205,117 +418,241 @@ export function MetricsScreen() {
           <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 } : {}}>
 
             {/* Progreso General */}
-            <View style={col}>
-              {seccion('PROGRESO GENERAL')}
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Créditos obtenidos</Text>
-                  <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>
-                    {creditos} / {creditosTotal}
-                    {creditosTotal > 0 && (
-                      <Text style={{ color: tema.textoSecundario }}> ({Math.round((creditos / creditosTotal) * 100)}%)</Text>
-                    )}
-                  </Text>
-                </View>
-                {creditosTotal > 0 && (
-                  <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, marginBottom: 10 }}>
-                    <View style={{ height: 6, borderRadius: 3, backgroundColor: tema.acento,
-                      width: `${Math.round((creditos / creditosTotal) * 100)}%` as any }} />
-                  </View>
-                )}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Créditos restantes</Text>
-                  <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{creditosTotal - creditos}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Exoneradas</Text>
-                  <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{conteo.exonerado} / {materias.length}</Text>
-                </View>
-                {promedioEnEscala !== null && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Promedio ponderado</Text>
-                    <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>
-                      {promedioEnEscala} / {config.notaMaxima}
+            {esVisible('progreso') && (
+              <View style={col}>
+                {seccion('PROGRESO GENERAL')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Créditos obtenidos</Text>
+                    <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>
+                      {creditos} / {creditosTotal}
+                      {creditosTotal > 0 && (
+                        <Text style={{ color: tema.textoSecundario }}> ({Math.round((creditos / creditosTotal) * 100)}%)</Text>
+                      )}
                     </Text>
                   </View>
-                )}
-                <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 17, marginTop: 8 }}>
-                  {materias.length ? Math.round((conteo.exonerado / materias.length) * 100) : 0}% completado
-                </Text>
-              </View>
-            </View>
-
-            {/* Avance por Año */}
-            <View style={col}>
-              {seccion('AVANCE POR AÑO')}
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                {avancesPorAño.length === 0 && sinDatos('Sin materias cargadas aún')}
-                {avancesPorAño.map(({ año, crTotal, crObt, pct, conteo: c }) => (
-                  <View key={año} style={{ marginBottom: 12 }}>
+                  {creditosTotal > 0 && (
+                    <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, marginBottom: 10 }}>
+                      <View style={{ height: 6, borderRadius: 3, backgroundColor: tema.acento,
+                        width: `${Math.round((creditos / creditosTotal) * 100)}%` as any }} />
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Créditos restantes</Text>
+                    <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{creditosTotal - creditos}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Exoneradas</Text>
+                    <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{conteo.exonerado} / {materias.length}</Text>
+                  </View>
+                  {promedioEnEscala !== null && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: tema.texto, fontWeight: '600' }}>Año {año}</Text>
-                      <Text style={{ color: pct === 100 ? '#4CAF50' : tema.acento, fontWeight: '700' }}>
-                        {pct}%  <Text style={{ color: tema.textoSecundario, fontWeight: '400', fontSize: 12 }}>
-                          ({crObt}/{crTotal} cr)
-                        </Text>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Promedio ponderado</Text>
+                      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>
+                        {promedioEnEscala} / {config.notaMaxima}
                       </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: tema.borde }}>
-                      {ORDEN_ESTADOS.map(e =>
-                        c[e] > 0 ? (
-                          <View key={e} style={{ flex: c[e], backgroundColor: estadoColores[e] }} />
-                        ) : null
-                      )}
-                    </View>
-                  </View>
-                ))}
+                  )}
+                  <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 17, marginTop: 8 }}>
+                    {materias.length ? Math.round((conteo.exonerado / materias.length) * 100) : 0}% completado
+                  </Text>
+                </View>
               </View>
-            </View>
+            )}
+
+            {/* Avance por Año */}
+            {esVisible('avance_año') && (
+              <View style={col}>
+                {seccion('AVANCE POR AÑO')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                  {avancesPorAño.length === 0 && sinDatos('Sin materias cargadas aún')}
+                  {avancesPorAño.map(({ año, crTotal, crObt, pct, conteo: c }) => (
+                    <View key={año} style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ color: tema.texto, fontWeight: '600' }}>Año {año}</Text>
+                        <Text style={{ color: pct === 100 ? '#4CAF50' : tema.acento, fontWeight: '700' }}>
+                          {pct}%  <Text style={{ color: tema.textoSecundario, fontWeight: '400', fontSize: 12 }}>
+                            ({crObt}/{crTotal} cr)
+                          </Text>
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: tema.borde }}>
+                        {ORDEN_ESTADOS.map(e =>
+                          c[e] > 0 ? (
+                            <View key={e} style={{ flex: c[e], backgroundColor: estadoColores[e] }} />
+                          ) : null
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Materias por Estado */}
-            <View style={col}>
-              {seccion('MATERIAS POR ESTADO')}
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                <View style={{ flexDirection: 'row', height: 20, borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
-                  {ORDEN_ESTADOS.map(e =>
-                    conteo[e] > 0 ? (
-                      <View key={e} style={{ flex: conteo[e], backgroundColor: estadoColores[e] }} />
-                    ) : null
-                  )}
-                </View>
-                {ORDEN_ESTADOS.map(e => (
-                  <View key={e} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ color: tema.texto, fontSize: 13 }}>{ESTADO_LABELS[e]}</Text>
-                    <Text style={{ color: estadoColores[e], fontWeight: '700', fontSize: 13 }}>
-                      {conteo[e]}  ({Math.round((conteo[e] / total) * 100)}%)
-                    </Text>
+            {esVisible('materias_estado') && (
+              <View style={col}>
+                {seccion('MATERIAS POR ESTADO')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                  <View style={{ flexDirection: 'row', height: 20, borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
+                    {ORDEN_ESTADOS.map(e =>
+                      conteo[e] > 0 ? (
+                        <View key={e} style={{ flex: conteo[e], backgroundColor: estadoColores[e] }} />
+                      ) : null
+                    )}
                   </View>
-                ))}
+                  {ORDEN_ESTADOS.map(e => (
+                    <View key={e} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ color: tema.texto, fontSize: 13 }}>{ESTADO_LABELS[e]}</Text>
+                      <Text style={{ color: estadoColores[e], fontWeight: '700', fontSize: 13 }}>
+                        {conteo[e]}  ({Math.round((conteo[e] / total) * 100)}%)
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Créditos por Semestre */}
-            <View style={col}>
-              {seccion('CRÉDITOS POR SEMESTRE')}
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                {semestres.length === 0 && sinDatos('Sin materias cargadas aún')}
-                {semestres.map(sem => {
-                  const mats = materias.filter(m => m.semestre === sem);
-                  const crObt = mats.reduce((a, m) => {
-                    const e = calcularEstadoFinal(m, config);
-                    return (e === 'aprobado' || e === 'exonerado') ? a + m.creditosQueDA : a;
-                  }, 0);
-                  const crTotal = mats.reduce((a, m) => a + m.creditosQueDA, 0);
-                  const icono = crObt === crTotal && crTotal > 0 ? '✅' : crObt > 0 ? '🔵' : '⬜';
-                  return (
-                    <View key={sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <Text style={{ color: tema.texto }}>{sem}° Semestre</Text>
-                      <Text style={{ color: tema.textoSecundario }}>{crObt} / {crTotal} {icono}</Text>
-                    </View>
-                  );
-                })}
+            {esVisible('creditos_semestre') && (
+              <View style={col}>
+                {seccion('CRÉDITOS POR SEMESTRE')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  {semestres.length === 0 && sinDatos('Sin materias cargadas aún')}
+                  {semestres.map(sem => {
+                    const mats = materias.filter(m => m.semestre === sem);
+                    const crObt = mats.reduce((a, m) => {
+                      const e = calcularEstadoFinal(m, config);
+                      return (e === 'aprobado' || e === 'exonerado') ? a + m.creditosQueDA : a;
+                    }, 0);
+                    const crTotal = mats.reduce((a, m) => a + m.creditosQueDA, 0);
+                    const icono = crObt === crTotal && crTotal > 0 ? '✅' : crObt > 0 ? '🔵' : '⬜';
+                    return (
+                      <View key={sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ color: tema.texto }}>{sem}° Semestre</Text>
+                        <Text style={{ color: tema.textoSecundario }}>{crObt} / {crTotal} {icono}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
+            )}
+
+            {/* Cuello de Botella */}
+            {esVisible('cuello_botella') && (
+              <View style={col}>
+                {seccion('CUELLO DE BOTELLA')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
+                    {soloSiguiente && siguienteSem !== null
+                      ? `Afectan al ${siguienteSem}° semestre · previa de ≥${umbralCuello} materias`
+                      : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
+                  </Text>
+
+                  {cuellosBotella.length === 0 ? (
+                    sinDatos(
+                      soloSiguiente
+                        ? 'Ningún cuello de botella afecta al próximo semestre'
+                        : `No hay materias sin aprobar que sean previa de ${umbralCuello} o más`
+                    )
+                  ) : (
+                    cuellosBotella.map(m => {
+                      const estado = calcularEstadoFinal(m, config);
+                      const matDesbloquea = m.esPreviaDe
+                        .map(n => materiasPorNumero.get(n))
+                        .filter((x): x is NonNullable<typeof x> => !!x);
+                      const enSigSem = matDesbloquea.filter(x => numerosEnSigSem.has(x.numero));
+
+                      return (
+                        <View key={m.id} style={{
+                          marginBottom: 10, paddingBottom: 10,
+                          borderBottomWidth: 1, borderBottomColor: tema.borde,
+                        }}>
+                          {/* Nombre + badge ×N */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+                            <View style={{
+                              width: 10, height: 10, borderRadius: 5,
+                              backgroundColor: estadoColores[estado],
+                            }} />
+                            <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13, flex: 1 }}>
+                              {m.nombre}
+                            </Text>
+                            <View style={{
+                              backgroundColor: '#FF980022', borderRadius: 10,
+                              paddingHorizontal: 8, paddingVertical: 2,
+                            }}>
+                              <Text style={{ color: '#FF9800', fontSize: 11, fontWeight: '700' }}>
+                                ×{m.esPreviaDe.length}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Detalle */}
+                          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginLeft: 18 }}>
+                            {`${m.semestre}° sem · desbloquea: `}
+                            {matDesbloquea.slice(0, 4).map(x => x.nombre).join(', ')}
+                            {matDesbloquea.length > 4 ? ` +${matDesbloquea.length - 4} más` : ''}
+                          </Text>
+
+                          {/* Highlight siguiente semestre */}
+                          {soloSiguiente && enSigSem.length > 0 && (
+                            <Text style={{ color: tema.acento, fontSize: 11, marginLeft: 18, marginTop: 2 }}>
+                              {'► Sig. sem: '}{enSigSem.map(x => x.nombre).join(', ')}
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Promedio Acumulado */}
+            {esVisible('promedio_acumulado') && (
+              <View style={col}>
+                {seccion('PROMEDIO ACUMULADO')}
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  {promedioAcumuladoData.length < 1 ? (
+                    sinDatos('Necesitás al menos un semestre con notas')
+                  ) : (
+                    <>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {ejeY(`Nota (/${config.notaMaxima})`)}
+                        <LineChart
+                          data={promedioAcumuladoData}
+                          width={chartWidth}
+                          height={150}
+                          maxValue={lineMax}
+                          noOfSections={lineSections}
+                          color="#4CAF50"
+                          dataPointsColor="#4CAF50"
+                          dataPointsRadius={5}
+                          thickness={2.5}
+                          curved
+                          hideRules
+                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                          startFillColor="#4CAF50"
+                          startOpacity={0.15}
+                          endOpacity={0}
+                          areaChart
+                        />
+                      </View>
+                      {ejeX('Semestre')}
+                      {promedioEnEscala !== null && (
+                        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginTop: 6 }}>
+                          {'Promedio final: '}
+                          <Text style={{ color: '#4CAF50', fontWeight: '700' }}>
+                            {promedioEnEscala}/{config.notaMaxima}
+                          </Text>
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
 
           </View>
         )}
@@ -326,194 +663,204 @@ export function MetricsScreen() {
             <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 } : {}}>
 
               {/* 1. Promedio por semestre */}
-              <View style={col}>
-                {seccion('PROMEDIO POR SEMESTRE')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                  {datosLinea.length >= 1 ? (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {ejeY(`Nota (/${config.notaMaxima})`)}
-                        <LineChart
-                          data={datosLinea}
-                          width={chartWidth}
-                          height={150}
-                          maxValue={lineMax}
-                          noOfSections={lineSections}
-                          color={tema.acento}
-                          dataPointsColor={tema.acento}
-                          dataPointsRadius={5}
-                          thickness={2.5}
-                          curved
-                          hideRules
-                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          startFillColor={tema.acento}
-                          startOpacity={0.15}
-                          endOpacity={0}
-                          areaChart
-                        />
-                      </View>
-                      {ejeX('Semestre')}
-                    </>
-                  ) : sinDatos('Necesitás al menos un semestre con notas')}
-                </View>
-              </View>
-
-              {/* 2. Distribución por rango */}
-              <View style={col}>
-                {seccion('DISTRIBUCIÓN POR RANGO DE NOTA')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                  {barrasRangos.length > 0 ? (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {ejeY('Materias')}
-                        <BarChart
-                          data={barrasRangos}
-                          barWidth={barWidthRangos}
-                          height={150}
-                          width={chartWidth}
-                          maxValue={rangosMax}
-                          noOfSections={rangosSections}
-                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
-                          hideRules
-                          barBorderRadius={4}
-                        />
-                      </View>
-                      {ejeX('Rango de nota')}
-                      <View style={{ marginTop: 8, gap: 2 }}>
-                        <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
-                          Recursar {'<'} {((config.umbralPorExamen / 100) * config.notaMaxima).toFixed(1)}  ·
-                          Reprobado {'<'} {((config.umbralAprobacion / 100) * config.notaMaxima).toFixed(1)}  ·
-                          {config.usarEstadoAprobado
-                            ? ` Aprobado < ${((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}  ·`
-                            : ''}
-                          {' '}Exonerado ≥ {((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}
-                        </Text>
-                      </View>
-                    </>
-                  ) : sinDatos('Sin notas registradas aún')}
-                </View>
-              </View>
-
-              {/* 3. Mapa de carrera */}
-              <View style={col}>
-                {seccion('MAPA DE LA CARRERA')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                  {semestres.length === 0 ? sinDatos() : (
-                    <>
-                      {semestres.map(sem => (
-                        <View key={sem} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <Text style={{ color: tema.textoSecundario, fontSize: 10, width: 22 }}>{sem}°</Text>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, flex: 1 }}>
-                            {materias.filter(m => m.semestre === sem).map(m => (
-                              <View
-                                key={m.id}
-                                style={{
-                                  width: 18, height: 18, borderRadius: 3,
-                                  backgroundColor: estadoColores[calcularEstadoFinal(m, config)],
-                                }}
-                              />
-                            ))}
-                          </View>
+              {esVisible('promedio_semestre') && (
+                <View style={col}>
+                  {seccion('PROMEDIO POR SEMESTRE')}
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                    {datosLinea.length >= 1 ? (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {ejeY(`Nota (/${config.notaMaxima})`)}
+                          <LineChart
+                            data={datosLinea}
+                            width={chartWidth}
+                            height={150}
+                            maxValue={lineMax}
+                            noOfSections={lineSections}
+                            color={tema.acento}
+                            dataPointsColor={tema.acento}
+                            dataPointsRadius={5}
+                            thickness={2.5}
+                            curved
+                            hideRules
+                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                            startFillColor={tema.acento}
+                            startOpacity={0.15}
+                            endOpacity={0}
+                            areaChart
+                          />
                         </View>
-                      ))}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10,
-                        paddingTop: 10, borderTopWidth: 1, borderTopColor: tema.borde }}>
-                        {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
-                          <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: estadoColores[e] }} />
-                            <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{ESTADO_LABELS[e].split(' ')[1]}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </>
-                  )}
-                </View>
-              </View>
-
-              {/* 4. Notas obtenidas */}
-              <View style={col}>
-                {seccion('NOTAS OBTENIDAS')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                  {barrasNotas.length > 0 ? (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {ejeY('Materias')}
-                        <BarChart
-                          data={barrasNotas}
-                          barWidth={barWidthNotas}
-                          height={150}
-                          width={chartWidth}
-                          maxValue={notasMax}
-                          noOfSections={notasSections}
-                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          hideRules
-                          barBorderRadius={4}
-                        />
-                      </View>
-                      {ejeX(`Nota obtenida (escala ${config.notaMaxima})`)}
-                    </>
-                  ) : sinDatos('Sin notas registradas aún')}
-                </View>
-              </View>
-
-            </View>
-
-            {/* 5. Tipos de formación — columna izquierda + columna fantasma */}
-            <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 } : {}}>
-            <View style={col}>
-            {seccion('TIPOS DE FORMACIÓN')}
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <TouchableOpacity
-                    onPress={() => setSemestreTorta(null)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-                      backgroundColor: semestreTorta === null ? tema.acento : tema.superficie }}>
-                    <Text style={{ color: semestreTorta === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Global</Text>
-                  </TouchableOpacity>
-                  {semestres.map(s => (
-                    <TouchableOpacity key={s} onPress={() => setSemestreTorta(s)}
-                      style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-                        backgroundColor: semestreTorta === s ? tema.acento : tema.superficie }}>
-                      <Text style={{ color: semestreTorta === s ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{s}° Sem</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-              {datosTorta.length === 0 ? sinDatos('Sin materias con tipo asignado') : (
-                <View style={isWeb ? { flexDirection: 'row', alignItems: 'flex-start', gap: 32 } : {}}>
-                  <View style={{ alignItems: 'center', marginBottom: isWeb ? 0 : 16 }}>
-                    <PieChart
-                      data={datosTorta}
-                      radius={80}
-                      innerRadius={40}
-                      centerLabelComponent={() => (
-                        <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>{materiasTorta.length}</Text>
-                      )}
-                    />
-                  </View>
-                  <View style={{ flex: isWeb ? 1 : undefined }}>
-                    {datosTorta.map((d, i) => (
-                      <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: d.color }} />
-                          <Text style={{ color: tema.texto, fontSize: 13 }}>{d.label}</Text>
-                        </View>
-                        <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
-                          {d.value} ({Math.round((d.value / (materiasTorta.length || 1)) * 100)}%)
-                        </Text>
-                      </View>
-                    ))}
+                        {ejeX('Semestre')}
+                      </>
+                    ) : sinDatos('Necesitás al menos un semestre con notas')}
                   </View>
                 </View>
               )}
+
+              {/* 2. Distribución por rango */}
+              {esVisible('distribucion_rangos') && (
+                <View style={col}>
+                  {seccion('DISTRIBUCIÓN POR RANGO DE NOTA')}
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                    {barrasRangos.length > 0 ? (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {ejeY('Materias')}
+                          <BarChart
+                            data={barrasRangos}
+                            barWidth={barWidthRangos}
+                            height={150}
+                            width={chartWidth}
+                            maxValue={rangosMax}
+                            noOfSections={rangosSections}
+                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
+                            hideRules
+                            barBorderRadius={4}
+                          />
+                        </View>
+                        {ejeX('Rango de nota')}
+                        <View style={{ marginTop: 8, gap: 2 }}>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
+                            Recursar {'<'} {((config.umbralPorExamen / 100) * config.notaMaxima).toFixed(1)}  ·
+                            Reprobado {'<'} {((config.umbralAprobacion / 100) * config.notaMaxima).toFixed(1)}  ·
+                            {config.usarEstadoAprobado
+                              ? ` Aprobado < ${((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}  ·`
+                              : ''}
+                            {' '}Exonerado ≥ {((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}
+                          </Text>
+                        </View>
+                      </>
+                    ) : sinDatos('Sin notas registradas aún')}
+                  </View>
+                </View>
+              )}
+
+              {/* 3. Mapa de carrera */}
+              {esVisible('mapa_carrera') && (
+                <View style={col}>
+                  {seccion('MAPA DE LA CARRERA')}
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                    {semestres.length === 0 ? sinDatos() : (
+                      <>
+                        {semestres.map(sem => (
+                          <View key={sem} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 10, width: 22 }}>{sem}°</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, flex: 1 }}>
+                              {materias.filter(m => m.semestre === sem).map(m => (
+                                <View
+                                  key={m.id}
+                                  style={{
+                                    width: 18, height: 18, borderRadius: 3,
+                                    backgroundColor: estadoColores[calcularEstadoFinal(m, config)],
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          </View>
+                        ))}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10,
+                          paddingTop: 10, borderTopWidth: 1, borderTopColor: tema.borde }}>
+                          {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
+                            <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: estadoColores[e] }} />
+                              <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{ESTADO_LABELS[e].split(' ')[1]}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* 4. Notas obtenidas */}
+              {esVisible('notas_obtenidas') && (
+                <View style={col}>
+                  {seccion('NOTAS OBTENIDAS')}
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
+                    {barrasNotas.length > 0 ? (
+                      <>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          {ejeY('Materias')}
+                          <BarChart
+                            data={barrasNotas}
+                            barWidth={barWidthNotas}
+                            height={150}
+                            width={chartWidth}
+                            maxValue={notasMax}
+                            noOfSections={notasSections}
+                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                            hideRules
+                            barBorderRadius={4}
+                          />
+                        </View>
+                        {ejeX(`Nota obtenida (escala ${config.notaMaxima})`)}
+                      </>
+                    ) : sinDatos('Sin notas registradas aún')}
+                  </View>
+                </View>
+              )}
+
             </View>
-            </View>{/* cierre col */}
-            {isWeb && <View style={col} />}{/* columna fantasma */}
-            </View>{/* cierre row wrapper */}
+
+            {/* 5. Tipos de formación */}
+            {esVisible('tipos_formacion') && (
+              <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 } : {}}>
+                <View style={col}>
+                  {seccion('TIPOS DE FORMACIÓN')}
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => setSemestreTorta(null)}
+                          style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+                            backgroundColor: semestreTorta === null ? tema.acento : tema.superficie }}>
+                          <Text style={{ color: semestreTorta === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Global</Text>
+                        </TouchableOpacity>
+                        {semestres.map(s => (
+                          <TouchableOpacity key={s} onPress={() => setSemestreTorta(s)}
+                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+                              backgroundColor: semestreTorta === s ? tema.acento : tema.superficie }}>
+                            <Text style={{ color: semestreTorta === s ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{s}° Sem</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                    {datosTorta.length === 0 ? sinDatos('Sin materias con tipo asignado') : (
+                      <View style={isWeb ? { flexDirection: 'row', alignItems: 'flex-start', gap: 32 } : {}}>
+                        <View style={{ alignItems: 'center', marginBottom: isWeb ? 0 : 16 }}>
+                          <PieChart
+                            data={datosTorta}
+                            radius={80}
+                            innerRadius={40}
+                            centerLabelComponent={() => (
+                              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>{materiasTorta.length}</Text>
+                            )}
+                          />
+                        </View>
+                        <View style={{ flex: isWeb ? 1 : undefined }}>
+                          {datosTorta.map((d, i) => (
+                            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, alignItems: 'center' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: d.color }} />
+                                <Text style={{ color: tema.texto, fontSize: 13 }}>{d.label}</Text>
+                              </View>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
+                                {d.value} ({Math.round((d.value / (materiasTorta.length || 1)) * 100)}%)
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                {isWeb && <View style={col} />}
+              </View>
+            )}
           </>
         )}
 
@@ -535,6 +882,7 @@ export function MetricsScreen() {
         </Animated.View>
       )}
       {innerContent}
+      {renderModalPersonalizar()}
     </View>
   );
 }
