@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform,
-  Alert, ActivityIndicator,
+  Alert, ActivityIndicator, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
@@ -12,8 +12,10 @@ import { construirPayload } from '../utils/exportPayload';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
-import { Materia, Perfil } from '../types';
+import { Materia, Perfil, Config } from '../types';
 import type { MateriaJson, ModoImport, ConfigJsonResult } from '../utils/importExport';
+import LZString from 'lz-string';
+import QRCode from 'react-native-qrcode-svg';
 
 type Tab = 'importar' | 'exportar';
 
@@ -69,6 +71,7 @@ function PanelImportar() {
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
     tiposNuevos: string[];
+    configAplicados?: number;
   } | null>(null);
 
   const handleImportarJson = async () => {
@@ -89,6 +92,34 @@ function PanelImportar() {
       datos = JSON.parse(contenido);
     } catch {
       Alert.alert('Error', 'El archivo no es un JSON válido.');
+      return;
+    }
+
+    // Detectar formato todo-en-uno
+    if (
+      typeof datos === 'object' && datos !== null &&
+      (datos as any).cursus_todo_en_uno === 1
+    ) {
+      let configAplicados = 0;
+      if ((datos as any).config && typeof (datos as any).config === 'object') {
+        try {
+          const { aplicarConfigJson } = await import('../utils/importExport');
+          const resultado = aplicarConfigJson(
+            { cursus_config: 1, ...(datos as any).config },
+            actualizarConfig,
+          );
+          configAplicados = resultado.aplicados.length;
+        } catch {
+          // ignorar errores de config, continuar con materias
+        }
+      }
+      if (Array.isArray((datos as any).materias)) {
+        const { extraerTiposNuevos } = await import('../utils/importExport');
+        const tiposNuevos = extraerTiposNuevos((datos as any).materias, config.tiposFormacion);
+        setPendingImport({ json: (datos as any).materias, tiposNuevos, configAplicados });
+      } else {
+        Alert.alert('Configuración aplicada', `✅ ${configAplicados} campo(s) aplicado(s).`);
+      }
       return;
     }
 
@@ -117,7 +148,7 @@ function PanelImportar() {
 
     Alert.alert(
       'Formato no reconocido',
-      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Exportación completa: generada desde esta pantalla',
+      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla',
     );
   };
 
@@ -239,9 +270,14 @@ function PanelImportar() {
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 2 }}>
               {pendingImport.json.length} materias encontradas
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: pendingImport.configAplicados ? 6 : 14 }}>
               {nuevoCount} nuevas · {existenteCount} ya existentes
             </Text>
+            {!!pendingImport.configAplicados && (
+              <Text style={{ color: tema.acento, fontSize: 13, marginBottom: 14 }}>
+                ⚙️ {pendingImport.configAplicados} campo(s) de configuración ya aplicados
+              </Text>
+            )}
 
             <TouchableOpacity onPress={() => doImport('solo_nuevas')} style={optStyle}>
               <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>Solo nuevas</Text>
@@ -340,6 +376,7 @@ function PanelExportar() {
   const [inclHorarios, setInclHorarios] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
   const [cargandoConfig, setCargandoConfig] = useState(false);
+  const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
 
   const handleExportarConfig = async () => {
     setCargandoConfig(true);
@@ -436,23 +473,83 @@ function PanelExportar() {
           Podés importarlo en otro dispositivo desde{' '}
           <Text style={{ color: tema.acento }}>Importar → Configuración desde JSON</Text>.
         </Text>
-        <TouchableOpacity
-          onPress={handleExportarConfig}
-          disabled={cargandoConfig}
-          style={{
-            backgroundColor: tema.tarjeta,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1, borderColor: tema.acento,
-          }}
-        >
-          {cargandoConfig
-            ? <ActivityIndicator color={tema.acento} />
-            : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Exportar configuración .json</Text>
-          }
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleExportarConfig}
+            disabled={cargandoConfig}
+            style={{
+              flex: 1,
+              backgroundColor: tema.tarjeta,
+              padding: 14, borderRadius: 10,
+              alignItems: 'center',
+              borderWidth: 1, borderColor: tema.acento,
+            }}
+          >
+            {cargandoConfig
+              ? <ActivityIndicator color={tema.acento} />
+              : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Exportar .json</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setMostrarQrConfig(true)}
+            style={{
+              flex: 1,
+              backgroundColor: tema.tarjeta,
+              padding: 14, borderRadius: 10,
+              alignItems: 'center',
+              borderWidth: 1, borderColor: tema.acento,
+            }}
+          >
+            <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <QrConfigModal
+        visible={mostrarQrConfig}
+        onCerrar={() => setMostrarQrConfig(false)}
+        config={config}
+      />
     </View>
+  );
+}
+
+function QrConfigModal({ visible, onCerrar, config }: { visible: boolean; onCerrar: () => void; config: Config }) {
+  const tema = useTema();
+  const [qrData, setQrData] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) { setQrData(null); return; }
+    import('../utils/importExport').then(({ configAJson }) => {
+      const json = configAJson(config);
+      const compressed = LZString.compressToBase64(JSON.stringify(json));
+      setQrData(JSON.stringify({ type: 'cursus-config', data: compressed }));
+    });
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onCerrar}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <View style={{ backgroundColor: tema.superficie ?? tema.tarjeta, borderRadius: 16, padding: 24, width: '100%', alignItems: 'center' }}>
+          <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
+            Compartir configuración
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+            Escaneá este QR desde otro dispositivo con la app Cursus para aplicar esta configuración automáticamente.
+          </Text>
+          {qrData ? (
+            <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+              <QRCode value={qrData} size={220} backgroundColor="#fff" color="#000" />
+            </View>
+          ) : (
+            <ActivityIndicator color={tema.acento} style={{ marginVertical: 24 }} />
+          )}
+          <TouchableOpacity onPress={onCerrar} style={{ padding: 10 }}>
+            <Text style={{ color: tema.textoSecundario }}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
