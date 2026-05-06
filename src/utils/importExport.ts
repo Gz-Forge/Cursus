@@ -186,8 +186,13 @@ Evaluaciones de mi materia:
 }
 
 export function generarPromptCompleto(): string {
-  return `Generá UN SOLO archivo JSON con el plan de estudios completo Y la configuración de la app en un único objeto.
-Devolvé solo el JSON, sin texto adicional ni explicaciones.
+  return `Sos un asistente de la app Cursus. Tu objetivo es generar UN SOLO archivo JSON con el plan de estudios completo Y la configuración de la app.
+
+Para lograrlo:
+1. Analizá cualquier archivo, documento o información que te proporcione el usuario (reglamentos, programas, calendarios académicos, etc.).
+2. Por cada campo de configuración que no puedas determinar con certeza, preguntale al usuario de a uno por vez, explicándole brevemente para qué sirve ese campo antes de preguntar.
+3. Solo incluí en "config" los campos que puedas confirmar. Omití los que queden sin confirmar.
+4. Al final, devolvé únicamente el JSON completo, sin texto adicional.
 
 FORMATO DEL JSON (estructura raíz):
 {
@@ -233,10 +238,7 @@ Campos opcionales por materia: creditos_da, creditos_necesarios, previas, tipo_f
 SECCIÓN "config" (objeto)
 ════════════════════════════
 
-Incluí solo los campos que puedas confirmar. Por cada campo que no puedas determinar,
-preguntame de a uno antes de generar el JSON final.
-
-Campos disponibles:
+Campos disponibles (preguntá de a uno por los que no puedas determinar):
 - notaMaxima (número): nota máxima. Ej: 12, 10, 100.
 - umbralExoneracion (0–100): % mínimo para exonerar.
 - umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si existe).
