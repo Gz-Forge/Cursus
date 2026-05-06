@@ -186,7 +186,13 @@ Evaluaciones de mi materia:
 }
 
 export function generarPromptCompleto(): string {
-  return `Generá un archivo JSON completo con el plan de estudios de mi carrera.
+  return `Generá DOS archivos JSON: uno con el plan de estudios completo y otro con la configuración de la app.
+
+══════════════════════════════════════════
+ARCHIVO 1 — Plan de estudios (array JSON)
+══════════════════════════════════════════
+
+Generá un archivo JSON completo con el plan de estudios de mi carrera.
 Podés incluir horarios y evaluaciones para cada materia si tenés esa información.
 Devolvé solo el JSON (array), sin explicaciones.
 
@@ -264,7 +270,38 @@ Ejemplo completo:
 ]
 
 Mi carrera:
-[describí tu carrera acá con toda la información disponible: materias, semestres, previas, horarios y evaluaciones]`;
+[describí tu carrera acá con toda la información disponible: materias, semestres, previas, horarios y evaluaciones]
+
+══════════════════════════════════════════
+ARCHIVO 2 — Configuración de la app (objeto JSON)
+══════════════════════════════════════════
+
+Además del plan de estudios, generá un JSON de configuración con los ajustes de la carrera.
+Devolvé solo los campos que puedas confirmar con certeza a partir de la información provista.
+Por cada campo que no puedas determinar, preguntame de a uno antes de generar el JSON final.
+
+Campos disponibles:
+
+- notaMaxima (número): nota máxima de la carrera. Ej: 12, 10, 100.
+- umbralExoneracion (0–100): % mínimo sobre la nota máxima para exonerar.
+- umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si existe).
+- umbralPorExamen (0–100): % mínimo para tener derecho a rendir examen.
+- umbralExamenExoneracion (0–100): % mínimo en el examen para aprobar.
+- usarEstadoAprobado (true/false): ¿existe el estado "Aprobado" separado de "Exonerado"?
+- aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
+- oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
+- tiposFormacion (array de strings): categorías de materias. Ej: ["Básica","Específica"].
+- modoExamen ("manual" o "automatico"): cómo se activa el período de examen.
+- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de cada período (solo si automatico).
+- horarioPrimerDia ("lunes" o "domingo"): primer día de la semana en el horario.
+
+Formato del JSON de configuración (incluí solo los campos confirmados):
+{
+  "cursus_config": 1,
+  "notaMaxima": 12,
+  "umbralExoneracion": 85,
+  ...
+}`;
 }
 
 export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';
