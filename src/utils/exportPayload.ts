@@ -1,5 +1,5 @@
 import { cargarPerfilEstado } from './perfiles';
-import { materiasAJson, configAJson } from './importExport';
+import { materiasAJson } from './importExport';
 import { Perfil } from '../types';
 
 export interface ExportPerfilPayload {
@@ -9,7 +9,6 @@ export interface ExportPerfilPayload {
   notas?: Record<string, number | null>;
   evaluaciones?: Record<string, import('../types').Evaluacion[]>;
   horarios?: import('../types').BloqueHorario[];
-  config?: Record<string, unknown>;
 }
 
 export interface ExportPayload {
@@ -22,7 +21,6 @@ export interface OpcionesExport {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
-  inclConfig: boolean;
   perfilesSelec: Perfil[];
 }
 
@@ -58,10 +56,6 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
     if (opts.inclHorarios) {
       const bloques = estado.materias.flatMap(m => m.bloques ?? []);
       entry.horarios = bloques;
-    }
-
-    if (opts.inclConfig) {
-      entry.config = configAJson(estado.config);
     }
 
     perfiles.push(entry);
