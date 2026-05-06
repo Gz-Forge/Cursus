@@ -334,12 +334,25 @@ function PanelImportar() {
 
 function PanelExportar() {
   const tema = useTema();
-  const { materias, perfiles, perfilActivoId } = useStore();
+  const { materias, perfiles, perfilActivoId, config } = useStore();
   const [inclNotas, setInclNotas] = useState(false);
   const [inclEvaluaciones, setInclEvaluaciones] = useState(false);
   const [inclHorarios, setInclHorarios] = useState(false);
-  const [inclConfig, setInclConfig] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
+  const [cargandoConfig, setCargandoConfig] = useState(false);
+
+  const handleExportarConfig = async () => {
+    setCargandoConfig(true);
+    try {
+      const { configAJson } = await import('../utils/importExport');
+      const contenido = JSON.stringify(configAJson(config), null, 2);
+      await fileIO.exportarArchivo('cursus-config.json', contenido);
+    } catch {
+      Alert.alert('Error', 'No se pudo exportar la configuración.');
+    } finally {
+      setCargandoConfig(false);
+    }
+  };
 
   const togglePerfil = (id: string) => {
     setPerfilesSelec(prev =>
@@ -376,7 +389,6 @@ function PanelExportar() {
         <Checkbox label="Notas" value={inclNotas} onChange={setInclNotas} />
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
-        <Checkbox label="Configuración" value={inclConfig} onChange={setInclConfig} />
       </View>
 
       <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
@@ -411,10 +423,35 @@ function PanelExportar() {
         inclNotas={inclNotas}
         inclEvaluaciones={inclEvaluaciones}
         inclHorarios={inclHorarios}
-        inclConfig={inclConfig}
         perfilesSelec={perfiles.filter(p => perfilesSelec.includes(p.id))}
         materiasActivas={materias}
       />
+
+      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
+        CONFIGURACIÓN
+      </Text>
+      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
+          Exporta la configuración actual (umbrales, horario, tarjetas, etc.) como un archivo JSON independiente.{'\n\n'}
+          Podés importarlo en otro dispositivo desde{' '}
+          <Text style={{ color: tema.acento }}>Importar → Configuración desde JSON</Text>.
+        </Text>
+        <TouchableOpacity
+          onPress={handleExportarConfig}
+          disabled={cargandoConfig}
+          style={{
+            backgroundColor: tema.tarjeta,
+            padding: 14, borderRadius: 10,
+            alignItems: 'center',
+            borderWidth: 1, borderColor: tema.acento,
+          }}
+        >
+          {cargandoConfig
+            ? <ActivityIndicator color={tema.acento} />
+            : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Exportar configuración .json</Text>
+          }
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -423,13 +460,12 @@ interface PanelMetodosProps {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
-  inclConfig: boolean;
   perfilesSelec: Perfil[];
   materiasActivas: Materia[];
 }
 
 function PanelMetodos({
-  inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, materiasActivas,
+  inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec, materiasActivas,
 }: PanelMetodosProps) {
   const tema = useTema();
   const [cargando, setCargando] = useState(false);
@@ -446,7 +482,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
