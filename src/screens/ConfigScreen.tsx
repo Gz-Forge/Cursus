@@ -559,35 +559,6 @@ export function ConfigScreen() {
           )}
 
           <TouchableOpacity
-            onPress={() => setPromptCompletoExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Generá carrera + horarios + evaluaciones en un solo JSON. Pasale el plan de carrera y dejá que la IA complete todo.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptCompletoExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCompleto()}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCompleto())}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
             onPress={() => setPromptConfigExpandido(v => !v)}
             style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
@@ -601,7 +572,7 @@ export function ConfigScreen() {
             <Text style={{ color: tema.acento, fontSize: 16 }}>{promptConfigExpandido ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {promptConfigExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
               <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
                   {generarPromptConfig()}
@@ -609,6 +580,35 @@ export function ConfigScreen() {
               </ScrollView>
               <TouchableOpacity
                 onPress={() => Clipboard.setStringAsync(generarPromptConfig())}
+                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => setPromptCompletoExpandido(v => !v)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera ambos JSONs a la vez.
+              </Text>
+            </View>
+            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {promptCompletoExpandido && (
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
+                  {generarPromptCompleto()}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => Clipboard.setStringAsync(generarPromptCompleto())}
                 style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
