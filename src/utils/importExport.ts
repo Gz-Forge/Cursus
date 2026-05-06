@@ -186,17 +186,21 @@ Evaluaciones de mi materia:
 }
 
 export function generarPromptCompleto(): string {
-  return `Generá DOS archivos JSON: uno con el plan de estudios completo y otro con la configuración de la app.
+  return `Generá UN SOLO archivo JSON con el plan de estudios completo Y la configuración de la app en un único objeto.
+Devolvé solo el JSON, sin texto adicional ni explicaciones.
 
-══════════════════════════════════════════
-ARCHIVO 1 — Plan de estudios (array JSON)
-══════════════════════════════════════════
+FORMATO DEL JSON (estructura raíz):
+{
+  "cursus_todo_en_uno": 1,
+  "config": { ...campos de configuración... },
+  "materias": [ ...array de materias... ]
+}
 
-Generá un archivo JSON completo con el plan de estudios de mi carrera.
-Podés incluir horarios y evaluaciones para cada materia si tenés esa información.
-Devolvé solo el JSON (array), sin explicaciones.
+════════════════════════════
+SECCIÓN "materias" (array)
+════════════════════════════
 
-Estructura de cada materia:
+Cada elemento del array representa una materia con esta estructura:
 {
   "nombre": "Nombre de la materia",
   "semestre": 1,
@@ -205,103 +209,79 @@ Estructura de cada materia:
   "previas": ["Nombre de materia prerequisito"],
   "tipo_formacion": "Básica",
   "bloques": [
-    {
-      "fecha": "2026-03-15",
-      "horaInicio": 480,
-      "horaFin": 600,
-      "tipo": "teorica"
-    }
+    { "fecha": "2026-03-15", "horaInicio": 480, "horaFin": 600, "tipo": "teorica" }
   ],
   "evaluaciones": [
-    {
-      "id": "ev1",
-      "tipo": "simple",
-      "nombre": "Parcial 1",
-      "pesoEnMateria": 50,
-      "tipoNota": "numero",
-      "nota": null,
-      "notaMaxima": 12
-    }
+    { "id": "ev1", "tipo": "simple", "nombre": "Parcial 1", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
   ]
 }
 
 Reglas para "bloques":
-- "fecha": formato ISO YYYY-MM-DD (ej: "2026-03-15")
-- "horaInicio" y "horaFin": minutos desde las 00:00 (ej: 480 = 8:00, 600 = 10:00, 720 = 12:00)
-- "tipo": "teorica", "practica" u "otro". No uses "parcial" — los exámenes van en evaluaciones.
+- "fecha": formato ISO YYYY-MM-DD
+- "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)
+- "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)
 
 Reglas para "evaluaciones":
-- "tipo": "simple" para una evaluación individual, "grupo" para agrupar varias pruebas.
-- "pesoEnMateria": porcentaje que pesa en la nota final. La suma de todos los ítems debe ser 100.
-- "tipoNota": "numero" o "porcentaje".
-- "nota": null si aún no hay nota.
-- "notaMaxima": puntaje máximo de esa evaluación.
-- Para grupos: incluí "subEvaluaciones" con el mismo formato (sin "tipo" ni "pesoEnMateria").
+- "tipo": "simple" para una evaluación, "grupo" para agrupar varias.
+- "pesoEnMateria": % que pesa en la nota final. La suma de todos debe ser 100.
+- "tipoNota": "numero" o "porcentaje". "nota": null si no hay nota aún.
+- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria").
 
-Podés omitir "bloques" y/o "evaluaciones" si no tenés esa información para alguna materia.
-Los campos "creditos_da", "creditos_necesarios", "previas" y "tipo_formacion" también son opcionales.
+Campos opcionales por materia: creditos_da, creditos_necesarios, previas, tipo_formacion, bloques, evaluaciones.
 
-Ejemplo mínimo:
-[
-  { "nombre": "Cálculo I", "semestre": 1 },
-  { "nombre": "Cálculo II", "semestre": 2, "previas": ["Cálculo I"] }
-]
+════════════════════════════
+SECCIÓN "config" (objeto)
+════════════════════════════
 
-Ejemplo completo:
-[
-  {
-    "nombre": "Cálculo I",
-    "semestre": 1,
-    "creditos_da": 6,
-    "tipo_formacion": "Básica",
-    "bloques": [
-      { "fecha": "2026-03-10", "horaInicio": 480, "horaFin": 600, "tipo": "teorica" },
-      { "fecha": "2026-03-12", "horaInicio": 600, "horaFin": 720, "tipo": "practica" }
-    ],
-    "evaluaciones": [
-      { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
-      { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
-      { "id": "3", "tipo": "grupo", "nombre": "TPs", "pesoEnMateria": 20, "subEvaluaciones": [
-        { "id": "3a", "nombre": "TP1", "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
-        { "id": "3b", "nombre": "TP2", "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
-      ]}
-    ]
-  }
-]
-
-Mi carrera:
-[describí tu carrera acá con toda la información disponible: materias, semestres, previas, horarios y evaluaciones]
-
-══════════════════════════════════════════
-ARCHIVO 2 — Configuración de la app (objeto JSON)
-══════════════════════════════════════════
-
-Además del plan de estudios, generá un JSON de configuración con los ajustes de la carrera.
-Devolvé solo los campos que puedas confirmar con certeza a partir de la información provista.
-Por cada campo que no puedas determinar, preguntame de a uno antes de generar el JSON final.
+Incluí solo los campos que puedas confirmar. Por cada campo que no puedas determinar,
+preguntame de a uno antes de generar el JSON final.
 
 Campos disponibles:
-
-- notaMaxima (número): nota máxima de la carrera. Ej: 12, 10, 100.
-- umbralExoneracion (0–100): % mínimo sobre la nota máxima para exonerar.
+- notaMaxima (número): nota máxima. Ej: 12, 10, 100.
+- umbralExoneracion (0–100): % mínimo para exonerar.
 - umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si existe).
-- umbralPorExamen (0–100): % mínimo para tener derecho a rendir examen.
+- umbralPorExamen (0–100): % mínimo para tener derecho a examen.
 - umbralExamenExoneracion (0–100): % mínimo en el examen para aprobar.
 - usarEstadoAprobado (true/false): ¿existe el estado "Aprobado" separado de "Exonerado"?
 - aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
 - oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
-- tiposFormacion (array de strings): categorías de materias. Ej: ["Básica","Específica"].
-- modoExamen ("manual" o "automatico"): cómo se activa el período de examen.
-- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de cada período (solo si automatico).
-- horarioPrimerDia ("lunes" o "domingo"): primer día de la semana en el horario.
+- tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
+- modoExamen ("manual" o "automatico").
+- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos de examen (solo si automatico).
+- horarioPrimerDia ("lunes" o "domingo").
 
-Formato del JSON de configuración (incluí solo los campos confirmados):
+════════════════════════════
+EJEMPLO COMPLETO
+════════════════════════════
+
 {
-  "cursus_config": 1,
-  "notaMaxima": 12,
-  "umbralExoneracion": 85,
-  ...
-}`;
+  "cursus_todo_en_uno": 1,
+  "config": {
+    "notaMaxima": 12,
+    "umbralExoneracion": 85,
+    "umbralAprobacion": 60,
+    "umbralPorExamen": 45,
+    "usarEstadoAprobado": true,
+    "oportunidadesExamenDefault": 3,
+    "tiposFormacion": ["Básica", "Específica"]
+  },
+  "materias": [
+    {
+      "nombre": "Cálculo I",
+      "semestre": 1,
+      "creditos_da": 6,
+      "tipo_formacion": "Básica",
+      "evaluaciones": [
+        { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+        { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
+      ]
+    },
+    { "nombre": "Cálculo II", "semestre": 2, "creditos_da": 6, "previas": ["Cálculo I"], "tipo_formacion": "Básica" }
+  ]
+}
+
+Mi carrera:
+[describí tu carrera acá: materias, semestres, previas, horarios, evaluaciones y reglamento de evaluación]`;
 }
 
 export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';

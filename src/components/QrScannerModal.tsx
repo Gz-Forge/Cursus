@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTema } from '../theme/ThemeContext';
 import LZString from 'lz-string';
 import { decodeCarrera, esChunkQR, joinChunks } from '../utils/qrPayload';
-import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
+import { jsonAMaterias, extraerTiposNuevos, aplicarConfigJson } from '../utils/importExport';
 import { useStore } from '../store/useStore';
 import { Evaluacion } from '../types';
 
@@ -86,6 +86,23 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           onCerrar();
         } catch {
           Alert.alert('Error', 'El QR no contiene evaluaciones válidas.');
+          procesando.current = false;
+        }
+        return;
+      }
+      if (parsed.type === 'cursus-config') {
+        procesando.current = true;
+        try {
+          const decoded = LZString.decompressFromBase64(parsed.data);
+          const configData = JSON.parse(decoded ?? '{}');
+          const resultado = aplicarConfigJson(configData, actualizarConfig);
+          Alert.alert(
+            'Configuración aplicada',
+            `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
+            [{ text: 'OK', onPress: onCerrar }],
+          );
+        } catch {
+          Alert.alert('Error', 'El QR no contiene una configuración válida.');
           procesando.current = false;
         }
         return;
