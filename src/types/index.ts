@@ -164,6 +164,8 @@ export interface Config {
   tarjetaPrevias: 'todas' | 'faltantes' | 'ninguna';
   tarjetaPreviasFormato: 'numero_nombre' | 'nombre';
   tarjetaAvisoPrevias: boolean;
+  tarjetaAvisoCreditos: boolean;           // aviso créditos faltantes en tarjeta colapsada
+  tarjetaAvisoCreditosExtendida: boolean;  // aviso créditos faltantes en tarjeta expandida
   tarjetaTipoFormacion: boolean;
   tarjetaCreditosExtendida: 'da' | 'necesita' | 'ambos';
   tarjetaMostrarToggleCursando: boolean;

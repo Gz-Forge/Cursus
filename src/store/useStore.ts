@@ -43,6 +43,8 @@ const CONFIG_DEFAULT: Config = {
   tarjetaPrevias: 'todas',
   tarjetaPreviasFormato: 'numero_nombre',
   tarjetaAvisoPrevias: true,
+  tarjetaAvisoCreditos: true,
+  tarjetaAvisoCreditosExtendida: true,
   tarjetaTipoFormacion: true,
   tarjetaCreditosExtendida: 'ambos',
   tarjetaMostrarToggleCursando: true,

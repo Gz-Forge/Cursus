@@ -124,6 +124,12 @@ export function TarjetaConfigScreen() {
                   valor={config.tarjetaAvisoPrevias}
                   onChange={v => actualizarConfig({ tarjetaAvisoPrevias: v })}
                 />
+                <ToggleFila
+                  label='Mostrar aviso "⚠️ Faltan N créditos"'
+                  valor={config.tarjetaAvisoCreditos ?? true}
+                  onChange={v => actualizarConfig({ tarjetaAvisoCreditos: v })}
+                  descripcion="Aparece cuando los créditos acumulados no alcanzan para cursar la materia"
+                />
               </View>
             </>
           )}
@@ -183,6 +189,15 @@ export function TarjetaConfigScreen() {
                 )}
               </View>
 
+              <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>AVISOS</Text>
+              <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <ToggleFila
+                  label='Mostrar aviso "⚠️ Faltan N créditos"'
+                  valor={config.tarjetaAvisoCreditosExtendida ?? true}
+                  onChange={v => actualizarConfig({ tarjetaAvisoCreditosExtendida: v })}
+                  descripcion="Aparece al inicio de la tarjeta expandida cuando faltan créditos"
+                />
+              </View>
               <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>OTROS CAMPOS</Text>
               <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                 <ToggleFila
