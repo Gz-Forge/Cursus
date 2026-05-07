@@ -11,14 +11,14 @@ Formato: array de objetos. Campos obligatorios:
 Campos opcionales (omitir si no aplican):
 - creditos_da (número): créditos que otorga al aprobarla
 - creditos_necesarios (número): créditos acumulados necesarios para cursarla
-- previas (array de strings): nombres exactos de las materias que ESTA materia desbloquea (es previa de)
+- previas (array de strings): nombres exactos de las materias previas necesarias para poder cursar ESTA materia
 - numero (número): solo si querés mantener un orden fijo
 - tipo_formacion (string): categoría de la materia (ej: "Básica", "Específica", "Electiva")
 
 Ejemplo:
 [
-  { "nombre": "Cálculo I", "semestre": 1, "creditos_da": 6, "previas": ["Cálculo II"], "tipo_formacion": "Básica" },
-  { "nombre": "Cálculo II", "semestre": 2, "creditos_da": 6, "tipo_formacion": "Básica" },
+  { "nombre": "Cálculo I", "semestre": 1, "creditos_da": 6, "tipo_formacion": "Básica" },
+  { "nombre": "Cálculo II", "semestre": 2, "creditos_da": 6, "previas": ["Cálculo I"], "tipo_formacion": "Básica" },
   { "nombre": "Inglés I", "semestre": 1 }
 ]
 
@@ -31,7 +31,7 @@ export interface MateriaJson {
   semestre: number;
   creditos_da?: number;
   creditos_necesarios?: number;
-  previas?: string[];   // nombres de materias que esta materia desbloquea (esPreviaDe)
+  previas?: string[];   // nombres de las materias previas necesarias para cursar esta materia (previasNecesarias)
   numero?: number;      // si ausente se auto-asigna por orden de semestre
   tipo_formacion?: string;
   bloques?: Array<{
@@ -108,10 +108,10 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       semestre: d.semestre,
       creditosQueDA: d.creditos_da ?? 0,
       creditosNecesarios: d.creditos_necesarios ?? 0,
-      previasNecesarias: [],
-      esPreviaDe: (d.previas ?? [])
+      previasNecesarias: (d.previas ?? [])
         .map(nombre => nombreANumero.get(nombre.trim()))
         .filter((n): n is number => n !== undefined),
+      esPreviaDe: [],
       cursando: false,
       usarNotaManual: false,
       notaManual: null,
@@ -123,12 +123,12 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
     };
   });
 
-  // Derivar previasNecesarias invirtiendo esPreviaDe
+  // Derivar esPreviaDe invirtiendo previasNecesarias
   materias.forEach(m => {
-    m.esPreviaDe.forEach(numDesbloqueada => {
-      const desbloqueada = materias.find(x => x.numero === numDesbloqueada);
-      if (desbloqueada && !desbloqueada.previasNecesarias.includes(m.numero)) {
-        desbloqueada.previasNecesarias.push(m.numero);
+    m.previasNecesarias.forEach(numReq => {
+      const req = materias.find(x => x.numero === numReq);
+      if (req && !req.esPreviaDe.includes(m.numero)) {
+        req.esPreviaDe.push(m.numero);
       }
     });
   });
@@ -381,7 +381,7 @@ export function materiasAJson(materias: Materia[]): MateriaJson[] {
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));
 
   return materias.map(m => {
-    const previas = m.esPreviaDe
+    const previas = m.previasNecesarias
       .map(num => numeroANombre.get(num))
       .filter((n): n is string => n !== undefined);
 
@@ -512,6 +512,8 @@ export function aplicarConfigJson(
   oneOf('tarjetaPrevias', ['todas', 'faltantes', 'ninguna']);
   oneOf('tarjetaPreviasFormato', ['numero_nombre', 'nombre']);
   bool('tarjetaAvisoPrevias');
+  bool('tarjetaAvisoCreditos');
+  bool('tarjetaAvisoCreditosExtendida');
   bool('tarjetaTipoFormacion');
   oneOf('tarjetaCreditosExtendida', ['da', 'necesita', 'ambos']);
   bool('tarjetaMostrarToggleCursando');
@@ -560,6 +562,8 @@ export function configAJson(config: import('../types').Config): Record<string, u
     tarjetaPrevias: config.tarjetaPrevias,
     tarjetaPreviasFormato: config.tarjetaPreviasFormato,
     tarjetaAvisoPrevias: config.tarjetaAvisoPrevias,
+    tarjetaAvisoCreditos: config.tarjetaAvisoCreditos,
+    tarjetaAvisoCreditosExtendida: config.tarjetaAvisoCreditosExtendida,
     tarjetaTipoFormacion: config.tarjetaTipoFormacion,
     tarjetaCreditosExtendida: config.tarjetaCreditosExtendida,
     tarjetaMostrarToggleCursando: config.tarjetaMostrarToggleCursando,

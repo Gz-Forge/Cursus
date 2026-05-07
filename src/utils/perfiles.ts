@@ -39,6 +39,8 @@ const CONFIG_DEFAULT_PARCIAL = {
   tarjetaPrevias: 'todas' as const,
   tarjetaPreviasFormato: 'numero_nombre' as const,
   tarjetaAvisoPrevias: true,
+  tarjetaAvisoCreditos: true,
+  tarjetaAvisoCreditosExtendida: true,
   tarjetaTipoFormacion: true,
   tarjetaCreditosExtendida: 'ambos' as const,
   tarjetaMostrarToggleCursando: true,

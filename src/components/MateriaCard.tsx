@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { estadoColores } from '../theme/colors';
-import { obtenerNotaFinal, calcularEstadoFinal } from '../utils/calculos';
+import { obtenerNotaFinal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 
 const ICONOS: Record<EstadoMateria, string> = {
   aprobado: '✅', exonerado: '⭐', cursando: '🔵', por_cursar: '⬜', reprobado: '🟠', recursar: '🔴',
@@ -61,6 +61,16 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
 
   const previasPendientes = previasObj.filter(p => !p.ok);
 
+  const creditosAcum = creditosAcumulados(todasLasMaterias, config);
+  const creditosFaltantes = materia.creditosNecesarios > 0
+    ? Math.max(0, materia.creditosNecesarios - creditosAcum)
+    : 0;
+  const mostrarAvisoCreditos =
+    creditosFaltantes > 0 &&
+    estado !== 'cursando' &&
+    estado !== 'aprobado' &&
+    estado !== 'exonerado';
+
   const s = StyleSheet.create({
     tarjeta: {
       backgroundColor: tema.tarjeta,
@@ -94,8 +104,16 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
         <Text style={s.advertencia}>⚠️ Faltan previas: {previasPendientes.map(p => p.num).join(', ')}</Text>
       )}
 
+      {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
+        <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
+      )}
+
       {expandida && (
         <View style={s.detalle}>
+          {(config.tarjetaAvisoCreditosExtendida ?? true) && mostrarAvisoCreditos && (
+            <Text style={[s.advertencia, { marginBottom: 6 }]}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
+          )}
+
           {(config.tarjetaMostrarNota ?? true) && (
             <Text style={s.label}>Nota: <Text style={s.valor}>{notaDisplayTarjeta(notaPct, config)}</Text></Text>
           )}
