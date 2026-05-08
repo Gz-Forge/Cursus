@@ -25,12 +25,11 @@ const ORDEN_ESTADOS: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 're
 type Panel = 'general' | 'graficos';
 
 const METRICAS_GENERAL = [
-  { id: 'progreso',           label: 'Progreso general' },
-  { id: 'avance_año',         label: 'Avance por año' },
-  { id: 'materias_estado',    label: 'Materias por estado' },
-  { id: 'creditos_semestre',  label: 'Créditos por semestre' },
-  { id: 'cuello_botella',     label: 'Cuello de botella' },
-  { id: 'promedio_acumulado', label: 'Promedio acumulado' },
+  { id: 'progreso',          label: 'Progreso general' },
+  { id: 'avance_año',        label: 'Avance por año' },
+  { id: 'materias_estado',   label: 'Materias por estado' },
+  { id: 'creditos_semestre', label: 'Créditos por semestre' },
+  { id: 'cuello_botella',    label: 'Cuello de botella' },
 ];
 const METRICAS_GRAFICOS = [
   { id: 'promedio_semestre',   label: 'Promedio por semestre' },
@@ -603,52 +602,6 @@ export function MetricsScreen() {
                         </View>
                       );
                     })
-                  )}
-                </View>
-              </View>
-            )}
-
-            {/* Promedio Acumulado */}
-            {esVisible('promedio_acumulado') && (
-              <View style={col}>
-                {seccion('PROMEDIO ACUMULADO')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                  {promedioAcumuladoData.length < 1 ? (
-                    sinDatos('Necesitás al menos un semestre con notas')
-                  ) : (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {ejeY(`Nota (/${config.notaMaxima})`)}
-                        <LineChart
-                          data={promedioAcumuladoData}
-                          width={chartWidth}
-                          height={150}
-                          maxValue={lineMax}
-                          noOfSections={lineSections}
-                          color="#4CAF50"
-                          dataPointsColor="#4CAF50"
-                          dataPointsRadius={5}
-                          thickness={2.5}
-                          curved
-                          hideRules
-                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          startFillColor="#4CAF50"
-                          startOpacity={0.15}
-                          endOpacity={0}
-                          areaChart
-                        />
-                      </View>
-                      {ejeX('Semestre')}
-                      {promedioEnEscala !== null && (
-                        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginTop: 6 }}>
-                          {'Promedio final: '}
-                          <Text style={{ color: '#4CAF50', fontWeight: '700' }}>
-                            {promedioEnEscala}/{config.notaMaxima}
-                          </Text>
-                        </Text>
-                      )}
-                    </>
                   )}
                 </View>
               </View>
