@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
-import { BloqueHorario, EvaluacionSimple } from '../types';
+import { BloqueHorario, EvaluacionSimple, TipoBloque } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
@@ -68,12 +68,14 @@ function fmtFechaCorta(iso: string): string {
 }
 
 export function HorarioScreen() {
-  const { materias, config } = useStore();
+  const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
+  const [modalDatos, setModalDatos] = useState(false);
+  const [modalFiltro, setModalFiltro] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
@@ -179,6 +181,23 @@ export function HorarioScreen() {
 
   const todosLosBloques = materiasEnCurso
     .flatMap(m => (m.bloques ?? []).map(b => ({ ...b, materia: m })));
+
+  // Tipos de bloque que realmente existen en las materias cursando (para el modal de filtro)
+  const tiposPresentes = (['teorica', 'practica', 'parcial', 'otro'] as const)
+    .filter(tipo => todosLosBloques.some(b => b.tipo === tipo));
+
+  const labelDeTipo = (tipo: TipoBloque): string => {
+    switch (tipo) {
+      case 'teorica':  return config.labelTeorica  || 'Teórica';
+      case 'practica': return config.labelPractica || 'Práctica';
+      case 'parcial':  return config.labelParcial  || 'Parcial';
+      case 'otro':     return config.labelOtro     || 'Otro';
+    }
+  };
+
+  const filtroActivo =
+    (config.horarioFiltroOcultos ?? []).length > 0 ||
+    config.horarioFiltroOcultarEvaluaciones;
 
   // Evaluaciones con fecha de materias en curso
   type EvalConMateria = EvaluacionSimple & { materia: typeof todosLosBloques[0]['materia'] };
