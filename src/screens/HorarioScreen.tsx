@@ -220,15 +220,20 @@ export function HorarioScreen() {
 
   // Bloques filtrados a esta semana (memoizado para estabilizar la referencia)
   const bloquesEstaSemana = React.useMemo(
-    () => todosLosBloques.filter(b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]),
+    () => todosLosBloques.filter(b =>
+      b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
+      !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
+    ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6]]
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
   // Evaluaciones filtradas a esta semana
-  const evaluacionesEstaSemana = todasLasEvaluaciones.filter(
-    ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
-  );
+  const evaluacionesEstaSemana = config.horarioFiltroOcultarEvaluaciones
+    ? []
+    : todasLasEvaluaciones.filter(
+        ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
+      );
 
   // Layout de superposición por día (memoizado)
   const layoutPorDia = React.useMemo(() => {
