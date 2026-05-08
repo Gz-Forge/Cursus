@@ -49,6 +49,8 @@ const CONFIG_DEFAULT: Config = {
   coloresHorario: {},
   horarioMostrarEvaluaciones: true,
   horarioPrimerDia: 'lunes',
+  horarioFiltroOcultos: [],
+  horarioFiltroOcultarEvaluaciones: false,
   metricasOcultas: [],
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,
