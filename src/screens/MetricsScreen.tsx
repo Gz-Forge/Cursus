@@ -130,9 +130,12 @@ export function MetricsScreen() {
 
   const cuellosBotella = materias
     .filter(m => {
-      if (m.esPreviaDe.length < umbralCuello) return false;
       const e = calcularEstadoFinal(m, config);
       if (e === 'aprobado' || e === 'exonerado') return false;
+      // Con soloSiguiente activo, las cursando siempre aparecen
+      if (soloSiguiente && e === 'cursando') return true;
+      // Resto: filtro normal de umbral + siguiente semestre
+      if (m.esPreviaDe.length < umbralCuello) return false;
       if (soloSiguiente && siguienteSem !== null) {
         return m.esPreviaDe.some(num => numerosEnSigSem.has(num));
       }
@@ -544,7 +547,7 @@ export function MetricsScreen() {
                 <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                   <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
                     {soloSiguiente && siguienteSem !== null
-                      ? `Afectan al ${siguienteSem}° semestre · previa de ≥${umbralCuello} materias`
+                      ? `Cursando + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
                       : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
                   </Text>
 
