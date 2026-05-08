@@ -137,28 +137,59 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
 }
 
 export function generarPromptEvaluaciones(): string {
-  return `Generá un JSON con las evaluaciones de una materia.
-Devolvé solo el JSON (array), sin explicaciones.
+  return `Generá un JSON con las evaluaciones de una o más materias.
+Devolvé solo el JSON (array de materias o de evaluaciones), sin explicaciones.
 
-Tipos disponibles:
+════════════════════════════
+FORMATO PRINCIPAL: multi-materia
+════════════════════════════
+
+Usá este formato para incluir evaluaciones de varias materias en un solo JSON.
+Cada elemento del array representa una materia con sus evaluaciones:
+
+[
+  {
+    "materia": "Nombre de la materia",
+    "evaluaciones": [
+      { "id": "1", "tipo": "simple", "nombre": "Parcial 1", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+      { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+      { "id": "3", "tipo": "grupo", "nombre": "TPs", "pesoEnMateria": 20, "subEvaluaciones": [
+        { "id": "3a", "nombre": "TP1", "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
+        { "id": "3b", "nombre": "TP2", "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
+      ]}
+    ]
+  },
+  {
+    "materia": "Otra Materia",
+    "evaluaciones": [
+      { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+      { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
+    ]
+  }
+]
+
+════════════════════════════
+FORMATO ALTERNATIVO: materia única (array plano)
+════════════════════════════
+
+Si solo querés importar evaluaciones para UNA sola materia, también podés devolver
+directamente un array plano de evaluaciones (sin el wrapper de "materia"):
+
+[
+  { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+  { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
+]
+
+════════════════════════════
+TIPOS DE EVALUACIÓN
+════════════════════════════
 
 1. Evaluación simple:
-{
-  "id": "1",
-  "tipo": "simple",
-  "nombre": "Parcial 1",
-  "pesoEnMateria": 40,
-  "tipoNota": "numero",
-  "nota": null,
-  "notaMaxima": 12
-}
+{ "id": "1", "tipo": "simple", "nombre": "Parcial 1", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
 
 2. Grupo de evaluaciones (con subítems):
 {
-  "id": "2",
-  "tipo": "grupo",
-  "nombre": "Trabajos prácticos",
-  "pesoEnMateria": 30,
+  "id": "2", "tipo": "grupo", "nombre": "Trabajos prácticos", "pesoEnMateria": 30,
   "subEvaluaciones": [
     { "id": "2a", "nombre": "TP1", "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
     { "id": "2b", "nombre": "TP2", "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
@@ -166,23 +197,13 @@ Tipos disponibles:
 }
 
 Reglas:
-- La suma de pesoEnMateria de todos los ítems debe ser 100.
+- La suma de pesoEnMateria de todos los ítems de una materia debe ser 100.
 - tipoNota: "numero" o "porcentaje".
 - nota: null si no hay nota aún.
 - notaMaxima: el puntaje máximo posible para esa evaluación.
 
-Ejemplo para una materia con parcial, final y TPs:
-[
-  { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
-  { "id": "2", "tipo": "simple", "nombre": "Final", "pesoEnMateria": 40, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
-  { "id": "3", "tipo": "grupo", "nombre": "TPs", "pesoEnMateria": 20, "subEvaluaciones": [
-    { "id": "3a", "nombre": "TP1", "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
-    { "id": "3b", "nombre": "TP2", "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
-  ]}
-]
-
-Evaluaciones de mi materia:
-[describí acá: nombre materia, exámenes, trabajos, pesos aproximados]`;
+Mis materias y sus evaluaciones:
+[describí acá: nombre de cada materia, exámenes, trabajos, pesos aproximados]`;
 }
 
 export function generarPromptCompleto(): string {
@@ -284,6 +305,18 @@ EJEMPLO COMPLETO
 
 Mi carrera:
 [describí tu carrera acá: materias, semestres, previas, horarios, evaluaciones y reglamento de evaluación]`;
+}
+
+export function esFormatoMultiMateriaEval(parsed: unknown[]): boolean {
+  if (!Array.isArray(parsed) || parsed.length === 0) return false;
+  const first = parsed[0];
+  return (
+    typeof first === 'object' &&
+    first !== null &&
+    'materia' in first &&
+    'evaluaciones' in first &&
+    Array.isArray((first as any).evaluaciones)
+  );
 }
 
 export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';

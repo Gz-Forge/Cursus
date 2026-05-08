@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
-import { BloqueHorario, EvaluacionSimple } from '../types';
+import { BloqueHorario, EvaluacionSimple, TipoBloque } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
@@ -68,12 +68,14 @@ function fmtFechaCorta(iso: string): string {
 }
 
 export function HorarioScreen() {
-  const { materias, config } = useStore();
+  const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
+  const [modalDatos, setModalDatos] = useState(false);
+  const [modalFiltro, setModalFiltro] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
@@ -180,6 +182,23 @@ export function HorarioScreen() {
   const todosLosBloques = materiasEnCurso
     .flatMap(m => (m.bloques ?? []).map(b => ({ ...b, materia: m })));
 
+  // Tipos de bloque que realmente existen en las materias cursando (para el modal de filtro)
+  const tiposPresentes = (['teorica', 'practica', 'parcial', 'otro'] as const)
+    .filter(tipo => todosLosBloques.some(b => b.tipo === tipo));
+
+  const labelDeTipo = (tipo: TipoBloque): string => {
+    switch (tipo) {
+      case 'teorica':  return config.labelTeorica  || 'Teórica';
+      case 'practica': return config.labelPractica || 'Práctica';
+      case 'parcial':  return config.labelParcial  || 'Parcial';
+      case 'otro':     return config.labelOtro     || 'Otro';
+    }
+  };
+
+  const filtroActivo =
+    (config.horarioFiltroOcultos ?? []).length > 0 ||
+    config.horarioFiltroOcultarEvaluaciones;
+
   // Evaluaciones con fecha de materias en curso
   type EvalConMateria = EvaluacionSimple & { materia: typeof todosLosBloques[0]['materia'] };
   const todasLasEvaluaciones: EvalConMateria[] = config.horarioMostrarEvaluaciones
@@ -220,15 +239,20 @@ export function HorarioScreen() {
 
   // Bloques filtrados a esta semana (memoizado para estabilizar la referencia)
   const bloquesEstaSemana = React.useMemo(
-    () => todosLosBloques.filter(b => b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6]),
+    () => todosLosBloques.filter(b =>
+      b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
+      !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
+    ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6]]
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
   // Evaluaciones filtradas a esta semana
-  const evaluacionesEstaSemana = todasLasEvaluaciones.filter(
-    ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
-  );
+  const evaluacionesEstaSemana = config.horarioFiltroOcultarEvaluaciones
+    ? []
+    : todasLasEvaluaciones.filter(
+        ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
+      );
 
   // Layout de superposición por día (memoizado)
   const layoutPorDia = React.useMemo(() => {
@@ -376,22 +400,29 @@ export function HorarioScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Derecha: botones importar/exportar (tamaño fijo, pegados a la derecha) */}
+            {/* Derecha: botones Datos y Filtrar */}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => setModalImport(true)}
+                onPress={() => setModalDatos(true)}
                 style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
                   paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>📥</Text>
-                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Importar</Text>
+                <Text style={{ fontSize: 16 }}>📦</Text>
+                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
-                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
-                  paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>📤</Text>
-                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Exportar</Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalFiltro(true)}
+                  style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1,
+                    borderColor: filtroActivo ? tema.acento : tema.borde,
+                    paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🔽</Text>
+                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>Filtrar</Text>
+                </TouchableOpacity>
+                {filtroActivo && (
+                  <View style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10,
+                    borderRadius: 5, backgroundColor: tema.acento }} />
+                )}
+              </View>
             </View>
           </>
         ) : (
@@ -415,21 +446,28 @@ export function HorarioScreen() {
             </TouchableOpacity>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <TouchableOpacity
-                onPress={() => setModalImport(true)}
+                onPress={() => setModalDatos(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
                   borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15 }}>📥</Text>
-                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Importar</Text>
+                <Text style={{ fontSize: 15 }}>📦</Text>
+                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
-                  borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15 }}>📤</Text>
-                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Exportar</Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalFiltro(true)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
+                    borderRadius: 8, borderWidth: 1,
+                    borderColor: filtroActivo ? tema.acento : tema.borde, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15 }}>🔽</Text>
+                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 9, fontWeight: '600' }}>Filtrar</Text>
+                </TouchableOpacity>
+                {filtroActivo && (
+                  <View style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8,
+                    borderRadius: 4, backgroundColor: tema.acento }} />
+                )}
+              </View>
             </View>
           </>
         )}
@@ -869,6 +907,42 @@ export function HorarioScreen() {
         </View>
       </Modal>
 
+      {/* Modal Datos — punto de entrada unificado para Importar/Exportar */}
+      <Modal visible={modalDatos} transparent animationType="fade" onRequestClose={() => setModalDatos(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 16 }}>
+              Datos de horario
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setModalDatos(false); setModalImport(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
+                backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 10 }}>
+              <Text style={{ fontSize: 22 }}>📥</Text>
+              <View>
+                <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Importar</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Cargar horarios desde un archivo JSON</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { setModalDatos(false); setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
+                backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 16 }}>
+              <Text style={{ fontSize: 22 }}>📤</Text>
+              <View>
+                <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Exportar</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Compartir horarios como archivo JSON</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setModalDatos(false)}
+              style={{ padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal importar */}
       <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => setModalImport(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
@@ -898,6 +972,77 @@ export function HorarioScreen() {
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Continuar</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Filtro de bloques */}
+      <Modal visible={modalFiltro} transparent animationType="fade" onRequestClose={() => setModalFiltro(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Mostrar en horario
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>
+              Solo aparecen los tipos que tenés cargados
+            </Text>
+
+            {tiposPresentes.length === 0 && (
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+                No hay bloques cargados en ninguna materia cursando.
+              </Text>
+            )}
+
+            {tiposPresentes.map(tipo => {
+              const oculto = (config.horarioFiltroOcultos ?? []).includes(tipo);
+              return (
+                <TouchableOpacity
+                  key={tipo}
+                  onPress={() => {
+                    const actuales = config.horarioFiltroOcultos ?? [];
+                    actualizarConfig({
+                      horarioFiltroOcultos: oculto
+                        ? actuales.filter(t => t !== tipo)
+                        : [...actuales, tipo],
+                    });
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+                    borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 12 }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                    backgroundColor: !oculto ? tema.acento : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!oculto && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={{ color: tema.texto, fontSize: 14 }}>{labelDeTipo(tipo)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {config.horarioMostrarEvaluaciones && todasLasEvaluaciones.length > 0 && (
+              <>
+                <View style={{ height: 1, backgroundColor: tema.borde, marginVertical: 8 }} />
+                <TouchableOpacity
+                  onPress={() => actualizarConfig({ horarioFiltroOcultarEvaluaciones: !config.horarioFiltroOcultarEvaluaciones })}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                    backgroundColor: !config.horarioFiltroOcultarEvaluaciones ? tema.acento : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!config.horarioFiltroOcultarEvaluaciones && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={{ color: tema.texto, fontSize: 14 }}>Evaluaciones</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setModalFiltro(false)}
+              style={{ marginTop: 16, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Listo</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -42,9 +42,11 @@ interface Props {
   onEditar: () => void;
   onToggleCursando?: (v: boolean) => void;
   mostrarToggleCursando?: boolean;
+  onLongPress?: () => void;
+  pinned?: boolean;
 }
 
-export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando }: Props) {
+export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
 
@@ -79,6 +81,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
       marginVertical: 4,
       borderLeftWidth: 4,
       borderLeftColor: color,
+      ...(pinned ? { borderWidth: 2, borderColor: tema.acento } : {}),
     },
     fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     nombre: { color: tema.texto, fontSize: 15, fontWeight: '600', flex: 1 },
@@ -94,7 +97,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   });
 
   return (
-    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)}>
+    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress}>
       <View style={s.fila}>
         <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
         <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>

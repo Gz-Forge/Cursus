@@ -42,6 +42,7 @@ export function CarreraScreen() {
   const [subFiltroDisp, setSubFiltroDisp] = useState<'para_cursar' | 'para_examen'>('para_cursar');
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [modoBusqueda, setModoBusqueda] = useState<'nombre' | 'es_previa_de' | 'sus_previas'>('nombre');
+  const [materiaPinned, setMateriaPinned] = useState<typeof materias[0] | null>(null);
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
@@ -365,12 +366,13 @@ export function CarreraScreen() {
                 value={textoBusqueda}
                 onChangeText={v => {
                   setTextoBusqueda(v);
+                  setMateriaPinned(null);
                   if (!v) setModoBusqueda('nombre');
                 }}
                 autoCorrect={false}
               />
               {textoBusqueda.length > 0 && (
-                <TouchableOpacity onPress={() => { setTextoBusqueda(''); setModoBusqueda('nombre'); }}>
+                <TouchableOpacity onPress={() => { setTextoBusqueda(''); setModoBusqueda('nombre'); setMateriaPinned(null); }}>
                   <Text style={{ color: tema.textoSecundario, fontSize: 18, lineHeight: 20 }}>✕</Text>
                 </TouchableOpacity>
               )}
@@ -396,16 +398,54 @@ export function CarreraScreen() {
                   resultados = materias.filter(m => matchBusqueda(m));
                   emptyMsg = 'No se encontró ninguna materia con ese nombre o número';
                 } else if (modoBusqueda === 'es_previa_de') {
-                  const nums = new Set(materias.filter(m => matchBusqueda(m)).map(m => m.numero));
+                  const nums = materiaPinned
+                    ? new Set([materiaPinned.numero])
+                    : new Set(materias.filter(m => matchBusqueda(m)).map(m => m.numero));
                   resultados = materias.filter(m => m.previasNecesarias.some(n => nums.has(n)));
                   emptyMsg = 'Esta materia no es requisito directo de ninguna otra';
                 } else {
-                  const nums = new Set(
-                    materias.filter(m => matchBusqueda(m)).flatMap(m => m.previasNecesarias)
-                  );
-                  resultados = materias.filter(m => nums.has(m.numero));
+                  const ids = materiaPinned
+                    ? new Set(materiaPinned.previasNecesarias)
+                    : new Set(materias.filter(m => matchBusqueda(m)).flatMap(m => m.previasNecesarias));
+                  resultados = materias.filter(m => ids.has(m.numero));
                   emptyMsg = 'Esta materia no tiene previas requeridas';
                 }
+
+                const renderResultados = () => {
+                  if (!isWeb) {
+                    return resultados.map(r => (
+                      <MateriaCard
+                        key={r.id}
+                        materia={r}
+                        todasLasMaterias={materias}
+                        config={config}
+                        onEditar={() => irAEditar(r)}
+                        mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+                        onToggleCursando={(v) => handleToggleCursandoCard(r, v)}
+                        onLongPress={() => setMateriaPinned(prev => prev?.numero === r.numero ? null : r)}
+                        pinned={materiaPinned?.numero === r.numero}
+                      />
+                    ));
+                  }
+                  return (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {resultados.map(r => (
+                        <View key={r.id} style={{ width: '50%', paddingHorizontal: 4 }}>
+                          <MateriaCard
+                            materia={r}
+                            todasLasMaterias={materias}
+                            config={config}
+                            onEditar={() => irAEditar(r)}
+                            mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
+                            onToggleCursando={(v) => handleToggleCursandoCard(r, v)}
+                            onLongPress={() => setMateriaPinned(prev => prev?.numero === r.numero ? null : r)}
+                            pinned={materiaPinned?.numero === r.numero}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  );
+                };
 
                 return (
                   <>
@@ -425,12 +465,18 @@ export function CarreraScreen() {
                       ))}
                     </View>
 
+                    {materiaPinned && (
+                      <Text style={{ color: tema.acento, marginBottom: 4, fontSize: 12 }}>
+                        📌 Referencia: {materiaPinned.nombre}
+                      </Text>
+                    )}
+
                     {resultados.length === 0 ? (
                       <Text style={{ color: tema.textoSecundario, textAlign: 'center', marginTop: 24, fontSize: 13 }}>
                         {emptyMsg}
                       </Text>
                     ) : (
-                      renderMateriasList(resultados)
+                      renderResultados()
                     )}
                   </>
                 );

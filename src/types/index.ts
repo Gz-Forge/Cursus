@@ -172,6 +172,8 @@ export interface Config {
   coloresHorario: Record<string, Partial<Record<TipoBloque, ColorBloque>>>;
   horarioMostrarEvaluaciones: boolean;
   horarioPrimerDia: 'lunes' | 'domingo';
+  horarioFiltroOcultos: TipoBloque[];        // [] = mostrar todo
+  horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
   // Métricas personalizables
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)

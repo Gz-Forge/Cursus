@@ -47,6 +47,8 @@ const CONFIG_DEFAULT_PARCIAL = {
   coloresHorario: {} as Record<string, Partial<Record<import('../types').TipoBloque, import('../types').ColorBloque>>>,
   horarioMostrarEvaluaciones: true,
   horarioPrimerDia: 'lunes' as const,
+  horarioFiltroOcultos: [] as import('../types').TipoBloque[],
+  horarioFiltroOcultarEvaluaciones: false,
 };
 
 /**

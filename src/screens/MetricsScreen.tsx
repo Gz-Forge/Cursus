@@ -25,12 +25,11 @@ const ORDEN_ESTADOS: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 're
 type Panel = 'general' | 'graficos';
 
 const METRICAS_GENERAL = [
-  { id: 'progreso',           label: 'Progreso general' },
-  { id: 'avance_año',         label: 'Avance por año' },
-  { id: 'materias_estado',    label: 'Materias por estado' },
-  { id: 'creditos_semestre',  label: 'Créditos por semestre' },
-  { id: 'cuello_botella',     label: 'Cuello de botella' },
-  { id: 'promedio_acumulado', label: 'Promedio acumulado' },
+  { id: 'progreso',          label: 'Progreso general' },
+  { id: 'avance_año',        label: 'Avance por año' },
+  { id: 'materias_estado',   label: 'Materias por estado' },
+  { id: 'creditos_semestre', label: 'Créditos por semestre' },
+  { id: 'cuello_botella',    label: 'Cuello de botella' },
 ];
 const METRICAS_GRAFICOS = [
   { id: 'promedio_semestre',   label: 'Promedio por semestre' },
@@ -131,9 +130,12 @@ export function MetricsScreen() {
 
   const cuellosBotella = materias
     .filter(m => {
-      if (m.esPreviaDe.length < umbralCuello) return false;
       const e = calcularEstadoFinal(m, config);
       if (e === 'aprobado' || e === 'exonerado') return false;
+      // Con soloSiguiente activo, las cursando siempre aparecen
+      if (soloSiguiente && e === 'cursando') return true;
+      // Resto: filtro normal de umbral + siguiente semestre
+      if (m.esPreviaDe.length < umbralCuello) return false;
       if (soloSiguiente && siguienteSem !== null) {
         return m.esPreviaDe.some(num => numerosEnSigSem.has(num));
       }
@@ -545,7 +547,7 @@ export function MetricsScreen() {
                 <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                   <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
                     {soloSiguiente && siguienteSem !== null
-                      ? `Afectan al ${siguienteSem}° semestre · previa de ≥${umbralCuello} materias`
+                      ? `Cursando + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
                       : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
                   </Text>
 
@@ -608,52 +610,6 @@ export function MetricsScreen() {
               </View>
             )}
 
-            {/* Promedio Acumulado */}
-            {esVisible('promedio_acumulado') && (
-              <View style={col}>
-                {seccion('PROMEDIO ACUMULADO')}
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                  {promedioAcumuladoData.length < 1 ? (
-                    sinDatos('Necesitás al menos un semestre con notas')
-                  ) : (
-                    <>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        {ejeY(`Nota (/${config.notaMaxima})`)}
-                        <LineChart
-                          data={promedioAcumuladoData}
-                          width={chartWidth}
-                          height={150}
-                          maxValue={lineMax}
-                          noOfSections={lineSections}
-                          color="#4CAF50"
-                          dataPointsColor="#4CAF50"
-                          dataPointsRadius={5}
-                          thickness={2.5}
-                          curved
-                          hideRules
-                          yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                          startFillColor="#4CAF50"
-                          startOpacity={0.15}
-                          endOpacity={0}
-                          areaChart
-                        />
-                      </View>
-                      {ejeX('Semestre')}
-                      {promedioEnEscala !== null && (
-                        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginTop: 6 }}>
-                          {'Promedio final: '}
-                          <Text style={{ color: '#4CAF50', fontWeight: '700' }}>
-                            {promedioEnEscala}/{config.notaMaxima}
-                          </Text>
-                        </Text>
-                      )}
-                    </>
-                  )}
-                </View>
-              </View>
-            )}
-
           </View>
         )}
 
@@ -671,25 +627,27 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY(`Nota (/${config.notaMaxima})`)}
-                          <LineChart
-                            data={datosLinea}
-                            width={chartWidth}
-                            height={150}
-                            maxValue={lineMax}
-                            noOfSections={lineSections}
-                            color={tema.acento}
-                            dataPointsColor={tema.acento}
-                            dataPointsRadius={5}
-                            thickness={2.5}
-                            curved
-                            hideRules
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            startFillColor={tema.acento}
-                            startOpacity={0.15}
-                            endOpacity={0}
-                            areaChart
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <LineChart
+                              data={datosLinea}
+                              width={chartWidth}
+                              height={150}
+                              maxValue={lineMax}
+                              noOfSections={lineSections}
+                              color={tema.acento}
+                              dataPointsColor={tema.acento}
+                              dataPointsRadius={5}
+                              thickness={2.5}
+                              curved
+                              hideRules
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              startFillColor={tema.acento}
+                              startOpacity={0.15}
+                              endOpacity={0}
+                              areaChart
+                            />
+                          </View>
                         </View>
                         {ejeX('Semestre')}
                       </>
@@ -707,18 +665,20 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY('Materias')}
-                          <BarChart
-                            data={barrasRangos}
-                            barWidth={barWidthRangos}
-                            height={150}
-                            width={chartWidth}
-                            maxValue={rangosMax}
-                            noOfSections={rangosSections}
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
-                            hideRules
-                            barBorderRadius={4}
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <BarChart
+                              data={barrasRangos}
+                              barWidth={barWidthRangos}
+                              height={150}
+                              width={chartWidth}
+                              maxValue={rangosMax}
+                              noOfSections={rangosSections}
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
+                              hideRules
+                              barBorderRadius={4}
+                            />
+                          </View>
                         </View>
                         {ejeX('Rango de nota')}
                         <View style={{ marginTop: 8, gap: 2 }}>
@@ -784,18 +744,20 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY('Materias')}
-                          <BarChart
-                            data={barrasNotas}
-                            barWidth={barWidthNotas}
-                            height={150}
-                            width={chartWidth}
-                            maxValue={notasMax}
-                            noOfSections={notasSections}
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            hideRules
-                            barBorderRadius={4}
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <BarChart
+                              data={barrasNotas}
+                              barWidth={barWidthNotas}
+                              height={150}
+                              width={chartWidth}
+                              maxValue={notasMax}
+                              noOfSections={notasSections}
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              hideRules
+                              barBorderRadius={4}
+                            />
+                          </View>
                         </View>
                         {ejeX(`Nota obtenida (escala ${config.notaMaxima})`)}
                       </>
