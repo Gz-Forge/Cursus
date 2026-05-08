@@ -975,6 +975,77 @@ export function HorarioScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Filtro de bloques */}
+      <Modal visible={modalFiltro} transparent animationType="fade" onRequestClose={() => setModalFiltro(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Mostrar en horario
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>
+              Solo aparecen los tipos que tenés cargados
+            </Text>
+
+            {tiposPresentes.length === 0 && (
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+                No hay bloques cargados en ninguna materia cursando.
+              </Text>
+            )}
+
+            {tiposPresentes.map(tipo => {
+              const oculto = (config.horarioFiltroOcultos ?? []).includes(tipo);
+              return (
+                <TouchableOpacity
+                  key={tipo}
+                  onPress={() => {
+                    const actuales = config.horarioFiltroOcultos ?? [];
+                    actualizarConfig({
+                      horarioFiltroOcultos: oculto
+                        ? actuales.filter(t => t !== tipo)
+                        : [...actuales, tipo],
+                    });
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+                    borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 12 }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                    backgroundColor: !oculto ? tema.acento : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!oculto && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={{ color: tema.texto, fontSize: 14 }}>{labelDeTipo(tipo)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {config.horarioMostrarEvaluaciones && todasLasEvaluaciones.length > 0 && (
+              <>
+                <View style={{ height: 1, backgroundColor: tema.borde, marginVertical: 8 }} />
+                <TouchableOpacity
+                  onPress={() => actualizarConfig({ horarioFiltroOcultarEvaluaciones: !config.horarioFiltroOcultarEvaluaciones })}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
+                    backgroundColor: !config.horarioFiltroOcultarEvaluaciones ? tema.acento : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!config.horarioFiltroOcultarEvaluaciones && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={{ color: tema.texto, fontSize: 14 }}>Evaluaciones</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setModalFiltro(false)}
+              style={{ marginTop: 16, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Listo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 
