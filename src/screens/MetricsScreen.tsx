@@ -54,6 +54,8 @@ export function MetricsScreen() {
   const [modalPersonalizar, setModalPersonalizar] = useState(false);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const scrollRef = React.useRef<any>(null);
+  const scrollPositions = React.useRef<Record<string, number>>({});
   const [contentHeight, setContentHeight] = useState(0);
 
   const isWeb = Platform.OS === 'web';
@@ -133,7 +135,7 @@ export function MetricsScreen() {
       const e = calcularEstadoFinal(m, config);
       if (e === 'aprobado' || e === 'exonerado') return false;
       // Con soloSiguiente activo, las cursando siempre aparecen
-      if (soloSiguiente && e === 'cursando') return true;
+      if (soloSiguiente && e === 'cursando' && m.esPreviaDe.length > 0) return true;
       // Resto: filtro normal de umbral + siguiente semestre
       if (m.esPreviaDe.length < umbralCuello) return false;
       if (soloSiguiente && siguienteSem !== null) {
@@ -249,6 +251,14 @@ export function MetricsScreen() {
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
   );
+
+  // ── Scroll memoria por panel ──────────────────────────────────────────────
+  React.useEffect(() => {
+    const savedY = scrollPositions.current[panelActivo] ?? 0;
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: savedY, animated: false });
+    }, 0);
+  }, [panelActivo]);
 
   // ── Modal Personalizar ────────────────────────────────────────────────────
   const renderModalPersonalizar = () => (
@@ -406,10 +416,16 @@ export function MetricsScreen() {
       </View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: 16 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
-          { useNativeDriver: true },
+          {
+            useNativeDriver: true,
+            listener: (e: any) => {
+              scrollPositions.current[panelActivo] = e.nativeEvent.contentOffset.y;
+            },
+          },
         )}
         scrollEventThrottle={16}
         onContentSizeChange={(_, h) => setContentHeight(h)}
@@ -725,7 +741,7 @@ export function MetricsScreen() {
                           {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
                             <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: estadoColores[e] }} />
-                              <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{ESTADO_LABELS[e].split(' ')[1]}</Text>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{ESTADO_LABELS[e].split(' ').slice(1).join(' ')}</Text>
                             </View>
                           ))}
                         </View>
