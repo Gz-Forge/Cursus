@@ -907,6 +907,42 @@ export function HorarioScreen() {
         </View>
       </Modal>
 
+      {/* Modal Datos — punto de entrada unificado para Importar/Exportar */}
+      <Modal visible={modalDatos} transparent animationType="fade" onRequestClose={() => setModalDatos(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 16 }}>
+              Datos de horario
+            </Text>
+            <TouchableOpacity
+              onPress={() => { setModalDatos(false); setModalImport(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
+                backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 10 }}>
+              <Text style={{ fontSize: 22 }}>📥</Text>
+              <View>
+                <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Importar</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Cargar horarios desde un archivo JSON</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { setModalDatos(false); setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
+                backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 16 }}>
+              <Text style={{ fontSize: 22 }}>📤</Text>
+              <View>
+                <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Exportar</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Compartir horarios como archivo JSON</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setModalDatos(false)}
+              style={{ padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal importar */}
       <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => setModalImport(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
