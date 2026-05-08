@@ -48,6 +48,8 @@ export function CarreraScreen() {
   const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
+  const scrollRef = React.useRef<any>(null);
+  const scrollPositions = React.useRef<Record<string, number>>({});
   const [contentHeight, setContentHeight] = useState(0);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -216,6 +218,14 @@ export function CarreraScreen() {
     () => (isMovible ? Animated.multiply(scrollAnim, -1) : new Animated.Value(0)),
     [isMovible, scrollAnim],
   );
+
+  React.useEffect(() => {
+    const savedY = scrollPositions.current[vista] ?? 0;
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: savedY, animated: false });
+    }, 0);
+  }, [vista]);
+
   const contenido = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Selector de perfil */}
@@ -299,11 +309,17 @@ export function CarreraScreen() {
       </View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 12 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
-          { useNativeDriver: true },
+          {
+            useNativeDriver: true,
+            listener: (e: any) => {
+              scrollPositions.current[vista] = e.nativeEvent.contentOffset.y;
+            },
+          },
         )}
         scrollEventThrottle={16}
         onContentSizeChange={(_, h) => setContentHeight(h)}
