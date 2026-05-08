@@ -138,7 +138,7 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
 
 export function generarPromptEvaluaciones(): string {
   return `Generá un JSON con las evaluaciones de una o más materias.
-Devolvé solo el JSON (array), sin explicaciones.
+Devolvé solo el JSON (array de materias o de evaluaciones), sin explicaciones.
 
 ════════════════════════════
 FORMATO PRINCIPAL: multi-materia
