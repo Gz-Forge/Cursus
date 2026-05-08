@@ -400,22 +400,29 @@ export function HorarioScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Derecha: botones importar/exportar (tamaño fijo, pegados a la derecha) */}
+            {/* Derecha: botones Datos y Filtrar */}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => setModalImport(true)}
+                onPress={() => setModalDatos(true)}
                 style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
                   paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>📥</Text>
-                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Importar</Text>
+                <Text style={{ fontSize: 16 }}>📦</Text>
+                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
-                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
-                  paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>📤</Text>
-                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Exportar</Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalFiltro(true)}
+                  style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1,
+                    borderColor: filtroActivo ? tema.acento : tema.borde,
+                    paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🔽</Text>
+                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>Filtrar</Text>
+                </TouchableOpacity>
+                {filtroActivo && (
+                  <View style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10,
+                    borderRadius: 5, backgroundColor: tema.acento }} />
+                )}
+              </View>
             </View>
           </>
         ) : (
@@ -439,21 +446,28 @@ export function HorarioScreen() {
             </TouchableOpacity>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <TouchableOpacity
-                onPress={() => setModalImport(true)}
+                onPress={() => setModalDatos(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
                   borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15 }}>📥</Text>
-                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Importar</Text>
+                <Text style={{ fontSize: 15 }}>📦</Text>
+                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => { setSeleccionadas(new Set(materias.map(m => m.id))); setModalExport(true); }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
-                  borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
-                <Text style={{ fontSize: 15 }}>📤</Text>
-                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Exportar</Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalFiltro(true)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
+                    borderRadius: 8, borderWidth: 1,
+                    borderColor: filtroActivo ? tema.acento : tema.borde, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 15 }}>🔽</Text>
+                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 9, fontWeight: '600' }}>Filtrar</Text>
+                </TouchableOpacity>
+                {filtroActivo && (
+                  <View style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8,
+                    borderRadius: 4, backgroundColor: tema.acento }} />
+                )}
+              </View>
             </View>
           </>
         )}
