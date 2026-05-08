@@ -333,7 +333,8 @@ export function EditMateriaScreen() {
             String(m.numero) === String(entrada.materia)
           );
           if (!match) return;
-          const nuevas = [...match.evaluaciones, ...entrada.evaluaciones];
+          const incomingEvals = Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : [];
+          const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
           procesadas++;
         });
