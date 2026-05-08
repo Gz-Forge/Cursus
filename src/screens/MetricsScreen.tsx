@@ -627,25 +627,27 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY(`Nota (/${config.notaMaxima})`)}
-                          <LineChart
-                            data={datosLinea}
-                            width={chartWidth}
-                            height={150}
-                            maxValue={lineMax}
-                            noOfSections={lineSections}
-                            color={tema.acento}
-                            dataPointsColor={tema.acento}
-                            dataPointsRadius={5}
-                            thickness={2.5}
-                            curved
-                            hideRules
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            startFillColor={tema.acento}
-                            startOpacity={0.15}
-                            endOpacity={0}
-                            areaChart
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <LineChart
+                              data={datosLinea}
+                              width={chartWidth}
+                              height={150}
+                              maxValue={lineMax}
+                              noOfSections={lineSections}
+                              color={tema.acento}
+                              dataPointsColor={tema.acento}
+                              dataPointsRadius={5}
+                              thickness={2.5}
+                              curved
+                              hideRules
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              startFillColor={tema.acento}
+                              startOpacity={0.15}
+                              endOpacity={0}
+                              areaChart
+                            />
+                          </View>
                         </View>
                         {ejeX('Semestre')}
                       </>
@@ -663,18 +665,20 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY('Materias')}
-                          <BarChart
-                            data={barrasRangos}
-                            barWidth={barWidthRangos}
-                            height={150}
-                            width={chartWidth}
-                            maxValue={rangosMax}
-                            noOfSections={rangosSections}
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
-                            hideRules
-                            barBorderRadius={4}
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <BarChart
+                              data={barrasRangos}
+                              barWidth={barWidthRangos}
+                              height={150}
+                              width={chartWidth}
+                              maxValue={rangosMax}
+                              noOfSections={rangosSections}
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
+                              hideRules
+                              barBorderRadius={4}
+                            />
+                          </View>
                         </View>
                         {ejeX('Rango de nota')}
                         <View style={{ marginTop: 8, gap: 2 }}>
@@ -740,18 +744,20 @@ export function MetricsScreen() {
                       <>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           {ejeY('Materias')}
-                          <BarChart
-                            data={barrasNotas}
-                            barWidth={barWidthNotas}
-                            height={150}
-                            width={chartWidth}
-                            maxValue={notasMax}
-                            noOfSections={notasSections}
-                            yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                            hideRules
-                            barBorderRadius={4}
-                          />
+                          <View style={{ overflow: 'hidden', flex: 1 }}>
+                            <BarChart
+                              data={barrasNotas}
+                              barWidth={barWidthNotas}
+                              height={150}
+                              width={chartWidth}
+                              maxValue={notasMax}
+                              noOfSections={notasSections}
+                              yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
+                              hideRules
+                              barBorderRadius={4}
+                            />
+                          </View>
                         </View>
                         {ejeX(`Nota obtenida (escala ${config.notaMaxima})`)}
                       </>
