@@ -12,6 +12,7 @@ import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
   exportarJSONMateria, generarEjemploCSV, leerArchivo, compartirArchivo,
 } from '../utils/horarioImportExport';
+import { esFormatoMultiMateriaEval } from '../utils/importExport';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -320,16 +321,36 @@ export function EditMateriaScreen() {
         Alert.alert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
         return;
       }
-      const evaluaciones = parsed as Evaluacion[];
-      Alert.alert(
-        'Importar evaluaciones',
-        `Se encontraron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
-          { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
-        ]
-      );
+
+      if (esFormatoMultiMateriaEval(parsed)) {
+        // Multi-materia format: [{materia, evaluaciones}]
+        const entradas = parsed as { materia: string; evaluaciones: Evaluacion[] }[];
+        const total = entradas.length;
+        let procesadas = 0;
+        entradas.forEach(entrada => {
+          const match = materias.find(m =>
+            m.nombre.trim().toLowerCase() === String(entrada.materia).trim().toLowerCase() ||
+            String(m.numero) === String(entrada.materia)
+          );
+          if (!match) return;
+          const nuevas = [...match.evaluaciones, ...entrada.evaluaciones];
+          guardarMateria({ ...match, evaluaciones: nuevas });
+          procesadas++;
+        });
+        Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
+      } else {
+        // Flat single-materia format: array of evaluaciones for current materia
+        const evaluaciones = parsed as Evaluacion[];
+        Alert.alert(
+          'Importar evaluaciones',
+          `Se encontraron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
+            { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
+          ]
+        );
+      }
     } catch (e: any) {
       Alert.alert('Error al importar', e.message);
     }
