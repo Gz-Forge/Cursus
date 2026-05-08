@@ -336,6 +336,10 @@ export function EditMateriaScreen() {
           const incomingEvals = Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : [];
           const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
+          // Keep local form in sync if this is the currently open materia
+          if (match.id === form.id) {
+            setForm(f => ({ ...f, evaluaciones: nuevas }));
+          }
           procesadas++;
         });
         Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
