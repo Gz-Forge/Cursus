@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform, Modal } from 'react-native';
+import LZString from 'lz-string';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
@@ -89,6 +91,7 @@ export function EditMateriaScreen() {
   const [modoImport, setModoImport] = useState<ModoImport | null>(null);
   const [mostrarMenuImport, setMostrarMenuImport] = useState(false);
   const [mostrarEvalQr, setMostrarEvalQr] = useState(false);
+  const [mostrarQrHorario, setMostrarQrHorario] = useState(false);
   const [semanasICS, setSemanasICS] = useState('16');
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
   const [mostrarAcordeonCSV, setMostrarAcordeonCSV] = useState(false);
@@ -1081,12 +1084,20 @@ export function EditMateriaScreen() {
               </View>
             )}
             {(form.bloques ?? []).length > 0 && (
-              <TouchableOpacity
-                onPress={exportarJSON}
-                style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 16,
-                  borderWidth: 1, borderColor: tema.acento }}>
-                <Text style={{ color: tema.acento }}>↑ Exportar horario como JSON</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <TouchableOpacity
+                  onPress={exportarJSON}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center',
+                    borderWidth: 1, borderColor: tema.acento }}>
+                  <Text style={{ color: tema.acento }}>⬆ JSON</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setMostrarQrHorario(true)}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center',
+                    borderWidth: 1, borderColor: tema.acento }}>
+                  <Text style={{ color: tema.acento }}>📷 QR</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -1300,6 +1311,40 @@ export function EditMateriaScreen() {
         evaluaciones={form.evaluaciones}
         onCerrar={() => setMostrarEvalQr(false)}
       />
+
+      {/* ── Modal QR horario ── */}
+      <Modal
+        visible={mostrarQrHorario}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setMostrarQrHorario(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+          justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 16, padding: 24,
+            width: '100%', alignItems: 'center' }}>
+            <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
+              Compartir horario QR
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+              Escaneá este QR desde otro dispositivo con la app Cursus para importar los bloques de {form.nombre || 'esta materia'}.
+            </Text>
+            {(() => {
+              const json = exportarJSONMateria(form);
+              const compressed = LZString.compressToBase64(json);
+              const qrData = JSON.stringify({ type: 'cursus-horario', data: compressed });
+              return (
+                <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+                  <QRCode value={qrData} size={220} backgroundColor="#fff" color="#000" />
+                </View>
+              );
+            })()}
+            <TouchableOpacity onPress={() => setMostrarQrHorario(false)} style={{ padding: 10 }}>
+              <Text style={{ color: tema.textoSecundario }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

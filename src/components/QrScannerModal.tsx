@@ -59,7 +59,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
     }
   };
 
-  const onQrLeido = ({ data }: { data: string }) => {
+  const onQrLeido = async ({ data }: { data: string }) => {
     if (procesando.current) return;
 
     // Detectar payload de QR login
@@ -103,6 +103,37 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           );
         } catch {
           Alert.alert('Error', 'El QR no contiene una configuración válida.');
+          procesando.current = false;
+        }
+        return;
+      }
+      if (parsed.type === 'cursus-horario') {
+        procesando.current = true;
+        try {
+          const decoded = LZString.decompressFromBase64(parsed.data);
+          const horarioData = JSON.parse(decoded ?? '{}') as { nombre: string; bloques: unknown[] };
+          const { parsearJSONMateria } = await import('../utils/horarioImportExport');
+          const bloquesStr = JSON.stringify(horarioData.bloques ?? []);
+          const bloques = parsearJSONMateria(`{"bloques": ${bloquesStr}}`);
+          const { materias: materiasActuales, guardarMateria } = useStore.getState();
+          const match = materiasActuales.find(m =>
+            m.nombre.trim().toLowerCase() === (horarioData.nombre ?? '').trim().toLowerCase()
+          );
+          if (match) {
+            const clave = (b: import('../types').BloqueHorario) =>
+              `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
+            const existentes = new Set((match.bloques ?? []).map(clave));
+            const nuevos = bloques.filter(b => !existentes.has(clave(b)));
+            guardarMateria({ ...match, bloques: [...(match.bloques ?? []), ...nuevos] });
+            Alert.alert('Horario importado', `Se agregaron ${nuevos.length} bloque(s) a "${match.nombre}".`,
+              [{ text: 'OK', onPress: onCerrar }]);
+          } else {
+            Alert.alert('Materia no encontrada',
+              `No existe una materia llamada "${horarioData.nombre}" en esta app.`,
+              [{ text: 'OK', onPress: () => { procesando.current = false; } }]);
+          }
+        } catch {
+          Alert.alert('Error', 'El QR de horario no es válido.');
           procesando.current = false;
         }
         return;
