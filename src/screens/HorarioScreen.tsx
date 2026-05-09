@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, Animated } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
@@ -138,6 +139,17 @@ export function HorarioScreen() {
       cerrarModal();
     } catch (e: any) {
       Alert.alert('Error al exportar', e.message);
+    }
+  };
+
+  const copiarSeleccionadas = async () => {
+    try {
+      const elegidas = materias.filter(m => seleccionadas.has(m.id));
+      if (elegidas.length === 0) return;
+      await Clipboard.setStringAsync(exportarJSONMultiMateria(elegidas));
+      Alert.alert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
+    } catch (e: any) {
+      Alert.alert('Error al copiar', e.message);
     }
   };
 
@@ -894,12 +906,23 @@ export function HorarioScreen() {
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={copiarSeleccionadas}
+                disabled={seleccionadas.size === 0}
+                style={{ flex: 1, padding: 10,
+                  backgroundColor: seleccionadas.size > 0 ? tema.tarjeta : tema.tarjeta,
+                  borderRadius: 8, alignItems: 'center',
+                  borderWidth: 1, borderColor: seleccionadas.size > 0 ? tema.acento : tema.borde }}>
+                <Text style={{ color: seleccionadas.size > 0 ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
+                  📋 Copiar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={exportarSeleccionadas}
                 disabled={seleccionadas.size === 0}
-                style={{ flex: 2, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
+                style={{ flex: 1, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
                   borderRadius: 8, alignItems: 'center' }}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>
-                  ↑ Exportar {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}
+                  ↑ Exportar
                 </Text>
               </TouchableOpacity>
             </View>
