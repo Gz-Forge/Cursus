@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform, Modal } from 'react-native';
+import LZString from 'lz-string';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
@@ -10,8 +12,10 @@ import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
 import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
-  exportarJSONMateria, generarEjemploCSV, leerArchivo, compartirArchivo,
+  exportarJSONMateria, generarEjemploCSV, generarEjemploTexto, generarEjemploJSONMateria,
+  leerArchivo, compartirArchivo,
 } from '../utils/horarioImportExport';
+import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
 
 
@@ -87,6 +91,7 @@ export function EditMateriaScreen() {
   const [modoImport, setModoImport] = useState<ModoImport | null>(null);
   const [mostrarMenuImport, setMostrarMenuImport] = useState(false);
   const [mostrarEvalQr, setMostrarEvalQr] = useState(false);
+  const [mostrarQrHorario, setMostrarQrHorario] = useState(false);
   const [semanasICS, setSemanasICS] = useState('16');
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
   const [mostrarAcordeonCSV, setMostrarAcordeonCSV] = useState(false);
@@ -286,6 +291,11 @@ export function EditMateriaScreen() {
     } catch (e: any) {
       Alert.alert('Error al exportar', e.message);
     }
+  };
+
+  const copiarAlPortapapeles = async (texto: string, etiqueta = 'Copiado') => {
+    await Clipboard.setStringAsync(texto);
+    Alert.alert(etiqueta, 'Contenido copiado al portapapeles.');
   };
 
   const descargarEjemploCSV = async () => {
@@ -764,6 +774,12 @@ export function EditMateriaScreen() {
               Pegá filas de Excel o Google Sheets. Separadores: tab, punto y coma o coma.{'\n'}
               Formato: Fecha | Inicio | Fin | Tipo  ó  Fecha | Inicio-Fin | Tipo
             </Text>
+            <TouchableOpacity
+              onPress={() => copiarAlPortapapeles(generarEjemploTexto(), 'Ejemplo copiado')}
+              style={{ marginBottom: 8, backgroundColor: tema.fondo, borderRadius: 6, padding: 7,
+                alignItems: 'center', borderWidth: 1, borderColor: tema.acento }}>
+              <Text style={{ color: tema.acento, fontSize: 11, fontWeight: '600' }}>📋 Copiar ejemplo de texto</Text>
+            </TouchableOpacity>
             <TextInput
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 10, borderRadius: 6,
                 minHeight: 100, textAlignVertical: 'top', fontFamily: 'monospace', fontSize: 12, marginBottom: 10 }}
@@ -849,11 +865,19 @@ export function EditMateriaScreen() {
                 <Text style={{ color: tema.textoSecundario, fontSize: 10, marginTop: 6 }}>
                   También acepta rango en col 2: "08:00-10:00" (la col 3 sería el tipo).
                 </Text>
-                <TouchableOpacity
-                  onPress={descargarEjemploCSV}
-                  style={{ marginTop: 8, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>⬇ Descargar ejemplo.csv</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TouchableOpacity
+                    onPress={descargarEjemploCSV}
+                    style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>⬇ Descargar .csv</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => copiarAlPortapapeles(generarEjemploCSV(), 'Ejemplo CSV copiado')}
+                    style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
+                      borderWidth: 1, borderColor: tema.acento }}>
+                    <Text style={{ color: tema.acento, fontSize: 11, fontWeight: '600' }}>📋 Copiar</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
             {filasParseadas.length > 0 && (
@@ -897,6 +921,62 @@ export function EditMateriaScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
+            </View>
+          </View>
+        )}
+
+        {/* ── Panel: JSON ── */}
+        {modoImport === 'json' && (
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 6 }}>Importar JSON</Text>
+            <TouchableOpacity
+              onPress={() => setMostrarAcordeonCSV(v => !v)}
+              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                backgroundColor: tema.fondo, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+              <Text style={{ color: tema.acento, fontSize: 12 }}>¿Cómo armar el JSON?</Text>
+              <Text style={{ color: tema.acento }}>{mostrarAcordeonCSV ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {mostrarAcordeonCSV && (
+              <View style={{ backgroundColor: tema.fondo, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                <Text style={{ color: tema.texto, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>
+                  Formato esperado:
+                </Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 10, fontFamily: 'monospace' }}>
+                  {'{\n  "nombre": "Materia",\n  "bloques": [\n    {\n      "fecha": "YYYY-MM-DD",\n      "horaInicio": 480,\n      "horaFin": 600,\n      "tipo": "teorica"\n    }\n  ]\n}'}
+                </Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 10, marginTop: 6 }}>
+                  horaInicio/horaFin: minutos desde 00:00 (ej: 480 = 8:00)
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        await compartirArchivo('ejemplo_horario.json', generarEjemploJSONMateria(), 'application/json');
+                      } catch (e: any) { Alert.alert('Error', e.message); }
+                    }}
+                    style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>⬇ Descargar .json</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => copiarAlPortapapeles(generarEjemploJSONMateria(), 'Ejemplo JSON copiado')}
+                    style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
+                      borderWidth: 1, borderColor: tema.acento }}>
+                    <Text style={{ color: tema.acento, fontSize: 11, fontWeight: '600' }}>📋 Copiar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => { setModoImport(null); setMostrarAcordeonCSV(false); }}
+                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => { setMostrarAcordeonCSV(false); await importarDesdeJSON(); setModoImport(null); }}
+                style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo JSON</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -976,7 +1056,7 @@ export function EditMateriaScreen() {
                   {[
                     { label: '📋 Pegar texto', onPress: () => { setModoImport('texto'); setMostrarMenuImport(false); } },
                     { label: '📄 CSV', onPress: () => { setModoImport('csv'); setMostrarMenuImport(false); } },
-                    { label: '{ } JSON', onPress: () => { importarDesdeJSON(); setMostrarMenuImport(false); } },
+                    { label: '{ } JSON', onPress: () => { setModoImport('json'); setMostrarMenuImport(false); } },
                     { label: '📅 ICS', onPress: () => { setModoImport('ics'); setMostrarMenuImport(false); } },
                   ].map(({ label, onPress }) => (
                     <TouchableOpacity key={label} onPress={onPress}
@@ -1004,12 +1084,20 @@ export function EditMateriaScreen() {
               </View>
             )}
             {(form.bloques ?? []).length > 0 && (
-              <TouchableOpacity
-                onPress={exportarJSON}
-                style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 16,
-                  borderWidth: 1, borderColor: tema.acento }}>
-                <Text style={{ color: tema.acento }}>↑ Exportar horario como JSON</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <TouchableOpacity
+                  onPress={exportarJSON}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center',
+                    borderWidth: 1, borderColor: tema.acento }}>
+                  <Text style={{ color: tema.acento }}>⬆ JSON</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setMostrarQrHorario(true)}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center',
+                    borderWidth: 1, borderColor: tema.acento }}>
+                  <Text style={{ color: tema.acento }}>📷 QR</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </>
         )}
@@ -1223,6 +1311,40 @@ export function EditMateriaScreen() {
         evaluaciones={form.evaluaciones}
         onCerrar={() => setMostrarEvalQr(false)}
       />
+
+      {/* ── Modal QR horario ── */}
+      <Modal
+        visible={mostrarQrHorario}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setMostrarQrHorario(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+          justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 16, padding: 24,
+            width: '100%', alignItems: 'center' }}>
+            <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
+              Compartir horario QR
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+              Escaneá este QR desde otro dispositivo con la app Cursus para importar los bloques de {form.nombre || 'esta materia'}.
+            </Text>
+            {(() => {
+              const json = exportarJSONMateria(form);
+              const compressed = LZString.compressToBase64(json);
+              const qrData = JSON.stringify({ type: 'cursus-horario', data: compressed });
+              return (
+                <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+                  <QRCode value={qrData} size={220} backgroundColor="#fff" color="#000" />
+                </View>
+              );
+            })()}
+            <TouchableOpacity onPress={() => setMostrarQrHorario(false)} style={{ padding: 10 }}>
+              <Text style={{ color: tema.textoSecundario }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

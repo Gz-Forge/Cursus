@@ -142,6 +142,51 @@ function FechaHoraPicker({
   );
 }
 
+// ── Input de nota con estado local string (evita borrar el punto decimal) ──
+interface NotaInputProps {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  style?: object;
+  placeholder?: string;
+  placeholderTextColor?: string;
+}
+function NotaInput({ value, onChange, style, placeholder, placeholderTextColor }: NotaInputProps) {
+  const [str, setStr] = useState<string>(value !== null ? String(value) : '');
+
+  React.useEffect(() => {
+    const parsed = parseFloat(str);
+    const externalChanged = value === null ? str !== '' : parsed !== value;
+    if (externalChanged && !str.endsWith('.')) {
+      setStr(value !== null ? String(value) : '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <TextInput
+      style={style}
+      value={str}
+      keyboardType="decimal-pad"
+      placeholder={placeholder}
+      placeholderTextColor={placeholderTextColor}
+      onChangeText={v => {
+        const cleaned = v.replace(/[^0-9.]/g, '');
+        const parts = cleaned.split('.');
+        const normalized = parts.length > 2
+          ? `${parts[0]}.${parts.slice(1).join('')}`
+          : cleaned;
+        setStr(normalized);
+        const num = parseFloat(normalized);
+        if (!isNaN(num)) {
+          onChange(num);
+        } else if (normalized === '' || normalized === '.') {
+          onChange(null);
+        }
+      }}
+    />
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 interface Props {
   evaluacion: Evaluacion;
@@ -200,12 +245,19 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
         {/* Fila: Nota / Máx */}
         <View style={estilos.fila}>
           <Text style={estilos.label}>Nota</Text>
-          <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-            value={evaluacion.nota !== null ? String(evaluacion.nota) : ''}
-            onChangeText={v => actualizarSimple({ nota: v ? Number(v) : null })} />
+          <NotaInput
+            style={[estilos.input, { flex: 0, width: 70 }]}
+            value={evaluacion.nota}
+            onChange={nota => actualizarSimple({ nota })}
+            placeholder="—"
+            placeholderTextColor={tema.textoSecundario}
+          />
           <Text style={estilos.label}>/ Máx</Text>
-          <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-            value={String(evaluacion.notaMaxima)} onChangeText={v => actualizarSimple({ notaMaxima: Number(v) })} />
+          <NotaInput
+            style={[estilos.input, { flex: 0, width: 70 }]}
+            value={evaluacion.notaMaxima}
+            onChange={notaMaxima => actualizarSimple({ notaMaxima: notaMaxima ?? 10 })}
+          />
         </View>
         <TouchableOpacity onPress={() => actualizarSimple({ tipoNota: evaluacion.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
           <Text style={estilos.label}>Tipo: {evaluacion.tipoNota === 'numero' ? '🔢 Número' : '% Porcentaje'} (tocar para cambiar)</Text>
@@ -246,12 +298,19 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
           </View>
           <View style={estilos.fila}>
             <Text style={estilos.label}>Nota</Text>
-            <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-              value={sub.nota !== null ? String(sub.nota) : ''}
-              onChangeText={v => actualizarSub(i, { nota: v ? Number(v) : null })} />
+            <NotaInput
+              style={[estilos.input, { flex: 0, width: 70 }]}
+              value={sub.nota}
+              onChange={nota => actualizarSub(i, { nota })}
+              placeholder="—"
+              placeholderTextColor={tema.textoSecundario}
+            />
             <Text style={estilos.label}>/ Máx</Text>
-            <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-              value={String(sub.notaMaxima)} onChangeText={v => actualizarSub(i, { notaMaxima: Number(v) })} />
+            <NotaInput
+              style={[estilos.input, { flex: 0, width: 70 }]}
+              value={sub.notaMaxima}
+              onChange={notaMaxima => actualizarSub(i, { notaMaxima: notaMaxima ?? 10 })}
+            />
             <TouchableOpacity onPress={() => actualizarSub(i, { tipoNota: sub.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
               <Text style={{ color: tema.acento, fontSize: 11 }}>{sub.tipoNota === 'numero' ? '🔢' : '%'}</Text>
             </TouchableOpacity>

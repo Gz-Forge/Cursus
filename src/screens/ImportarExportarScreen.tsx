@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Platform,
   Alert, ActivityIndicator, Modal,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
@@ -590,6 +591,26 @@ function PanelMetodos({
     }
   };
 
+  const handleCopiarJson = async () => {
+    if (sinPerfiles) {
+      Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      return;
+    }
+    setCargando(true);
+    try {
+      const payload = await construirPayload({
+        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+      });
+      const contenido = JSON.stringify(payload, null, 2);
+      await Clipboard.setStringAsync(contenido);
+      Alert.alert('Copiado', 'El JSON fue copiado al portapapeles.');
+    } catch {
+      Alert.alert('Error', 'No se pudo copiar el contenido.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
   const handleQrPantalla = () => {
     if (sinPerfiles) {
       Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
@@ -634,19 +655,36 @@ function PanelMetodos({
         </View>
       )}
 
-      <TouchableOpacity
-        onPress={handleDescargarJson}
-        disabled={cargando || sinPerfiles}
-        style={{
-          backgroundColor: sinPerfiles ? tema.borde : tema.tarjeta,
-          padding: 14, borderRadius: 10, alignItems: 'center',
-          marginBottom: 10, borderWidth: 1, borderColor: tema.borde,
-        }}
-      >
-        <Text style={{ color: sinPerfiles ? tema.textoSecundario : tema.texto, fontWeight: '600' }}>
-          📄 Descargar .json
-        </Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+        <TouchableOpacity
+          onPress={handleDescargarJson}
+          disabled={cargando || sinPerfiles}
+          style={{
+            flex: 1,
+            backgroundColor: sinPerfiles ? tema.borde : tema.tarjeta,
+            padding: 14, borderRadius: 10, alignItems: 'center',
+            borderWidth: 1, borderColor: tema.borde,
+          }}
+        >
+          <Text style={{ color: sinPerfiles ? tema.textoSecundario : tema.texto, fontWeight: '600' }}>
+            📄 Descargar
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleCopiarJson}
+          disabled={cargando || sinPerfiles}
+          style={{
+            flex: 1,
+            backgroundColor: sinPerfiles ? tema.borde : tema.tarjeta,
+            padding: 14, borderRadius: 10, alignItems: 'center',
+            borderWidth: 1, borderColor: tema.borde,
+          }}
+        >
+          <Text style={{ color: sinPerfiles ? tema.textoSecundario : tema.texto, fontWeight: '600' }}>
+            📋 Copiar
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         onPress={handleQrPantalla}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, Animated } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, Animated, TextInput } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
@@ -9,6 +10,9 @@ import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
   parsearJSONMultiMateria, leerArchivo,
+  parsearCSV, extraerEventosICS, expandirEventosICS,
+  generarEjemploCSV, generarEjemploTexto,
+  type FilaParseada,
 } from '../utils/horarioImportExport';
 import { calcularLayoutSuperposicion, LayoutBloque } from '../utils/horarioLayout';
 import {
@@ -78,6 +82,16 @@ export function HorarioScreen() {
   const [modalFiltro, setModalFiltro] = useState(false);
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
 
+  type ModoImportHorario = 'menu' | 'texto' | 'csv' | 'json' | 'ics';
+  const [modoImportHorario, setModoImportHorario] = useState<ModoImportHorario>('menu');
+  const [importMateriasSelec, setImportMateriasSelec] = useState<Set<string>>(new Set());
+  const [importMateriaConfirmada, setImportMateriaConfirmada] = useState(false);
+  const [importTexto, setImportTexto] = useState('');
+  const [importFilas, setImportFilas] = useState<FilaParseada[]>([]);
+  const [importEventosICS, setImportEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
+  const [importSemanasICS, setImportSemanasICS] = useState('16');
+  const [importAcordeon, setImportAcordeon] = useState(false);
+
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -141,40 +155,46 @@ export function HorarioScreen() {
     }
   };
 
-  const descargarEjemploJSON = async () => {
+  const copiarSeleccionadas = async () => {
     try {
-      await compartirArchivo('ejemplo_horarios.json', generarEjemploJSON(), 'application/json');
+      const elegidas = materias.filter(m => seleccionadas.has(m.id));
+      if (elegidas.length === 0) return;
+      await Clipboard.setStringAsync(exportarJSONMultiMateria(elegidas));
+      Alert.alert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
     } catch (e: any) {
-      Alert.alert('Error al descargar ejemplo', e.message);
+      Alert.alert('Error al copiar', e.message);
     }
   };
 
-  const importarJSONGlobal = async () => {
-    try {
-      const texto = await leerArchivo(['application/json', '*/*']);
-      if (!texto) return;
-      const importadas = parsearJSONMultiMateria(texto);
-      const { guardarMateria, materias: materiasActuales } = useStore.getState();
-      importadas.forEach(imp => {
-        const materia = materiasActuales.find(m =>
-          (imp.id && m.id === imp.id) ||
-          (imp.numero && m.numero === imp.numero) ||
-          m.nombre.toLowerCase() === imp.nombre.toLowerCase()
-        );
-        if (materia) {
-          const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
-          const existentes = new Set((materia.bloques ?? []).map(clave));
-          const nuevos = imp.bloques.filter(b => !existentes.has(clave(b)));
-          if (nuevos.length > 0) {
-            guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...nuevos] });
-          }
-        }
-      });
-      cerrarModal();
-      Alert.alert('Importado', `Se procesaron ${importadas.length} materia(s).`);
-    } catch (e: any) {
-      Alert.alert('Error al importar', e.message);
-    }
+  const resetImport = () => {
+    setModoImportHorario('menu');
+    setImportMateriasSelec(new Set());
+    setImportMateriaConfirmada(false);
+    setImportTexto('');
+    setImportFilas([]);
+    setImportEventosICS([]);
+    setImportSemanasICS('16');
+    setImportAcordeon(false);
+  };
+
+  const aplicarBloquesAMaterias = (bloques: BloqueHorario[], materiaIds: string[]): number => {
+    const { guardarMateria } = useStore.getState();
+    const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
+    let totalNuevos = 0;
+    materiaIds.forEach(id => {
+      const materia = useStore.getState().materias.find(m => m.id === id);
+      if (!materia) return;
+      const existentes = new Set((materia.bloques ?? []).map(clave));
+      const nuevos = bloques.filter(b => !existentes.has(clave(b))).map(b => ({
+        ...b,
+        id: b.id ?? `${Date.now()}_${Math.random()}`,
+      }));
+      if (nuevos.length > 0) {
+        guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...nuevos] });
+        totalNuevos += nuevos.length;
+      }
+    });
+    return totalNuevos;
   };
 
   const materiasEnCurso = materias.filter(m => calcularEstadoFinal(m, config) === 'cursando');
@@ -894,12 +914,23 @@ export function HorarioScreen() {
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={copiarSeleccionadas}
+                disabled={seleccionadas.size === 0}
+                style={{ flex: 1, padding: 10,
+                  backgroundColor: seleccionadas.size > 0 ? tema.tarjeta : tema.tarjeta,
+                  borderRadius: 8, alignItems: 'center',
+                  borderWidth: 1, borderColor: seleccionadas.size > 0 ? tema.acento : tema.borde }}>
+                <Text style={{ color: seleccionadas.size > 0 ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
+                  📋 Copiar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={exportarSeleccionadas}
                 disabled={seleccionadas.size === 0}
-                style={{ flex: 2, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
+                style={{ flex: 1, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
                   borderRadius: 8, alignItems: 'center' }}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>
-                  ↑ Exportar {seleccionadas.size > 0 ? `(${seleccionadas.size})` : ''}
+                  ↑ Exportar
                 </Text>
               </TouchableOpacity>
             </View>
@@ -915,13 +946,13 @@ export function HorarioScreen() {
               Datos de horario
             </Text>
             <TouchableOpacity
-              onPress={() => { setModalDatos(false); setModalImport(true); }}
+              onPress={() => { setModalDatos(false); resetImport(); setModalImport(true); }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
                 backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 10 }}>
               <Text style={{ fontSize: 22 }}>📥</Text>
               <View>
                 <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Importar</Text>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Cargar horarios desde un archivo JSON</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Texto, CSV, JSON o ICS</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -943,36 +974,398 @@ export function HorarioScreen() {
         </View>
       </Modal>
 
-      {/* Modal importar */}
-      <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => setModalImport(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }}>
-          <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
-            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 10 }}>
-              Importar horarios
-            </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 8 }}>
-              Para importar correctamente, el archivo .json debe seguir un formato específico.
-            </Text>
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-                Para saber cómo generarlo, revisá la sección{' '}
-                <Text style={{ color: tema.acento, fontWeight: '600' }}>Prompts para IA</Text>
-                {' '}al final de Configuración.
-              </Text>
+      {/* Modal importar — multi-formato */}
+      <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => { setModalImport(false); resetImport(); }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
+          alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+          padding: Platform.OS === 'web' ? 24 : 0 }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1, justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end' }}
+          >
+            <View style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0,
+              borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20,
+              width: Platform.OS === 'web' ? '100%' : undefined,
+              maxWidth: Platform.OS === 'web' ? 540 : undefined }}>
+
+              {/* ── Menú principal: elegir formato ── */}
+              {modoImportHorario === 'menu' && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 12 }}>
+                    Importar horarios
+                  </Text>
+                  {([
+                    { key: 'texto' as const, emoji: '📋', label: 'Pegar texto',   desc: 'Tabla separada por tab, coma o punto y coma' },
+                    { key: 'csv'   as const, emoji: '📄', label: 'Archivo CSV',   desc: 'Columnas: fecha, inicio, fin, tipo' },
+                    { key: 'json'  as const, emoji: '{ }', label: 'Archivo JSON', desc: 'JSON de materia(s) exportado desde Cursus' },
+                    { key: 'ics'   as const, emoji: '📅', label: 'Archivo ICS',   desc: 'Google Calendar, Outlook, etc.' },
+                  ] as const).map(({ key, emoji, label, desc }) => (
+                    <TouchableOpacity key={key} onPress={() => setModoImportHorario(key)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14,
+                        backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>{label}</Text>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>{desc}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => { setModalImport(false); resetImport(); }}
+                    style={{ padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center', marginTop: 4 }}>
+                    <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* ── JSON: multi-materia (comportamiento original) ── */}
+              {modoImportHorario === 'json' && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 8 }}>
+                    Importar JSON multi-materia
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16 }}>
+                    Seleccioná un archivo .json con el formato{' '}
+                    <Text style={{ color: tema.texto }}>{'{ "materias": [...] }'}</Text>.
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => setModoImportHorario('menu')}
+                      style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          const texto = await leerArchivo(['application/json', '*/*']);
+                          if (!texto) return;
+                          const importadas = parsearJSONMultiMateria(texto);
+                          const { guardarMateria: gm, materias: mats } = useStore.getState();
+                          const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
+                          importadas.forEach(imp => {
+                            const materia = mats.find(m =>
+                              (imp.id && m.id === imp.id) ||
+                              (imp.numero && m.numero === imp.numero) ||
+                              m.nombre.toLowerCase() === imp.nombre.toLowerCase()
+                            );
+                            if (materia) {
+                              const existentes = new Set((materia.bloques ?? []).map(clave));
+                              const nuevos = imp.bloques.filter(b => !existentes.has(clave(b)));
+                              if (nuevos.length > 0) gm({ ...materia, bloques: [...(materia.bloques ?? []), ...nuevos] });
+                            }
+                          });
+                          setModalImport(false); resetImport();
+                          Alert.alert('Importado', `Se procesaron ${importadas.length} materia(s).`);
+                        } catch (e: any) { Alert.alert('Error al importar', e.message); }
+                      }}
+                      style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir archivo</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* ── Selector de materia(s) — para texto / csv / ics ── */}
+              {(modoImportHorario === 'texto' || modoImportHorario === 'csv' || modoImportHorario === 'ics') && !importMateriaConfirmada && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+                    ¿A qué materia(s) importar?
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 12 }}>
+                    Los bloques se agregarán a las materias seleccionadas
+                  </Text>
+                  <ScrollView style={{ maxHeight: 240, marginBottom: 12 }} nestedScrollEnabled>
+                    {materias.map(m => (
+                      <TouchableOpacity key={m.id}
+                        onPress={() => setImportMateriasSelec(prev => {
+                          const s = new Set(prev);
+                          s.has(m.id) ? s.delete(m.id) : s.add(m.id);
+                          return s;
+                        })}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+                          borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 10 }}>
+                        <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2,
+                          borderColor: importMateriasSelec.has(m.id) ? tema.acento : tema.borde,
+                          backgroundColor: importMateriasSelec.has(m.id) ? tema.acento : 'transparent',
+                          alignItems: 'center', justifyContent: 'center' }}>
+                          {importMateriasSelec.has(m.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
+                        </View>
+                        <Text style={{ color: tema.texto, fontSize: 14 }}>{m.nombre}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => setModoImportHorario('menu')}
+                      style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (importMateriasSelec.size === 0) {
+                          Alert.alert('Sin materias', 'Seleccioná al menos una materia.');
+                          return;
+                        }
+                        setImportMateriaConfirmada(true);
+                      }}
+                      disabled={importMateriasSelec.size === 0}
+                      style={{ flex: 2, padding: 12,
+                        backgroundColor: importMateriasSelec.size > 0 ? tema.acento : tema.tarjeta,
+                        borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>
+                        Continuar ({importMateriasSelec.size})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* ── Panel: texto ── */}
+              {modoImportHorario === 'texto' && importMateriaConfirmada && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 8 }}>
+                    Pegar texto — {importMateriasSelec.size} materia(s)
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setImportAcordeon(v => !v)}
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                      backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ color: tema.acento, fontSize: 12 }}>¿Cómo formatear?</Text>
+                    <Text style={{ color: tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {importAcordeon && (
+                    <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
+                        Columnas separadas por tab, coma o punto y coma:{'\n'}
+                        fecha · hora_inicio · hora_fin · tipo (opcional)
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            try { await compartirArchivo('ejemplo.csv', generarEjemploTexto(), 'text/csv'); }
+                            catch (e: any) { Alert.alert('Error', e.message); }
+                          }}
+                          style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                          <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploTexto()); Alert.alert('Copiado', ''); }}
+                          style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
+                            borderWidth: 1, borderColor: tema.acento }}>
+                          <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                  <TextInput
+                    style={{ backgroundColor: tema.tarjeta, color: tema.texto, borderRadius: 8,
+                      padding: 10, height: 120, textAlignVertical: 'top', fontSize: 11,
+                      fontFamily: 'monospace', marginBottom: 10 }}
+                    multiline
+                    placeholder={'fecha\tinicio\tfin\ttipo\n15/03/2026\t08:00\t10:00\tTeorica'}
+                    placeholderTextColor={tema.textoSecundario}
+                    value={importTexto}
+                    onChangeText={v => {
+                      setImportTexto(v);
+                      if (v.trim()) setImportFilas(parsearCSV(v));
+                      else setImportFilas([]);
+                    }}
+                  />
+                  {importFilas.length > 0 && (
+                    <View style={{ marginBottom: 8 }}>
+                      {importFilas.slice(0, 5).map((f, i) => (
+                        <Text key={i} style={{ color: f.error ? '#F44336' : tema.textoSecundario, fontSize: 10 }}>
+                          {f.error ? `❌ ${f.error}` : `✅ ${f.fecha} ${Math.floor(f.horaInicio!/60)}:${String(f.horaInicio!%60).padStart(2,'0')}–${Math.floor(f.horaFin!/60)}:${String(f.horaFin!%60).padStart(2,'0')} · ${f.tipo}`}
+                        </Text>
+                      ))}
+                      {importFilas.length > 5 && <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>...y {importFilas.length - 5} más</Text>}
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => { setImportMateriaConfirmada(false); setImportTexto(''); setImportFilas([]); }}
+                      style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const validas = importFilas.filter(f => !f.error);
+                        if (validas.length === 0) { Alert.alert('Sin datos', 'Pegá texto con al menos una fila válida.'); return; }
+                        const bloques: BloqueHorario[] = validas.map(f => ({
+                          id: `${Date.now()}_${Math.random()}`,
+                          fecha: f.fecha!, horaInicio: f.horaInicio!, horaFin: f.horaFin!, tipo: f.tipo!,
+                        }));
+                        const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
+                        setModalImport(false); resetImport();
+                        Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                      }}
+                      disabled={importFilas.filter(f => !f.error).length === 0}
+                      style={{ flex: 2, padding: 12,
+                        backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? tema.acento : tema.tarjeta,
+                        borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>
+                        Importar {importFilas.filter(f=>!f.error).length} válidos
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              {/* ── Panel: CSV ── */}
+              {modoImportHorario === 'csv' && importMateriaConfirmada && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 8 }}>
+                    Importar CSV — {importMateriasSelec.size} materia(s)
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setImportAcordeon(v => !v)}
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                      backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ color: tema.acento, fontSize: 12 }}>¿Cómo armar el CSV?</Text>
+                    <Text style={{ color: tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
+                  </TouchableOpacity>
+                  {importAcordeon && (
+                    <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
+                        Columnas: fecha · hora_inicio · hora_fin · tipo (opcional){'\n'}
+                        Separadores: coma, punto y coma o tab
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity
+                          onPress={async () => { try { await compartirArchivo('ejemplo.csv', generarEjemploCSV(), 'text/csv'); } catch (e: any) { Alert.alert('Error', e.message); } }}
+                          style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                          <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploCSV()); Alert.alert('Copiado', ''); }}
+                          style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
+                            borderWidth: 1, borderColor: tema.acento }}>
+                          <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                  {importFilas.length > 0 && (
+                    <View style={{ marginBottom: 8 }}>
+                      {importFilas.slice(0, 5).map((f, i) => (
+                        <Text key={i} style={{ color: f.error ? '#F44336' : tema.textoSecundario, fontSize: 10 }}>
+                          {f.error ? `❌ ${f.error}` : `✅ ${f.fecha} ${Math.floor(f.horaInicio!/60)}:${String(f.horaInicio!%60).padStart(2,'0')}–${Math.floor(f.horaFin!/60)}:${String(f.horaFin!%60).padStart(2,'0')} · ${f.tipo}`}
+                        </Text>
+                      ))}
+                      {importFilas.length > 5 && <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>...y {importFilas.length - 5} más</Text>}
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => { setImportMateriaConfirmada(false); setImportFilas([]); setImportAcordeon(false); }}
+                      style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                    </TouchableOpacity>
+                    {importFilas.length === 0 ? (
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            const texto = await leerArchivo(['text/csv', 'text/plain', '*/*']);
+                            if (!texto) return;
+                            setImportFilas(parsearCSV(texto));
+                          } catch (e: any) { Alert.alert('Error', e.message); }
+                        }}
+                        style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir CSV</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const validas = importFilas.filter(f => !f.error);
+                          const bloques: BloqueHorario[] = validas.map(f => ({
+                            id: `${Date.now()}_${Math.random()}`,
+                            fecha: f.fecha!, horaInicio: f.horaInicio!, horaFin: f.horaFin!, tipo: f.tipo!,
+                          }));
+                          const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
+                          setModalImport(false); resetImport();
+                          Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                        }}
+                        disabled={importFilas.filter(f => !f.error).length === 0}
+                        style={{ flex: 2, padding: 12,
+                          backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? tema.acento : tema.tarjeta,
+                          borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#fff', fontWeight: '700' }}>
+                          Importar {importFilas.filter(f=>!f.error).length} válidos
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* ── Panel: ICS ── */}
+              {modoImportHorario === 'ics' && importMateriaConfirmada && (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 8 }}>
+                    Importar ICS — {importMateriasSelec.size} materia(s)
+                  </Text>
+                  {importEventosICS.length === 0 ? (
+                    <>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12 }}>
+                        Importá un archivo .ics (Google Calendar, Outlook, etc.).{'\n'}
+                        Los eventos recurrentes semanales se expandirán N semanas.
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity onPress={() => { setImportMateriaConfirmada(false); }}
+                          style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            try {
+                              const texto = await leerArchivo(['text/calendar', '*/*']);
+                              if (!texto) return;
+                              const eventos = extraerEventosICS(texto);
+                              if (eventos.length === 0) { Alert.alert('Sin eventos', 'No se encontraron eventos en el archivo ICS.'); return; }
+                              setImportEventosICS(eventos);
+                            } catch (e: any) { Alert.alert('Error', e.message); }
+                          }}
+                          style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir ICS</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 12 }}>
+                        {importEventosICS.length} evento(s) — {importEventosICS.filter(e => e.esRecurrente).length} recurrentes
+                      </Text>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Expandir recurrentes en semanas:</Text>
+                      <TextInput
+                        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8,
+                          width: 80, marginBottom: 12 }}
+                        keyboardType="numeric"
+                        value={importSemanasICS}
+                        onChangeText={setImportSemanasICS}
+                      />
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity onPress={() => setImportEventosICS([])}
+                          style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: tema.textoSecundario }}>← Volver</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const semanas = parseInt(importSemanasICS, 10);
+                            if (isNaN(semanas) || semanas < 1) { Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.'); return; }
+                            if (semanas > 52) { Alert.alert('Máximo 52 semanas permitidas'); return; }
+                            const bloques = expandirEventosICS(importEventosICS, semanas);
+                            const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
+                            setModalImport(false); resetImport();
+                            Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                          }}
+                          style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#fff', fontWeight: '700' }}>Importar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+
             </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity
-                onPress={() => setModalImport(false)}
-                style={{ flex: 1, padding: 12, backgroundColor: tema.tarjeta, borderRadius: 8, alignItems: 'center' }}>
-                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={async () => { setModalImport(false); await importarJSONGlobal(); }}
-                style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Continuar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
