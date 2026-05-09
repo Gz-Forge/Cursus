@@ -166,42 +166,6 @@ export function HorarioScreen() {
     }
   };
 
-  const descargarEjemploJSON = async () => {
-    try {
-      await compartirArchivo('ejemplo_horarios.json', generarEjemploJSON(), 'application/json');
-    } catch (e: any) {
-      Alert.alert('Error al descargar ejemplo', e.message);
-    }
-  };
-
-  const importarJSONGlobal = async () => {
-    try {
-      const texto = await leerArchivo(['application/json', '*/*']);
-      if (!texto) return;
-      const importadas = parsearJSONMultiMateria(texto);
-      const { guardarMateria, materias: materiasActuales } = useStore.getState();
-      importadas.forEach(imp => {
-        const materia = materiasActuales.find(m =>
-          (imp.id && m.id === imp.id) ||
-          (imp.numero && m.numero === imp.numero) ||
-          m.nombre.toLowerCase() === imp.nombre.toLowerCase()
-        );
-        if (materia) {
-          const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
-          const existentes = new Set((materia.bloques ?? []).map(clave));
-          const nuevos = imp.bloques.filter(b => !existentes.has(clave(b)));
-          if (nuevos.length > 0) {
-            guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), ...nuevos] });
-          }
-        }
-      });
-      cerrarModal();
-      Alert.alert('Importado', `Se procesaron ${importadas.length} materia(s).`);
-    } catch (e: any) {
-      Alert.alert('Error al importar', e.message);
-    }
-  };
-
   const resetImport = () => {
     setModoImportHorario('menu');
     setImportMateriasSelec(new Set());
@@ -988,7 +952,7 @@ export function HorarioScreen() {
               <Text style={{ fontSize: 22 }}>📥</Text>
               <View>
                 <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Importar</Text>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Cargar horarios desde un archivo JSON</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Texto, CSV, JSON o ICS</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1208,12 +1172,12 @@ export function HorarioScreen() {
                   />
                   {importFilas.length > 0 && (
                     <View style={{ marginBottom: 8 }}>
-                      {importFilas.slice(0, 4).map((f, i) => (
+                      {importFilas.slice(0, 5).map((f, i) => (
                         <Text key={i} style={{ color: f.error ? '#F44336' : tema.textoSecundario, fontSize: 10 }}>
                           {f.error ? `❌ ${f.error}` : `✅ ${f.fecha} ${Math.floor(f.horaInicio!/60)}:${String(f.horaInicio!%60).padStart(2,'0')}–${Math.floor(f.horaFin!/60)}:${String(f.horaFin!%60).padStart(2,'0')} · ${f.tipo}`}
                         </Text>
                       ))}
-                      {importFilas.length > 4 && <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>...y {importFilas.length - 4} más</Text>}
+                      {importFilas.length > 5 && <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>...y {importFilas.length - 5} más</Text>}
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
