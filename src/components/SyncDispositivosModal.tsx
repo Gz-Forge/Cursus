@@ -19,6 +19,7 @@ type Estado =
   | 'emisor_listo'
   | 'receptor_escaneando'
   | 'receptor_descargando'
+  | 'receptor_confirmando'
   | 'receptor_aplicando'
   | 'receptor_listo'
   | 'error';
@@ -43,6 +44,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [codigoManual, setCodigoManual] = useState('');
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [pendingPayload, setPendingPayload] = useState<import('../utils/deviceSnapshot').DeviceSyncPayload | null>(null);
+  const [pendingCode, setPendingCode] = useState('');
 
   const resetear = useCallback(() => {
     setEstado('idle');
@@ -51,6 +54,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setCodigoManual('');
     setMostrarScanner(false);
     setErrorMsg('');
+    setPendingPayload(null);
+    setPendingCode('');
   }, []);
 
   useEffect(() => {
@@ -127,37 +132,27 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       }
 
       const syncPayload = descomprimirPayload(data.datos);
-
-      Alert.alert(
-        'Confirmar sincronización',
-        `Se van a reemplazar TODOS tus datos locales con los del dispositivo emisor (${syncPayload.meta.perfiles.length} perfil(es)).\n\nEsta acción no se puede deshacer.`,
-        [
-          {
-            text: 'Cancelar',
-            style: 'cancel',
-            onPress: () => resetear(),
-          },
-          {
-            text: 'Reemplazar todo',
-            style: 'destructive',
-            onPress: async () => {
-              setEstado('receptor_aplicando');
-              try {
-                await aplicarSnapshot(syncPayload);
-                // Borrar la fila: código de un solo uso
-                const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', trimmed);
-                if (deleteError) console.warn('No se pudo borrar la sesión de sync:', deleteError.message);
-                setEstado('receptor_listo');
-              } catch (e: any) {
-                setErrorMsg(e?.message ?? 'Error aplicando los datos.');
-                setEstado('error');
-              }
-            },
-          },
-        ]
-      );
+      setPendingPayload(syncPayload);
+      setPendingCode(trimmed);
+      setEstado('receptor_confirmando');
     } catch (e: any) {
       setErrorMsg(e?.message ?? 'Error descargando los datos. Verificá tu conexión.');
+      setEstado('error');
+    }
+  };
+
+  const aplicarPendingSync = async () => {
+    if (!pendingPayload) return;
+    setEstado('receptor_aplicando');
+    try {
+      await aplicarSnapshot(pendingPayload);
+      const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', pendingCode);
+      if (deleteError) console.warn('No se pudo borrar la sesión de sync:', deleteError.message);
+      setPendingPayload(null);
+      setPendingCode('');
+      setEstado('receptor_listo');
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Error aplicando los datos.');
       setEstado('error');
     }
   };
@@ -293,6 +288,31 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
             <ActivityIndicator color={tema.acento} size="large" />
             <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Descargando datos...</Text>
+          </View>
+        );
+
+      case 'receptor_confirmando':
+        return (
+          <View>
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
+              Confirmar sincronización
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+              Se van a reemplazar{' '}
+              <Text style={{ color: tema.texto, fontWeight: '700' }}>TODOS</Text>
+              {' '}tus datos locales con los del dispositivo emisor
+              {pendingPayload ? ` (${pendingPayload.meta.perfiles.length} perfil(es))` : ''}.{'\n\n'}
+              Esta acción no se puede deshacer.
+            </Text>
+            <TouchableOpacity onPress={aplicarPendingSync} style={btnStyle('#F44336')}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Reemplazar todo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={resetear}
+              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}
+            >
+              <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
+            </TouchableOpacity>
           </View>
         );
 
