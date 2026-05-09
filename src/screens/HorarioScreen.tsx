@@ -10,7 +10,7 @@ import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
   parsearJSONMultiMateria, leerArchivo,
-  parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
+  parsearCSV, extraerEventosICS, expandirEventosICS,
   generarEjemploCSV, generarEjemploTexto,
   type FilaParseada,
 } from '../utils/horarioImportExport';
@@ -178,11 +178,11 @@ export function HorarioScreen() {
   };
 
   const aplicarBloquesAMaterias = (bloques: BloqueHorario[], materiaIds: string[]): number => {
-    const { guardarMateria, materias: materiasActuales } = useStore.getState();
+    const { guardarMateria } = useStore.getState();
     const clave = (b: BloqueHorario) => `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
     let totalNuevos = 0;
     materiaIds.forEach(id => {
-      const materia = materiasActuales.find(m => m.id === id);
+      const materia = useStore.getState().materias.find(m => m.id === id);
       if (!materia) return;
       const existentes = new Set((materia.bloques ?? []).map(clave));
       const nuevos = bloques.filter(b => !existentes.has(clave(b))).map(b => ({
@@ -1245,11 +1245,12 @@ export function HorarioScreen() {
                   )}
                   {importFilas.length > 0 && (
                     <View style={{ marginBottom: 8 }}>
-                      {importFilas.slice(0, 4).map((f, i) => (
+                      {importFilas.slice(0, 5).map((f, i) => (
                         <Text key={i} style={{ color: f.error ? '#F44336' : tema.textoSecundario, fontSize: 10 }}>
                           {f.error ? `❌ ${f.error}` : `✅ ${f.fecha} ${Math.floor(f.horaInicio!/60)}:${String(f.horaInicio!%60).padStart(2,'0')}–${Math.floor(f.horaFin!/60)}:${String(f.horaFin!%60).padStart(2,'0')} · ${f.tipo}`}
                         </Text>
                       ))}
+                      {importFilas.length > 5 && <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>...y {importFilas.length - 5} más</Text>}
                     </View>
                   )}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1348,6 +1349,7 @@ export function HorarioScreen() {
                           onPress={() => {
                             const semanas = parseInt(importSemanasICS, 10);
                             if (isNaN(semanas) || semanas < 1) { Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.'); return; }
+                            if (semanas > 52) { Alert.alert('Máximo 52 semanas permitidas'); return; }
                             const bloques = expandirEventosICS(importEventosICS, semanas);
                             const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
                             setModalImport(false); resetImport();
