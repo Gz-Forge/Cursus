@@ -271,6 +271,25 @@ export function generarEjemploCSV(): string {
   ].join('\n');
 }
 
+export function generarEjemploTexto(): string {
+  return [
+    'fecha\thoraInicio\thoraFin\ttipo',
+    '15/03/2026\t08:00\t10:00\tTeorica',
+    '17/03/2026\t14:00\t16:00\tPractica',
+    '25/03/2026\t09:00\t11:00\tParcial',
+  ].join('\n');
+}
+
+export function generarEjemploJSONMateria(): string {
+  return JSON.stringify({
+    nombre: 'Cálculo I',
+    bloques: [
+      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica' },
+      { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
+    ],
+  }, null, 2);
+}
+
 export function generarPromptHorario(config: Config): string {
   return `Usando la información que te proporcione sobre los horarios de las diferentes materias, crea un archivo .json con la siguiente estructura exacta:
 
