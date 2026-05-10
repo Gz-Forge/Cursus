@@ -20,6 +20,7 @@ import { esFormatoMultiMateriaEval } from '../utils/importExport';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 // ── Helpers de formato ──────────────────────────────────────────────
 function fmtHora(mins: number): string {
@@ -33,14 +34,6 @@ function fmtFechaBloque(iso: string): string {
 }
 
 // ── Parser individual (formulario manual) ───────────────────────────
-function parsearHora(str: string): number | null {
-  const m = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = parseInt(m[1], 10), min = parseInt(m[2], 10);
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
-}
-
 function parsearFecha(str: string): string | null {
   const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!m) return null;
@@ -55,10 +48,42 @@ function autoFormatFechaBloque(prev: string, next: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-function autoFormatHora(prev: string, next: string): string {
-  const digits = next.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+// ── Selector de hora con botones ▲/▼ y minutos :00/:30 ──────────────
+function HoraPicker({ value, onChange, label }: {
+  value: number; onChange: (v: number) => void; label: string;
+}) {
+  const tema = useTema();
+  const h = Math.floor(value / 60);
+  const m = value % 60 === 30 ? 30 : 0;
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>{label}</Text>
+      <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 10, alignItems: 'center' }}>
+        <TouchableOpacity onPress={() => onChange(((h + 1) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
+          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
+        </TouchableOpacity>
+        <Text style={{ color: tema.texto, fontSize: 26, fontWeight: '700', letterSpacing: 1, minWidth: 64, textAlign: 'center' }}>
+          {h.toString().padStart(2, '0')}:{m === 0 ? '00' : '30'}
+        </Text>
+        <TouchableOpacity onPress={() => onChange(((h - 1 + 24) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
+          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+          {([0, 30] as const).map(min => (
+            <TouchableOpacity
+              key={min}
+              onPress={() => onChange(h * 60 + min)}
+              style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: m === min ? tema.acento : tema.tarjeta, alignItems: 'center' }}
+            >
+              <Text style={{ color: m === min ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+                :{min === 0 ? '00' : '30'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export function EditMateriaScreen() {
@@ -80,8 +105,10 @@ export function EditMateriaScreen() {
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
-    fechaStr: string; horaInicioStr: string; horaFinStr: string; tipo: TipoBloque;
-  }>({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' });
+    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque;
+  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+  const [dropdownDia, setDropdownDia] = useState(false);
+  const [dropdownMes, setDropdownMes] = useState(false);
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
@@ -186,27 +213,42 @@ export function EditMateriaScreen() {
   };
 
   const confirmarBloque = () => {
-    const fecha  = parsearFecha(bloqueNuevo.fechaStr);
-    const inicio = parsearHora(bloqueNuevo.horaInicioStr);
-    const fin    = parsearHora(bloqueNuevo.horaFinStr);
-    if (!fecha) {
-      Alert.alert('Fecha inválida', 'Usá el formato DD/MM/YYYY.');
+    const anio = new Date().getFullYear();
+    const dia = parseInt(bloqueNuevo.dia, 10);
+    const mes = parseInt(bloqueNuevo.mes, 10);
+
+    if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
+      Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
       return;
     }
-    if (inicio === null || fin === null || fin <= inicio) {
-      Alert.alert('Horario inválido', 'Usá formato HH:MM y verificá que el fin sea posterior al inicio.');
+    if (!bloqueNuevo.mes || isNaN(mes) || mes < 1 || mes > 12) {
+      Alert.alert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
       return;
     }
+    // Validar que el día exista en ese mes (ej: 30 de febrero → inválido)
+    const dateObj = new Date(anio, mes - 1, dia);
+    if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
+      Alert.alert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
+      return;
+    }
+    if (bloqueNuevo.horaFin <= bloqueNuevo.horaInicio) {
+      Alert.alert('Horario inválido', 'El fin debe ser posterior al inicio.');
+      return;
+    }
+    const diaStr = dia.toString().padStart(2, '0');
+    const mesStr = mes.toString().padStart(2, '0');
     const nuevo: BloqueHorario = {
       id: Date.now().toString(),
-      fecha,
-      horaInicio: inicio,
-      horaFin: fin,
+      fecha: `${anio}-${mesStr}-${diaStr}`,
+      horaInicio: bloqueNuevo.horaInicio,
+      horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
     };
     setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), nuevo] }));
     setMostrarFormBloque(false);
-    setBloqueNuevo({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' });
+    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+    setDropdownDia(false);
+    setDropdownMes(false);
   };
 
   const agregarEvaluacion = (tipo: 'simple' | 'grupo') => {
@@ -711,37 +753,97 @@ export function EditMateriaScreen() {
         {/* ── Formulario individual ── */}
         {mostrarFormBloque && (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fecha (DD/MM/AAAA)</Text>
-            <TextInput
-              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 10 }}
-              value={bloqueNuevo.fechaStr}
-              onChangeText={v => setBloqueNuevo(b => ({ ...b, fechaStr: autoFormatFechaBloque(b.fechaStr, v) }))}
-              placeholder="15/03/2026"
-              placeholderTextColor={tema.textoSecundario}
-              keyboardType="numbers-and-punctuation"
-            />
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+
+            {/* ── Fecha: día + mes (año automático) ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 2 }}>
+
+              {/* Día */}
               <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Inicio (HH:MM)</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Día</Text>
                 <TextInput
-                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
-                  value={bloqueNuevo.horaInicioStr}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, horaInicioStr: autoFormatHora(b.horaInicioStr, v) }))}
-                  placeholder="08:00" placeholderTextColor={tema.textoSecundario}
-                  keyboardType="numbers-and-punctuation"
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
+                  value={bloqueNuevo.dia}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, dia: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
+                  placeholder="DD"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="number-pad"
+                  maxLength={2}
                 />
+                {dropdownDia && (
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 150, borderWidth: 1, borderColor: tema.borde }}>
+                    <ScrollView nestedScrollEnabled>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                        <TouchableOpacity
+                          key={d}
+                          onPress={() => { setBloqueNuevo(b => ({ ...b, dia: String(d) })); setDropdownDia(false); }}
+                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
+                        >
+                          <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fin (HH:MM)</Text>
+
+              {/* Mes */}
+              <View style={{ flex: 2 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Mes</Text>
                 <TextInput
                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
-                  value={bloqueNuevo.horaFinStr}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, horaFinStr: autoFormatHora(b.horaFinStr, v) }))}
-                  placeholder="10:00" placeholderTextColor={tema.textoSecundario}
-                  keyboardType="numbers-and-punctuation"
+                  value={bloqueNuevo.mes}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
+                  placeholder="MM"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="number-pad"
+                  maxLength={2}
                 />
+                {bloqueNuevo.mes && !isNaN(parseInt(bloqueNuevo.mes, 10)) &&
+                  parseInt(bloqueNuevo.mes, 10) >= 1 && parseInt(bloqueNuevo.mes, 10) <= 12 && (
+                  <Text style={{ color: tema.acento, fontSize: 10, marginTop: 2 }}>
+                    {MESES[parseInt(bloqueNuevo.mes, 10) - 1]}
+                  </Text>
+                )}
+                {dropdownMes && (
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 180, borderWidth: 1, borderColor: tema.borde }}>
+                    <ScrollView nestedScrollEnabled>
+                      {MESES.map((nombre, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          onPress={() => { setBloqueNuevo(b => ({ ...b, mes: String(i + 1) })); setDropdownMes(false); }}
+                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
+                        >
+                          <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 10, marginBottom: 12, textAlign: 'right' }}>
+              Año: {new Date().getFullYear()}
+            </Text>
+
+            {/* ── Hora inicio / fin ── */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <HoraPicker
+                label="Inicio"
+                value={bloqueNuevo.horaInicio}
+                onChange={v => setBloqueNuevo(b => ({ ...b, horaInicio: v }))}
+              />
+              <HoraPicker
+                label="Fin"
+                value={bloqueNuevo.horaFin}
+                onChange={v => setBloqueNuevo(b => ({ ...b, horaFin: v }))}
+              />
+            </View>
+
+            {/* ── Tipo ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Tipo</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               {tiposBloque.map(({ key, label }) => (
@@ -752,9 +854,15 @@ export function EditMateriaScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => { setMostrarFormBloque(false); setBloqueNuevo({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' }); }}
+                onPress={() => {
+                  setMostrarFormBloque(false);
+                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+                  setDropdownDia(false);
+                  setDropdownMes(false);
+                }}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>

@@ -19,23 +19,52 @@ const COLORES_BLOQUES_DEFAULT = [
   '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
 ];
 
-// ── Color picker simple: preview box + hex input ────────────────────────────
+// ── Paleta completa para el color picker ────────────────────────────────────
+const PALETA_COLOR_PICKER = [
+  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
+  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
+  '#F44336', '#3F51B5', '#FFEB3B', '#795548', '#9E9E9E',
+  '#ffffff', '#000000',
+];
+
+// ── Color picker: cuadrado tocable + paleta + hex input ─────────────────────
 function ColorInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const tema = useTema();
+  const [mostrarPaleta, setMostrarPaleta] = useState(false);
   const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-      <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.borde }} />
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
-      <TextInput
-        style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
-        value={value}
-        onChangeText={onChange}
-        placeholder="#RRGGBB"
-        placeholderTextColor={tema.textoSecundario}
-        maxLength={7}
-        autoCapitalize="characters"
-      />
+    <View style={{ marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => setMostrarPaleta(v => !v)}
+          style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.acento }}
+        />
+        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
+        <TextInput
+          style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
+          value={value}
+          onChangeText={onChange}
+          placeholder="#RRGGBB"
+          placeholderTextColor={tema.textoSecundario}
+          maxLength={7}
+          autoCapitalize="characters"
+        />
+      </View>
+      {mostrarPaleta && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, padding: 8, backgroundColor: tema.fondo, borderRadius: 8 }}>
+          {PALETA_COLOR_PICKER.map(c => (
+            <TouchableOpacity
+              key={c}
+              onPress={() => { onChange(c); setMostrarPaleta(false); }}
+              style={{
+                width: 32, height: 32, borderRadius: 6, backgroundColor: c,
+                borderWidth: c.toLowerCase() === value.toLowerCase() ? 2.5 : 1,
+                borderColor: c.toLowerCase() === value.toLowerCase() ? tema.acento : tema.borde,
+              }}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -92,6 +121,8 @@ export function ConfigScreen() {
   const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
+  const [mostrarImportColores, setMostrarImportColores] = useState(false);
+  const [jsonImportColores, setJsonImportColores] = useState('');
   const navigation = useNavigation<any>();
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
@@ -100,6 +131,62 @@ export function ConfigScreen() {
 
   const toggleAcordeonHorario = (id: string) =>
     setAcordeonesHorario(p => ({ ...p, [id]: !p[id] }));
+
+  const generarPayloadColoresParaIA = () => {
+    const labelTipo = (tipo: string) => {
+      switch (tipo) {
+        case 'teorica':  return config.labelTeorica  || 'Teórica';
+        case 'practica': return config.labelPractica || 'Práctica';
+        case 'parcial':  return 'Evaluación';
+        case 'otro':     return config.labelOtro     || 'Otro';
+        default:         return tipo;
+      }
+    };
+    const materiasExport = materiasConHorario.map(m => {
+      const tiposBloque = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
+      const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
+        m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
+      if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
+      return {
+        id: m.id,
+        nombre: m.nombre,
+        bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
+        coloresActuales: config.coloresHorario?.[m.id] ?? {},
+      };
+    });
+    const instruccion = `Sos un asistente de diseño de colores para una app académica.
+En el horario semanal, cada materia tiene bloques de diferentes tipos y necesito elegir colores para cada uno.
+
+Preguntame materia por materia, y dentro de cada materia, tipo de bloque por tipo de bloque, qué color de fondo y qué color de texto quiero usar. Podés sugerir combinaciones que queden bien visualmente.
+
+Cuando terminés de preguntar todo, devolvé SOLAMENTE el JSON final con este formato exacto (sin texto adicional antes ni después):
+{
+  "coloresHorario": {
+    "[id de la materia]": {
+      "[tipo de bloque]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
+    }
+  }
+}
+
+Tipos posibles: teorica, practica, parcial, otro`;
+    return JSON.stringify({ instruccion, materias: materiasExport }, null, 2);
+  };
+
+  const importarColoresDeIA = () => {
+    try {
+      const parsed = JSON.parse(jsonImportColores);
+      if (!parsed.coloresHorario || typeof parsed.coloresHorario !== 'object') {
+        Alert.alert('Formato inválido', 'El JSON debe tener la clave "coloresHorario".');
+        return;
+      }
+      actualizarConfig({ coloresHorario: { ...(config.coloresHorario ?? {}), ...parsed.coloresHorario } });
+      Alert.alert('Colores importados', 'Los colores se aplicaron correctamente.');
+      setMostrarImportColores(false);
+      setJsonImportColores('');
+    } catch (e: any) {
+      Alert.alert('JSON inválido', e.message);
+    }
+  };
 
   const materiasConHorario = materias.filter(m => {
     if (calcularEstadoFinal(m, config) !== 'cursando') return false;
@@ -379,6 +466,54 @@ export function ConfigScreen() {
             </View>
           ) : (
             <View style={{ marginBottom: 20 }}>
+              {/* ── Exportar / Importar colores para IA ── */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Clipboard.setStringAsync(generarPayloadColoresParaIA());
+                    Alert.alert('Copiado', 'JSON copiado al portapapeles. Pegalo en tu IA favorita.');
+                  }}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: tema.acento }}
+                >
+                  <Text style={{ color: tema.acento, fontSize: 12, fontWeight: '600' }}>↑ Exportar para IA</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setMostrarImportColores(v => !v)}
+                  style={{ flex: 1, backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: tema.borde }}
+                >
+                  <Text style={{ color: tema.texto, fontSize: 12, fontWeight: '600' }}>↓ Importar de IA</Text>
+                </TouchableOpacity>
+              </View>
+              {mostrarImportColores && (
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
+                    Pegá el JSON devuelto por la IA:
+                  </Text>
+                  <TextInput
+                    style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, minHeight: 80, textAlignVertical: 'top', fontFamily: 'monospace', fontSize: 12, marginBottom: 8 }}
+                    value={jsonImportColores}
+                    onChangeText={setJsonImportColores}
+                    multiline
+                    placeholder={'{\n  "coloresHorario": { ... }\n}'}
+                    placeholderTextColor={tema.textoSecundario}
+                  />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => { setMostrarImportColores(false); setJsonImportColores(''); }}
+                      style={{ flex: 1, padding: 8, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={importarColoresDeIA}
+                      style={{ flex: 1, padding: 8, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>Aplicar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               {materiasConHorario.map(m => {
                 const tiposPresentes = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
                 const coloresMateria = config.coloresHorario?.[m.id] ?? {};
@@ -454,8 +589,10 @@ export function ConfigScreen() {
                           );
                         })}
 
-                        {/* Color para Evaluaciones en el horario */}
-                        {config.horarioMostrarEvaluaciones && (() => {
+                        {/* Color para Evaluaciones en el horario (solo si la materia las tiene con fecha) */}
+                        {config.horarioMostrarEvaluaciones &&
+                          m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) &&
+                          (() => {
                           const evalColor: ColorBloque = coloresMateria['parcial'] ?? { fondo: '#FF9800', texto: '#ffffff' };
                           const actualizarColorEval = (campo: 'fondo' | 'texto', valor: string) => {
                             actualizarConfig({
