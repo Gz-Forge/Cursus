@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -24,10 +24,17 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
     useStore();
   const tema = useTema();
 
+  const isWeb = Platform.OS === 'web';
+
   const [renombrandoId, setRenombrandoId] = useState<string | null>(null);
   const [nombreEdicion, setNombreEdicion] = useState('');
   const [creando, setCreando] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState('');
+  const [confirmandoEliminarId, setConfirmandoEliminarId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) setConfirmandoEliminarId(null);
+  }, [visible]);
 
   const handleCambiar = async (id: string) => {
     await cambiarPerfil(id);
@@ -41,10 +48,14 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
     setNombreEdicion('');
   };
 
-  const handleEliminar = (id: string, nombre: string) => {
+  const handleEliminar = (id: string, _nombre: string) => {
+    if (isWeb) {
+      setConfirmandoEliminarId(id);
+      return;
+    }
     Alert.alert(
       'Eliminar perfil',
-      `¿Eliminar "${nombre}"? Se perderán todas sus materias y configuración.`,
+      `¿Eliminar "${_nombre}"? Se perderán todas sus materias y configuración.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -68,8 +79,6 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
     setCreando(false);
     setNombreNuevo('');
   };
-
-  const isWeb = Platform.OS === 'web';
 
   return (
     <Modal
@@ -177,9 +186,27 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                           <Text style={{ fontSize: 16 }}>✏️</Text>
                         </TouchableOpacity>
                         {perfiles.length > 1 && (
-                          <TouchableOpacity onPress={() => handleEliminar(perfil.id, perfil.nombre)} style={{ marginLeft: 10, padding: 4 }}>
-                            <Text style={{ fontSize: 16 }}>🗑️</Text>
-                          </TouchableOpacity>
+                          confirmandoEliminarId === perfil.id ? (
+                            <>
+                              <Text style={{ color: '#FF6B6B', fontSize: 12, marginLeft: 8 }}>¿Eliminar?</Text>
+                              <TouchableOpacity
+                                onPress={() => { eliminarPerfil(perfil.id); setConfirmandoEliminarId(null); }}
+                                style={{ marginLeft: 8, padding: 4 }}
+                              >
+                                <Text style={{ color: '#FF6B6B', fontWeight: '700', fontSize: 15 }}>✓</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => setConfirmandoEliminarId(null)}
+                                style={{ marginLeft: 6, padding: 4 }}
+                              >
+                                <Text style={{ color: tema.textoSecundario, fontSize: 15 }}>✕</Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <TouchableOpacity onPress={() => handleEliminar(perfil.id, perfil.nombre)} style={{ marginLeft: 10, padding: 4 }}>
+                              <Text style={{ fontSize: 16 }}>🗑️</Text>
+                            </TouchableOpacity>
+                          )
                         )}
                       </>
                     )}
