@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { BloqueHorario, Config, Materia, TipoBloque } from '../types';
+import { isTauri } from './platform';
 
 // ── Helpers internos ──────────────────────────────────────────────────
 
@@ -343,7 +344,32 @@ export function generarEjemploJSON(): string {
 
 // ── I/O de archivos ───────────────────────────────────────────────────
 
+async function leerArchivoTauri(tipos: string[]): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const { readTextFile } = await import('@tauri-apps/plugin-fs');
+  const extensions: string[] = [];
+  if (tipos.some(t => t.includes('json'))) extensions.push('json');
+  if (tipos.some(t => t.includes('csv') || t.includes('plain'))) extensions.push('csv', 'txt');
+  if (tipos.some(t => t.includes('calendar'))) extensions.push('ics');
+  if (tipos.includes('*/*') || extensions.length === 0) extensions.push('json', 'csv', 'txt', 'ics');
+  const ruta = await open({ multiple: false, filters: [{ name: 'Archivo', extensions }] });
+  if (!ruta || typeof ruta !== 'string') return null;
+  return readTextFile(ruta);
+}
+
+async function compartirArchivoTauri(nombre: string, contenido: string): Promise<void> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+  const ext = nombre.includes('.') ? nombre.split('.').pop()! : 'json';
+  const ruta = await save({
+    defaultPath: nombre,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (ruta) await writeTextFile(ruta, contenido);
+}
+
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
+  if (isTauri()) return leerArchivoTauri(tipos);
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
   if (!resultado.assets || resultado.assets.length === 0) return null;
@@ -360,6 +386,7 @@ export async function compartirArchivo(
   contenido: string,
   mimeType: string,
 ): Promise<void> {
+  if (isTauri()) return compartirArchivoTauri(nombre, contenido);
   if (Platform.OS === 'web') {
     const blob = new Blob([contenido], { type: mimeType });
     const url = URL.createObjectURL(blob);
