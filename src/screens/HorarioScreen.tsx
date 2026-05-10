@@ -26,6 +26,9 @@ import {
 } from 'react-native-gesture-handler';
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const BLOCK_FONT   = Platform.OS === 'web' ? 12 : 8;
+const BLOCK_LINE_H = Platform.OS === 'web' ? 16 : 11;
 const HORA_DEF_INICIO = 7 * 60;
 const HORA_DEF_FIN   = 22 * 60;
 const PX_POR_MIN     = 1.2;
@@ -110,6 +113,7 @@ export function HorarioScreen() {
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
+  const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const draftBloqueRef          = React.useRef<BloqueHorario | null>(null);
   const gridAreaRef             = React.useRef<View>(null);
   const gridAreaTopRef          = React.useRef(0);
@@ -122,6 +126,20 @@ export function HorarioScreen() {
   const horaFinRef              = React.useRef(HORA_DEF_FIN);
 
   React.useEffect(() => { draftBloqueRef.current = draftBloque; }, [draftBloque]);
+
+  // Escape para salir del modo edición en escritorio
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && cardEnEdicion !== null) {
+        setCardEnEdicion(null);
+        setDraftBloque(null);
+        setGhostPos(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [cardEnEdicion]);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -510,7 +528,9 @@ export function HorarioScreen() {
               return (
                 <View key={fecha} style={{ width: dayColWidths[i], alignItems: 'center' }}>
                   <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
-                    {DIAS_CORTO[new Date(fecha + 'T12:00:00').getDay()]}
+                    {Platform.OS === 'web'
+                      ? DIAS_LARGO[new Date(fecha + 'T12:00:00').getDay()]
+                      : DIAS_CORTO[new Date(fecha + 'T12:00:00').getDay()]}
                   </Text>
                   <Text style={{
                     color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
@@ -632,6 +652,184 @@ export function HorarioScreen() {
                         const { fondo, texto } = obtenerColorBloque(b.materia.id, b.tipo);
                         const enEdicion  = cardEnEdicion === b.id;
 
+                        // ── Helpers reutilizados en ambas plataformas ──────────────
+                        const calibrarOrigenBloque = (cx: number, cy: number) => {
+                          ghostOriginRef.current = { x: cx, y: cy };
+                          const blockTopInGrid = (b.horaInicio - horaInicioRef.current) * PX_POR_MIN;
+                          const prevColsWidth = dayColWidthsRef.current
+                            .slice(0, diaIdx)
+                            .reduce((s, w) => s + w, 0);
+                          const blockLeftInGrid = TIME_COL_W + prevColsWidth + 1 + lyt.subCol * subColW;
+                          gridAreaTopRef.current = cy - blockTopInGrid + vScrollOffRef.current;
+                          outerOriginRef.current = {
+                            x: cx - blockLeftInGrid + hScrollOffRef.current,
+                            y: outerOriginRef.current.y,
+                          };
+                        };
+
+                        // ── Web: clic para editar + Responder para drag/resize ──
+                        if (Platform.OS === 'web') {
+                          const enterEditWeb = () => {
+                            if (cardEnEdicion !== null) return;
+                            setCardEnEdicion(b.id);
+                            setDraftBloque({ ...b });
+                            cardRefs.current.get(b.id)?.measureInWindow((cx, cy) => {
+                              calibrarOrigenBloque(cx, cy);
+                            });
+                          };
+
+                          return (
+                            <View
+                              key={b.id}
+                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); }}
+                              style={{
+                                position: 'absolute', top, height,
+                                left, width: bWidth,
+                                backgroundColor: fondo, borderRadius: 3,
+                                overflow: 'hidden',
+                                zIndex: enEdicion ? 100 : 1,
+                                opacity: enEdicion && ghostPos ? 0.3 : 1,
+                              }}
+                            >
+                              {enEdicion ? (
+                                <>
+                                  {/* Handle superior — resize horaInicio */}
+                                  <View
+                                    style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderTopWidth: 4, borderTopColor: '#fff',
+                                    }}
+                                    onStartShouldSetResponder={() => true}
+                                    onResponderGrant={(e) => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+                                    }}
+                                    onResponderMove={(e) => {
+                                      if (!resizeStartRef.current || !webDragStartRef.current) return;
+                                      const deltaMin = (e.nativeEvent.pageY - webDragStartRef.current.y) / PX_POR_MIN;
+                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio = resizeStartRef.current.horaFin - 30;
+                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.max(horaInicio, Math.min(nuevoInicio, maxInicio)) } : d);
+                                    }}
+                                    onResponderRelease={() => {
+                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
+                                      webDragStartRef.current = null;
+                                    }}
+                                  >
+                                    <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                  </View>
+
+                                  {/* Zona central — drag para mover */}
+                                  <View
+                                    style={{ flex: 1, padding: 2 }}
+                                    onStartShouldSetResponder={() => true}
+                                    onResponderGrant={(e) => {
+                                      if (!ghostOriginRef.current) return;
+                                      const { x: cx, y: cy } = ghostOriginRef.current;
+                                      const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
+                                      setGhostPos({
+                                        x: cx - outerOriginRef.current.x,
+                                        y: cy - outerOriginRef.current.y,
+                                        w: subColW - 2,
+                                        h: bh,
+                                      });
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+                                    }}
+                                    onResponderMove={(e) => {
+                                      if (!ghostOriginRef.current || !webDragStartRef.current) return;
+                                      const dx = e.nativeEvent.pageX - webDragStartRef.current.x;
+                                      const dy = e.nativeEvent.pageY - webDragStartRef.current.y;
+                                      setGhostPos(prev => prev ? {
+                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + dx,
+                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + dy,
+                                        w: prev.w,
+                                        h: prev.h,
+                                      } : prev);
+                                    }}
+                                    onResponderRelease={(e) => {
+                                      if (!draftBloqueRef.current || !webDragStartRef.current) {
+                                        setGhostPos(null);
+                                        return;
+                                      }
+                                      const dy = e.nativeEvent.pageY - webDragStartRef.current.y;
+                                      const ghostTopY = ghostOriginRef.current!.y + dy;
+                                      const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(
+                                        e.nativeEvent.pageX,
+                                        ghostTopY,
+                                      );
+                                      const draft = draftBloqueRef.current!;
+                                      const duracion = draft.horaFin - draft.horaInicio;
+                                      const bloqueActualizado: BloqueHorario = {
+                                        ...draft,
+                                        fecha: destFecha,
+                                        horaInicio: nuevoInicio,
+                                        horaFin: nuevoInicio + duracion,
+                                      };
+                                      persistirBloque(bloqueActualizado);
+                                      setDraftBloque(bloqueActualizado);
+                                      setGhostPos(null);
+                                      setCardEnEdicion(null);
+                                      webDragStartRef.current = null;
+                                    }}
+                                  >
+                                    <Text
+                                      style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {sigla(b.tipo)} - {b.materia.nombre}
+                                    </Text>
+                                    <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
+                                      {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
+                                    </Text>
+                                  </View>
+
+                                  {/* Handle inferior — resize horaFin */}
+                                  <View
+                                    style={{
+                                      height: 16, alignItems: 'center', justifyContent: 'center',
+                                      borderBottomWidth: 4, borderBottomColor: '#fff',
+                                    }}
+                                    onStartShouldSetResponder={() => true}
+                                    onResponderGrant={(e) => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+                                    }}
+                                    onResponderMove={(e) => {
+                                      if (!resizeStartRef.current || !webDragStartRef.current) return;
+                                      const deltaMin = (e.nativeEvent.pageY - webDragStartRef.current.y) / PX_POR_MIN;
+                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin = resizeStartRef.current.horaInicio + 30;
+                                      setDraftBloque(d => d ? { ...d, horaFin: Math.min(horaFin, Math.max(nuevaFin, minFin)) } : d);
+                                    }}
+                                    onResponderRelease={() => {
+                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
+                                      webDragStartRef.current = null;
+                                    }}
+                                  >
+                                    <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
+                                  </View>
+                                </>
+                              ) : (
+                                <TouchableOpacity
+                                  activeOpacity={0.85}
+                                  onPress={enterEditWeb}
+                                  style={{ flex: 1, padding: 2 }}
+                                >
+                                  <Text
+                                    style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {sigla(b.tipo)} - {b.materia.nombre}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          );
+                        }
+
+                        // ── Móvil: LongPress + PanGestureHandler (sin cambios) ──
                         return (
                           <LongPressGestureHandler
                             key={b.id}
@@ -642,21 +840,7 @@ export function HorarioScreen() {
                                 setCardEnEdicion(b.id);
                                 setDraftBloque({ ...b });
                                 cardRefs.current.get(b.id)?.measureInWindow((cx, cy) => {
-                                  ghostOriginRef.current = { x: cx, y: cy };
-                                  // Recalibrar las referencias de origen usando la posición
-                                  // conocida del bloque. Esto corrige cualquier desfase entre
-                                  // measureInWindow del contenedor y absoluteX/Y de RNGH
-                                  // (presente en Android con edgeToEdgeEnabled: true).
-                                  const blockTopInGrid = (b.horaInicio - horaInicioRef.current) * PX_POR_MIN;
-                                  const prevColsWidth = dayColWidthsRef.current
-                                    .slice(0, diaIdx)
-                                    .reduce((s, w) => s + w, 0);
-                                  const blockLeftInGrid = TIME_COL_W + prevColsWidth + 1 + lyt.subCol * subColW;
-                                  gridAreaTopRef.current = cy - blockTopInGrid + vScrollOffRef.current;
-                                  outerOriginRef.current = {
-                                    x: cx - blockLeftInGrid + hScrollOffRef.current,
-                                    y: outerOriginRef.current.y,
-                                  };
+                                  calibrarOrigenBloque(cx, cy);
                                 });
                               }
                             }}
@@ -753,13 +937,13 @@ export function HorarioScreen() {
                                   >
                                     <View style={{ flex: 1, padding: 2 }}>
                                       <Text
-                                        style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                                        numberOfLines={Math.max(1, Math.floor((height - 36) / 11))}
+                                        style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                        numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                         ellipsizeMode="tail"
                                       >
                                         {sigla(b.tipo)} - {b.materia.nombre}
                                       </Text>
-                                      <Text style={{ color: texto, fontSize: 7, opacity: 0.8 }}>
+                                      <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                         {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
                                       </Text>
                                     </View>
@@ -792,8 +976,8 @@ export function HorarioScreen() {
                               ) : (
                                 <View style={{ padding: 2, flex: 1 }}>
                                   <Text
-                                    style={{ color: texto, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                                    style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
                                     {sigla(b.tipo)} - {b.materia.nombre}
@@ -829,8 +1013,8 @@ export function HorarioScreen() {
                             overflow: 'hidden',
                           }}>
                             <Text
-                              style={{ color: textoColor, fontSize: 8, fontWeight: '700', lineHeight: 11 }}
-                              numberOfLines={Math.max(1, Math.floor((height - 4) / 11))}
+                              style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                              numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                               ellipsizeMode="tail"
                             >
                               {ev.materia.nombre}{ev.nombre ? ` - ${ev.nombre}` : ''}
