@@ -144,12 +144,55 @@ export function HorarioScreen() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [cardEnEdicion]);
 
-  // Drag & drop en escritorio — eventos nativos del DOM para evitar que el
-  // ScrollView (overflow:scroll en web) consuma los eventos de pointer antes
-  // de que lleguen a los handlers del bloque.
+  // Drag & drop en escritorio — eventos nativos del DOM.
+  // Razones para NO usar onPressIn / Responder system:
+  //   1. ScrollView usa overflow:scroll en CSS → captura pointer events antes que los Views internos.
+  //   2. TouchableOpacity llama setPointerCapture vía el Responder → pointermove va al elemento, no al document.
+  //   3. measureInWindow es async → ghostOriginRef puede ser null cuando el usuario arrastra.
+  // Solución: pointerdown nativo en el elemento del bloque (getBoundingClientRect sincrónico),
+  //           pointermove / pointerup a nivel de document (fuera del ScrollView).
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (cardEnEdicion === null) return;
+
+    // Obtener el elemento DOM real del bloque en edición
+    const blockEl = cardRefs.current.get(cardEnEdicion) as unknown as HTMLElement | null;
+    if (!blockEl) return;
+
+    const HANDLE_H = 16;
+
+    const handleBlockPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = blockEl.getBoundingClientRect();
+      const relY = e.clientY - rect.top;
+      const draft = draftBloqueRef.current;
+      if (!draft) return;
+
+      // Actualizar refs de geometría con posición real actual (sincrónico)
+      ghostOriginRef.current = { x: rect.left, y: rect.top };
+      const blockTopInGrid = (draft.horaInicio - horaInicioRef.current) * PX_POR_MIN;
+      gridAreaTopRef.current = rect.top - blockTopInGrid + vScrollOffRef.current;
+
+      webDragStartRef.current = { x: e.clientX, y: e.clientY };
+
+      if (relY < HANDLE_H) {
+        resizeStartRef.current = { horaInicio: draft.horaInicio, horaFin: draft.horaFin };
+        webDragModeRef.current = 'resize-top';
+      } else if (relY > rect.height - HANDLE_H) {
+        resizeStartRef.current = { horaInicio: draft.horaInicio, horaFin: draft.horaFin };
+        webDragModeRef.current = 'resize-bottom';
+      } else {
+        webDragModeRef.current = 'drag';
+        setGhostPos({
+          x: rect.left - outerOriginRef.current.x,
+          y: rect.top  - outerOriginRef.current.y,
+          w: rect.width,
+          h: rect.height,
+        });
+      }
+    };
 
     const handlePointerMove = (e: PointerEvent) => {
       const mode = webDragModeRef.current;
@@ -174,12 +217,14 @@ export function HorarioScreen() {
         } : d);
       } else {
         // drag — mover el ghost
-        if (!ghostOriginRef.current) return;
-        const dx = e.clientX - webDragStartRef.current.x;
-        const dy = e.clientY - webDragStartRef.current.y;
+        const start = webDragStartRef.current;
+        const origin = ghostOriginRef.current;
+        if (!origin) return;
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
         setGhostPos(prev => prev ? {
-          x: ghostOriginRef.current!.x - outerOriginRef.current.x + dx,
-          y: ghostOriginRef.current!.y - outerOriginRef.current.y + dy,
+          x: origin.x - outerOriginRef.current.x + dx,
+          y: origin.y - outerOriginRef.current.y + dy,
           w: prev.w, h: prev.h,
         } : prev);
       }
@@ -188,13 +233,14 @@ export function HorarioScreen() {
     const handlePointerUp = (e: PointerEvent) => {
       const mode = webDragModeRef.current;
       const dragStart = webDragStartRef.current;
+      const origin = ghostOriginRef.current;
       webDragModeRef.current = null;
       webDragStartRef.current = null;
 
       if (mode === 'drag') {
-        if (ghostOriginRef.current) {
-          const dy = e.clientY - (dragStart?.y ?? e.clientY);
-          const ghostTopY = ghostOriginRef.current.y + dy;
+        if (origin && dragStart) {
+          const dy = e.clientY - dragStart.y;
+          const ghostTopY = origin.y + dy;
           const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(e.clientX, ghostTopY);
           const draft = draftBloqueRef.current;
           if (draft) {
@@ -214,11 +260,27 @@ export function HorarioScreen() {
       }
     };
 
+    // Clic fuera del bloque → salir del modo edición
+    const handleOutsidePointerDown = (e: PointerEvent) => {
+      if (!blockEl.contains(e.target as Node)) {
+        webDragModeRef.current = null;
+        webDragStartRef.current = null;
+        setCardEnEdicion(null);
+        setDraftBloque(null);
+        setGhostPos(null);
+      }
+    };
+
+    blockEl.addEventListener('pointerdown', handleBlockPointerDown);
     document.addEventListener('pointermove', handlePointerMove, { passive: false });
     document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointerdown', handleOutsidePointerDown, { capture: true });
+
     return () => {
+      blockEl.removeEventListener('pointerdown', handleBlockPointerDown);
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, { capture: true });
     };
   }, [cardEnEdicion]);
 
@@ -773,40 +835,19 @@ export function HorarioScreen() {
                               }}
                             >
                               {enEdicion ? (
+                                // El useEffect maneja todos los pointer events vía DOM nativo.
+                                // Aquí solo mostramos la UI visual de los handles.
                                 <>
-                                  {/* Handle superior — resize horaInicio (pointerdown → useEffect) */}
-                                  <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPressIn={(e) => {
-                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
-                                      webDragModeRef.current = 'resize-top';
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-                                    }}
-                                    style={{
-                                      height: 16, alignItems: 'center', justifyContent: 'center',
-                                      borderTopWidth: 4, borderTopColor: '#fff',
-                                    }}
-                                  >
+                                  {/* Handle superior — zona de resize horaInicio */}
+                                  <View style={{
+                                    height: 16, alignItems: 'center', justifyContent: 'center',
+                                    borderTopWidth: 4, borderTopColor: '#fff',
+                                  }}>
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
-                                  </TouchableOpacity>
+                                  </View>
 
-                                  {/* Zona central — drag para mover (pointerdown → useEffect) */}
-                                  <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPressIn={(e) => {
-                                      if (!ghostOriginRef.current) return;
-                                      const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
-                                      webDragModeRef.current = 'drag';
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-                                      setGhostPos({
-                                        x: ghostOriginRef.current.x - outerOriginRef.current.x,
-                                        y: ghostOriginRef.current.y - outerOriginRef.current.y,
-                                        w: subColW - 2,
-                                        h: bh,
-                                      });
-                                    }}
-                                    style={{ flex: 1, padding: 2 }}
-                                  >
+                                  {/* Zona central — drag para mover */}
+                                  <View style={{ flex: 1, padding: 2 }}>
                                     <Text
                                       style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
@@ -817,23 +858,15 @@ export function HorarioScreen() {
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
                                     </Text>
-                                  </TouchableOpacity>
+                                  </View>
 
-                                  {/* Handle inferior — resize horaFin (pointerdown → useEffect) */}
-                                  <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPressIn={(e) => {
-                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
-                                      webDragModeRef.current = 'resize-bottom';
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-                                    }}
-                                    style={{
-                                      height: 16, alignItems: 'center', justifyContent: 'center',
-                                      borderBottomWidth: 4, borderBottomColor: '#fff',
-                                    }}
-                                  >
+                                  {/* Handle inferior — zona de resize horaFin */}
+                                  <View style={{
+                                    height: 16, alignItems: 'center', justifyContent: 'center',
+                                    borderBottomWidth: 4, borderBottomColor: '#fff',
+                                  }}>
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
-                                  </TouchableOpacity>
+                                  </View>
                                 </>
                               ) : (
                                 <TouchableOpacity
