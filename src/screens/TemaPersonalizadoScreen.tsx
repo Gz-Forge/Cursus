@@ -433,7 +433,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Resumen */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 10,
         borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 8 }}>
-        {[{ valor: '45', label: 'créditos' }, { valor: '3', label: 'exoneradas' }, { valor: '5', label: 'disp.' }].map(s => (
+        {[{ valor: '45', label: 'Créditos' }, { valor: '3', label: 'Exoneradas' }, { valor: '5', label: 'Disponibles' }].map(s => (
           <View key={s.label} style={{ alignItems: 'center' }}>
             <Text style={{ color: t.texto, fontSize: 22, fontWeight: '700' }}>{s.valor}</Text>
             <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{s.label}</Text>
