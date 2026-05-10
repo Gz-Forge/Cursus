@@ -170,7 +170,14 @@ export function HorarioScreen() {
       const draft = draftBloqueRef.current;
       if (!draft) return;
 
-      // Actualizar refs de geometría con posición real actual (sincrónico)
+      // Recalcular outerOriginRef sincrónicamente (puede haber scroll desde el último onLayout)
+      const outerEl = outerViewRef.current as unknown as HTMLElement | null;
+      if (outerEl) {
+        const outerRect = outerEl.getBoundingClientRect();
+        outerOriginRef.current = { x: outerRect.left, y: outerRect.top };
+      }
+
+      // Actualizar refs de geometría del bloque (sincrónico via getBoundingClientRect)
       ghostOriginRef.current = { x: rect.left, y: rect.top };
       const blockTopInGrid = (draft.horaInicio - horaInicioRef.current) * PX_POR_MIN;
       gridAreaTopRef.current = rect.top - blockTopInGrid + vScrollOffRef.current;
@@ -810,15 +817,14 @@ export function HorarioScreen() {
                           };
                         };
 
-                        // ── Web: clic para editar + Responder para drag/resize ──
+                        // ── Web: clic para editar + eventos nativos del DOM para drag/resize ──
                         if (Platform.OS === 'web') {
                           const enterEditWeb = () => {
                             if (cardEnEdicion !== null) return;
                             setCardEnEdicion(b.id);
                             setDraftBloque({ ...b });
-                            cardRefs.current.get(b.id)?.measureInWindow((cx, cy) => {
-                              calibrarOrigenBloque(cx, cy);
-                            });
+                            // NO measureInWindow: el useEffect calibra sincrónicamente
+                            // con getBoundingClientRect al montarse el pointerdown handler.
                           };
 
                           return (
@@ -1707,8 +1713,10 @@ export function HorarioScreen() {
       )}
       {innerContent}
 
-      {/* Overlay tap-fuera: cancela modo edición */}
-      {cardEnEdicion !== null && (
+      {/* Overlay tap-fuera: cancela modo edición — solo móvil.
+          En web el useEffect (pointerdown capture en document) maneja el clic fuera.
+          El overlay con zIndex:50 bloquea los pointerdown del bloque en edición en web. */}
+      {cardEnEdicion !== null && Platform.OS !== 'web' && (
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => {
