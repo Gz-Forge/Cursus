@@ -114,6 +114,7 @@ export function HorarioScreen() {
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
+  const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
   const draftBloqueRef          = React.useRef<BloqueHorario | null>(null);
   const gridAreaRef             = React.useRef<View>(null);
   const gridAreaTopRef          = React.useRef(0);
@@ -135,10 +136,90 @@ export function HorarioScreen() {
         setCardEnEdicion(null);
         setDraftBloque(null);
         setGhostPos(null);
+        webDragModeRef.current = null;
+        webDragStartRef.current = null;
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [cardEnEdicion]);
+
+  // Drag & drop en escritorio — eventos nativos del DOM para evitar que el
+  // ScrollView (overflow:scroll en web) consuma los eventos de pointer antes
+  // de que lleguen a los handlers del bloque.
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (cardEnEdicion === null) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const mode = webDragModeRef.current;
+      if (!mode || !webDragStartRef.current) return;
+      e.preventDefault();
+
+      if (mode === 'resize-top') {
+        if (!resizeStartRef.current) return;
+        const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
+        const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+        const maxInicio   = resizeStartRef.current.horaFin - 30;
+        setDraftBloque(d => d ? {
+          ...d, horaInicio: Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio)),
+        } : d);
+      } else if (mode === 'resize-bottom') {
+        if (!resizeStartRef.current) return;
+        const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
+        const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+        const minFin   = resizeStartRef.current.horaInicio + 30;
+        setDraftBloque(d => d ? {
+          ...d, horaFin: Math.min(horaFinRef.current, Math.max(nuevaFin, minFin)),
+        } : d);
+      } else {
+        // drag — mover el ghost
+        if (!ghostOriginRef.current) return;
+        const dx = e.clientX - webDragStartRef.current.x;
+        const dy = e.clientY - webDragStartRef.current.y;
+        setGhostPos(prev => prev ? {
+          x: ghostOriginRef.current!.x - outerOriginRef.current.x + dx,
+          y: ghostOriginRef.current!.y - outerOriginRef.current.y + dy,
+          w: prev.w, h: prev.h,
+        } : prev);
+      }
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const mode = webDragModeRef.current;
+      const dragStart = webDragStartRef.current;
+      webDragModeRef.current = null;
+      webDragStartRef.current = null;
+
+      if (mode === 'drag') {
+        if (ghostOriginRef.current) {
+          const dy = e.clientY - (dragStart?.y ?? e.clientY);
+          const ghostTopY = ghostOriginRef.current.y + dy;
+          const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(e.clientX, ghostTopY);
+          const draft = draftBloqueRef.current;
+          if (draft) {
+            const duracion = draft.horaFin - draft.horaInicio;
+            const bloqueActualizado: BloqueHorario = {
+              ...draft, fecha: destFecha,
+              horaInicio: nuevoInicio, horaFin: nuevoInicio + duracion,
+            };
+            persistirBloque(bloqueActualizado);
+            setDraftBloque(bloqueActualizado);
+          }
+        }
+        setGhostPos(null);
+        setCardEnEdicion(null);
+      } else if (mode === 'resize-top' || mode === 'resize-bottom') {
+        if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
+      }
+    };
+
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
   }, [cardEnEdicion]);
 
   const cerrarModal = () => {
@@ -693,84 +774,38 @@ export function HorarioScreen() {
                             >
                               {enEdicion ? (
                                 <>
-                                  {/* Handle superior — resize horaInicio */}
-                                  <View
+                                  {/* Handle superior — resize horaInicio (pointerdown → useEffect) */}
+                                  <TouchableOpacity
+                                    activeOpacity={1}
+                                    onPressIn={(e) => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                      webDragModeRef.current = 'resize-top';
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+                                    }}
                                     style={{
                                       height: 16, alignItems: 'center', justifyContent: 'center',
                                       borderTopWidth: 4, borderTopColor: '#fff',
                                     }}
-                                    onStartShouldSetResponder={() => true}
-                                    onResponderGrant={(e) => {
-                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-                                    }}
-                                    onResponderMove={(e) => {
-                                      if (!resizeStartRef.current || !webDragStartRef.current) return;
-                                      const deltaMin = (e.nativeEvent.pageY - webDragStartRef.current.y) / PX_POR_MIN;
-                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
-                                      const maxInicio = resizeStartRef.current.horaFin - 30;
-                                      setDraftBloque(d => d ? { ...d, horaInicio: Math.max(horaInicio, Math.min(nuevoInicio, maxInicio)) } : d);
-                                    }}
-                                    onResponderRelease={() => {
-                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
-                                      webDragStartRef.current = null;
-                                    }}
                                   >
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
-                                  </View>
+                                  </TouchableOpacity>
 
-                                  {/* Zona central — drag para mover */}
-                                  <View
-                                    style={{ flex: 1, padding: 2 }}
-                                    onStartShouldSetResponder={() => true}
-                                    onResponderGrant={(e) => {
+                                  {/* Zona central — drag para mover (pointerdown → useEffect) */}
+                                  <TouchableOpacity
+                                    activeOpacity={1}
+                                    onPressIn={(e) => {
                                       if (!ghostOriginRef.current) return;
-                                      const { x: cx, y: cy } = ghostOriginRef.current;
                                       const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
+                                      webDragModeRef.current = 'drag';
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
                                       setGhostPos({
-                                        x: cx - outerOriginRef.current.x,
-                                        y: cy - outerOriginRef.current.y,
+                                        x: ghostOriginRef.current.x - outerOriginRef.current.x,
+                                        y: ghostOriginRef.current.y - outerOriginRef.current.y,
                                         w: subColW - 2,
                                         h: bh,
                                       });
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
                                     }}
-                                    onResponderMove={(e) => {
-                                      if (!ghostOriginRef.current || !webDragStartRef.current) return;
-                                      const dx = e.nativeEvent.pageX - webDragStartRef.current.x;
-                                      const dy = e.nativeEvent.pageY - webDragStartRef.current.y;
-                                      setGhostPos(prev => prev ? {
-                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + dx,
-                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + dy,
-                                        w: prev.w,
-                                        h: prev.h,
-                                      } : prev);
-                                    }}
-                                    onResponderRelease={(e) => {
-                                      if (!draftBloqueRef.current || !webDragStartRef.current) {
-                                        setGhostPos(null);
-                                        return;
-                                      }
-                                      const dy = e.nativeEvent.pageY - webDragStartRef.current.y;
-                                      const ghostTopY = ghostOriginRef.current!.y + dy;
-                                      const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(
-                                        e.nativeEvent.pageX,
-                                        ghostTopY,
-                                      );
-                                      const draft = draftBloqueRef.current!;
-                                      const duracion = draft.horaFin - draft.horaInicio;
-                                      const bloqueActualizado: BloqueHorario = {
-                                        ...draft,
-                                        fecha: destFecha,
-                                        horaInicio: nuevoInicio,
-                                        horaFin: nuevoInicio + duracion,
-                                      };
-                                      persistirBloque(bloqueActualizado);
-                                      setDraftBloque(bloqueActualizado);
-                                      setGhostPos(null);
-                                      setCardEnEdicion(null);
-                                      webDragStartRef.current = null;
-                                    }}
+                                    style={{ flex: 1, padding: 2 }}
                                   >
                                     <Text
                                       style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
@@ -782,33 +817,23 @@ export function HorarioScreen() {
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
                                     </Text>
-                                  </View>
+                                  </TouchableOpacity>
 
-                                  {/* Handle inferior — resize horaFin */}
-                                  <View
+                                  {/* Handle inferior — resize horaFin (pointerdown → useEffect) */}
+                                  <TouchableOpacity
+                                    activeOpacity={1}
+                                    onPressIn={(e) => {
+                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
+                                      webDragModeRef.current = 'resize-bottom';
+                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+                                    }}
                                     style={{
                                       height: 16, alignItems: 'center', justifyContent: 'center',
                                       borderBottomWidth: 4, borderBottomColor: '#fff',
                                     }}
-                                    onStartShouldSetResponder={() => true}
-                                    onResponderGrant={(e) => {
-                                      resizeStartRef.current = { horaInicio: bloqueDraft.horaInicio, horaFin: bloqueDraft.horaFin };
-                                      webDragStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-                                    }}
-                                    onResponderMove={(e) => {
-                                      if (!resizeStartRef.current || !webDragStartRef.current) return;
-                                      const deltaMin = (e.nativeEvent.pageY - webDragStartRef.current.y) / PX_POR_MIN;
-                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
-                                      const minFin = resizeStartRef.current.horaInicio + 30;
-                                      setDraftBloque(d => d ? { ...d, horaFin: Math.min(horaFin, Math.max(nuevaFin, minFin)) } : d);
-                                    }}
-                                    onResponderRelease={() => {
-                                      if (draftBloqueRef.current) persistirBloque(draftBloqueRef.current);
-                                      webDragStartRef.current = null;
-                                    }}
                                   >
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
-                                  </View>
+                                  </TouchableOpacity>
                                 </>
                               ) : (
                                 <TouchableOpacity
