@@ -2,11 +2,10 @@
 import LZString from 'lz-string';
 import { Config, Materia } from '../types';
 import { cargarMeta, guardarMeta, cargarPerfilEstado, guardarPerfilEstado } from './perfiles';
-import { materiasAJson, jsonAMaterias, MateriaJson } from './importExport';
 import { useStore } from '../store/useStore';
 
 export interface DeviceSyncPayload {
-  version: 1;
+  version: 2;
   type: 'cursus-device-sync';
   creadoEn: string;
   meta: {
@@ -15,8 +14,8 @@ export interface DeviceSyncPayload {
   };
   estados: {
     perfilId: string;
-    materias: MateriaJson[];
-    config: Config;
+    materias: Materia[];           // Objeto completo: notas, evaluaciones, horarios, faltas
+    config: Config;                // Toda la config excepto temaPersonalizado (siempre undefined aquí)
   }[];
 }
 
@@ -25,15 +24,17 @@ export async function capturarSnapshot(): Promise<DeviceSyncPayload> {
   const estados = await Promise.all(
     meta.perfiles.map(async (p) => {
       const estado = await cargarPerfilEstado(p.id);
+      // Excluir temaPersonalizado: es apariencia local, no se sincroniza
+      const configParaSync: Config = { ...estado.config, temaPersonalizado: undefined };
       return {
         perfilId: p.id,
-        materias: materiasAJson(estado.materias),
-        config: estado.config,
+        materias: estado.materias,
+        config: configParaSync,
       };
     })
   );
   return {
-    version: 1,
+    version: 2,
     type: 'cursus-device-sync',
     creadoEn: new Date().toISOString(),
     meta: { activoId: meta.activoId, perfiles: meta.perfiles },
@@ -42,10 +43,14 @@ export async function capturarSnapshot(): Promise<DeviceSyncPayload> {
 }
 
 export async function aplicarSnapshot(payload: DeviceSyncPayload): Promise<void> {
-  // Guardar cada perfil en storage
   for (const e of payload.estados) {
-    const materias = jsonAMaterias(e.materias, e.config.oportunidadesExamenDefault ?? 3);
-    await guardarPerfilEstado(e.perfilId, { materias, config: e.config });
+    // Preservar el temaPersonalizado local (no pisar la apariencia del receptor)
+    const estadoActual = await cargarPerfilEstado(e.perfilId);
+    const configFinal: Config = {
+      ...e.config,
+      temaPersonalizado: estadoActual.config.temaPersonalizado,
+    };
+    await guardarPerfilEstado(e.perfilId, { materias: e.materias, config: configFinal });
   }
   // Actualizar meta (perfiles activos)
   await guardarMeta({
