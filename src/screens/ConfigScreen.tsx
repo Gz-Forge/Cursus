@@ -40,8 +40,47 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
   );
 }
 
+type Tab = 'notas' | 'horario' | 'app' | 'datos';
+
+function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) => void; tema: any }) {
+  const tabs: { id: Tab; icon: string; label: string }[] = [
+    { id: 'notas',   icon: '📊', label: 'Notas'   },
+    { id: 'horario', icon: '🗓', label: 'Horario' },
+    { id: 'app',     icon: '🎨', label: 'App'     },
+    { id: 'datos',   icon: '📦', label: 'Datos'   },
+  ];
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+      {tabs.map(t => (
+        <TouchableOpacity
+          key={t.id}
+          onPress={() => onCambiar(t.id)}
+          style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+        >
+          <Text style={{ fontSize: 18 }}>{t.icon}</Text>
+          <Text style={{
+            color: activa === t.id ? tema.acento : tema.textoSecundario,
+            fontSize: 11,
+            fontWeight: activa === t.id ? '700' : '400',
+            marginTop: 2,
+          }}>
+            {t.label}
+          </Text>
+          {activa === t.id && (
+            <View style={{
+              position: 'absolute', bottom: 0, left: 8, right: 8,
+              height: 2, backgroundColor: tema.acento, borderRadius: 1,
+            }} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 export function ConfigScreen() {
   const { config, actualizarConfig, materias } = useStore();
+  const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
@@ -151,6 +190,10 @@ export function ConfigScreen() {
       >
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
+          <TabBar activa={tabActiva} onCambiar={setTabActiva} tema={tema} />
+
+          {tabActiva === 'app' && (
+          <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
             {(['oscuro', 'claro', 'personalizado'] as const).map(t => (
@@ -176,7 +219,18 @@ export function ConfigScreen() {
             </TouchableOpacity>
           )}
           {config.tema !== 'personalizado' && <View style={{ marginBottom: 20 }} />}
+          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('TarjetaConfig')}
+            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}
+          >
+            <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
+          </TouchableOpacity>
+          </>
+          )}
 
+          {tabActiva === 'notas' && (
+          <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
           {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima', true)}
           {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault', true)}
@@ -237,7 +291,11 @@ export function ConfigScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </>
+          )}
 
+          {tabActiva === 'horario' && (
+          <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>TIPOS DE BLOQUE DE HORARIO</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
             Editá el nombre completo y la abreviatura (máx. 3 caracteres) de cada tipo.
@@ -441,7 +499,11 @@ export function ConfigScreen() {
               })}
             </View>
           )}
+          </>
+          )}
 
+          {tabActiva === 'datos' && (
+          <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>IMPORTAR / EXPORTAR</Text>
 
           <TouchableOpacity
@@ -456,14 +518,6 @@ export function ConfigScreen() {
             style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.acento }}
           >
             <Text style={{ color: tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
-          </TouchableOpacity>
-
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('TarjetaConfig')}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}
-          >
-            <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
           </TouchableOpacity>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>PROMPTS PARA IA</Text>
@@ -537,7 +591,7 @@ export function ConfigScreen() {
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar evaluaciones JSON</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Usalo para generar el esquema de evaluaciones de una materia e importarlo.
+                Usalo para generar el esquema de evaluaciones de una o varias materias e importarlo.
               </Text>
             </View>
             <Text style={{ color: tema.acento, fontSize: 16 }}>{promptEvalExpandido ? '▲' : '▼'}</Text>
@@ -595,7 +649,7 @@ export function ConfigScreen() {
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera ambos JSONs a la vez.
+                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera un único JSON con todo incluido.
               </Text>
             </View>
             <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
@@ -614,6 +668,8 @@ export function ConfigScreen() {
                 <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
               </TouchableOpacity>
             </View>
+          )}
+          </>
           )}
 
         </View>
