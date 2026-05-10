@@ -284,9 +284,9 @@ export function CarreraScreen() {
       {/* Resumen */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: surfaceBg }}>
         {[
-          { valor: creditos, label: 'créditos' },
-          { valor: exoneradas, label: 'exoneradas' },
-          { valor: disponibles, label: 'disp.' },
+          { valor: creditos, label: 'Créditos' },
+          { valor: exoneradas, label: 'Exoneradas' },
+          { valor: disponibles, label: 'Disponibles' },
         ].map(({ valor, label }) => (
           <View key={label} style={{ alignItems: 'center' }}>
             <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{valor}</Text>
