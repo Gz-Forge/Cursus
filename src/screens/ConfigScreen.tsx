@@ -74,7 +74,7 @@ type Tab = 'notas' | 'horario' | 'app' | 'datos';
 function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) => void; tema: any }) {
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: 'notas',   icon: '📊', label: 'Notas'   },
-    { id: 'horario', icon: '🗓', label: 'Horario' },
+    { id: 'horario', icon: '📅', label: 'Horario' },
     { id: 'app',     icon: '🎨', label: 'App'     },
     { id: 'datos',   icon: '📦', label: 'Datos'   },
   ];
