@@ -318,6 +318,10 @@ export function EditMateriaScreen() {
       Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.');
       return;
     }
+    if (semanas > 52) {
+      Alert.alert('Semanas inválidas', 'El máximo permitido es 52 semanas.');
+      return;
+    }
     const bloques = expandirEventosICS(eventosICS, semanas);
     setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
     setModoImport(null);

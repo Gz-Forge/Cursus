@@ -97,30 +97,34 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   guardarMateria: (materia) => {
-    const renumeradas = renumerarMaterias(get().materias, materia);
+    const { perfilActivoId, config, materias } = get();
+    const renumeradas = renumerarMaterias(materias, materia);
     set({ materias: renumeradas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: renumeradas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: renumeradas, config });
   },
 
   reemplazarMaterias: (nuevas) => {
+    const { perfilActivoId, config } = get();
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
   },
 
   eliminarMateria: (id) => {
-    const nuevas = get().materias.filter(m => m.id !== id);
+    const { perfilActivoId, config, materias } = get();
+    const nuevas = materias.filter(m => m.id !== id);
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
   },
 
   actualizarConfig: (parcial) => {
-    const config = { ...get().config, ...parcial };
+    const { perfilActivoId, materias, config: configActual } = get();
+    const config = { ...configActual, ...parcial };
     set({ config });
-    guardarPerfilEstado(get().perfilActivoId, { materias: get().materias, config });
+    guardarPerfilEstado(perfilActivoId, { materias, config });
   },
 
   decrementarPeriodoExamen: () => {
-    const { materias, config } = get();
+    const { perfilActivoId, materias, config } = get();
     const nuevas = materias.map(m => {
       const estado = calcularEstadoFinal(m, config);
       if (estado === 'aprobado' || estado === 'reprobado') {
@@ -129,7 +133,7 @@ export const useStore = create<Store>((set, get) => ({
       return m;
     });
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
     return nuevas.filter(
       m =>
         m.oportunidadesExamen === 0 &&

@@ -368,17 +368,25 @@ async function compartirArchivoTauri(nombre: string, contenido: string): Promise
   if (ruta) await writeTextFile(ruta, contenido);
 }
 
+const MAX_ARCHIVO_CHARS = 5 * 1024 * 1024; // 5 MB en caracteres
+
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
   if (isTauri()) return leerArchivoTauri(tipos);
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
   if (!resultado.assets || resultado.assets.length === 0) return null;
   const uri = resultado.assets[0].uri;
+  let texto: string;
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
-    return response.text();
+    texto = await response.text();
+  } else {
+    texto = await FileSystem.readAsStringAsync(uri);
   }
-  return FileSystem.readAsStringAsync(uri);
+  if (texto.length > MAX_ARCHIVO_CHARS) {
+    throw new Error('El archivo es demasiado grande (máximo 5 MB).');
+  }
+  return texto;
 }
 
 export async function compartirArchivo(

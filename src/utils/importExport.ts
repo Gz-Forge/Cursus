@@ -341,12 +341,33 @@ function deriveEsPreviaDe(materias: Materia[]): Materia[] {
  *                   preserves evaluaciones, bloques, faltas, cursando, notas
  * - 'reemplazar':   discards existing, returns fresh list from jsonData
  */
+function validarItemsMateriaJson(datos: MateriaJson[]): void {
+  datos.forEach((d, i) => {
+    if (typeof d.nombre !== 'string' || !d.nombre.trim()) {
+      throw new Error(`Materia ${i + 1}: el campo "nombre" es obligatorio y debe ser texto.`);
+    }
+    if (typeof d.semestre !== 'number' || !isFinite(d.semestre) || d.semestre < 1) {
+      throw new Error(`Materia "${d.nombre}": "semestre" debe ser un número mayor a 0.`);
+    }
+    if (d.creditos_da !== undefined && (typeof d.creditos_da !== 'number' || !isFinite(d.creditos_da) || d.creditos_da < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_da" debe ser un número >= 0.`);
+    }
+    if (d.creditos_necesarios !== undefined && (typeof d.creditos_necesarios !== 'number' || !isFinite(d.creditos_necesarios) || d.creditos_necesarios < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_necesarios" debe ser un número >= 0.`);
+    }
+    if (d.previas !== undefined && (!Array.isArray(d.previas) || !d.previas.every(p => typeof p === 'string'))) {
+      throw new Error(`Materia "${d.nombre}": "previas" debe ser un array de nombres.`);
+    }
+  });
+}
+
 export function mergeImportar(
   existentes: Materia[],
   jsonData: MateriaJson[],
   modo: ModoImport,
   oportunidades: number,
 ): Materia[] {
+  validarItemsMateriaJson(jsonData);
   if (modo === 'reemplazar') {
     return jsonAMaterias(jsonData, oportunidades);
   }
