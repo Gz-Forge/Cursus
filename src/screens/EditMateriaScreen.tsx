@@ -238,7 +238,7 @@ export function EditMateriaScreen() {
     const diaStr = dia.toString().padStart(2, '0');
     const mesStr = mes.toString().padStart(2, '0');
     const nuevo: BloqueHorario = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha: `${anio}-${mesStr}-${diaStr}`,
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
@@ -253,7 +253,7 @@ export function EditMateriaScreen() {
   };
 
   const agregarEvaluacion = (tipo: 'simple' | 'grupo') => {
-    const id = Date.now().toString();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const nueva: Evaluacion = tipo === 'simple'
       ? { id, tipo: 'simple', nombre: '', pesoEnMateria: 0, tipoNota: 'numero', nota: null, notaMaxima: 10 }
       : { id, tipo: 'grupo', nombre: '', pesoEnMateria: 0, subEvaluaciones: [] };
@@ -498,7 +498,7 @@ export function EditMateriaScreen() {
       return;
     }
     const nueva: RegistroFalta = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha,
       tipo: faltaNueva.tipo,
       ...(faltaNueva.nota.trim() ? { nota: faltaNueva.nota.trim() } : {}),

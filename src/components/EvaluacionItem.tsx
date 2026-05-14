@@ -219,7 +219,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
       Alert.alert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
       return;
     }
-    const nueva: SubEvaluacion = { id: Date.now().toString(), nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
+    const nueva: SubEvaluacion = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
     onChange({ ...grupo, subEvaluaciones: [...grupo.subEvaluaciones, nueva] });
   };
 
