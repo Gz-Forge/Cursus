@@ -7,6 +7,10 @@ import { isTauri } from './platform';
 
 // ── Helpers internos ──────────────────────────────────────────────────
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function normTxt(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
@@ -126,6 +130,9 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     throw new Error(`Bloque ${idx} incompleto — requiere fecha (string), horaInicio y horaFin (number)`);
   }
   const bloque = b as Record<string, unknown>;
+  if ((bloque.horaFin as number) <= (bloque.horaInicio as number)) {
+    throw new Error(`Bloque ${idx}: horaFin (${bloque.horaFin}) debe ser posterior a horaInicio (${bloque.horaInicio})`);
+  }
   return {
     id: typeof bloque.id === 'string' ? bloque.id : `${Date.now()}_${idx}`,
     fecha: bloque.fecha as string,
@@ -206,7 +213,7 @@ export function extraerEventosICS(texto: string): EventoICS[] {
   const bloques = texto.split('BEGIN:VEVENT').slice(1);
   for (const bloque of bloques) {
     const getVal = (key: string): string | null => {
-      const m = bloque.match(new RegExp(`${key}(?:;[^:]*)?:([^\\r\\n]+)`));
+      const m = bloque.match(new RegExp(`${escapeRegExp(key)}(?:;[^:]*)?:([^\\r\\n]+)`));
       return m ? m[1].trim() : null;
     };
     const dtstartRaw = getVal('DTSTART');
