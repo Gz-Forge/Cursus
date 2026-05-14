@@ -19,6 +19,7 @@ export interface EvaluacionSimple {
   fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
   hora?: number;           // minutos desde 00:00, ej: 480 = 08:00
   horaFin?: number;        // minutos desde 00:00, duración opcional
+  salon?: string;          // salón donde ocurre (opcional)
 }
 
 export interface SubEvaluacion {
@@ -30,6 +31,7 @@ export interface SubEvaluacion {
   fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
   hora?: number;           // minutos desde 00:00
   horaFin?: number;        // minutos desde 00:00
+  salon?: string;          // salón donde ocurre (opcional)
 }
 
 export interface GrupoEvaluacion {
@@ -62,6 +64,7 @@ export interface BloqueHorario {
   horaInicio: number;   // minutos desde las 00:00 (ej: 480 = 8:00)
   horaFin: number;
   tipo: TipoBloque;
+  salon?: string;       // salón donde ocurre (opcional)
 }
 
 export interface Materia {

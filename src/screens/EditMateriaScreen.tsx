@@ -105,8 +105,8 @@ export function EditMateriaScreen() {
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
-    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque;
-  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string;
+  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
 
@@ -243,10 +243,11 @@ export function EditMateriaScreen() {
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
+      ...(bloqueNuevo.salon.trim() && { salon: bloqueNuevo.salon.trim() }),
     };
     setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), nuevo] }));
     setMostrarFormBloque(false);
-    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
     setDropdownDia(false);
     setDropdownMes(false);
   };
@@ -740,7 +741,7 @@ export function EditMateriaScreen() {
                   {fmtFechaBloque(b.fecha)}  {fmtHora(b.horaInicio)}–{fmtHora(b.horaFin)}
                 </Text>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                  {tiposBloque.find(t => t.key === b.tipo)?.label}
+                  {tiposBloque.find(t => t.key === b.tipo)?.label}{b.salon ? ` · ${b.salon}` : ''}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}>
@@ -855,11 +856,21 @@ export function EditMateriaScreen() {
               ))}
             </View>
 
+            {/* ── Salón ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Salón (opcional)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
+              value={bloqueNuevo.salon}
+              onChangeText={v => setBloqueNuevo(b => ({ ...b, salon: v }))}
+              placeholder="Ej: Aula 3, Lab 201..."
+              placeholderTextColor={tema.textoSecundario}
+            />
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => {
                   setMostrarFormBloque(false);
-                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica' });
+                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
                   setDropdownDia(false);
                   setDropdownMes(false);
                 }}

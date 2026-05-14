@@ -859,7 +859,7 @@ export function HorarioScreen() {
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                       ellipsizeMode="tail"
                                     >
-                                      {sigla(b.tipo)} - {b.materia.nombre}
+                                      {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                     </Text>
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -885,7 +885,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {sigla(b.tipo)} - {b.materia.nombre}
+                                    {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </TouchableOpacity>
                               )}
@@ -1005,7 +1005,7 @@ export function HorarioScreen() {
                                         numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                         ellipsizeMode="tail"
                                       >
-                                        {sigla(b.tipo)} - {b.materia.nombre}
+                                        {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                       </Text>
                                       <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                         {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -1044,7 +1044,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {sigla(b.tipo)} - {b.materia.nombre}
+                                    {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </View>
                               )}
@@ -1081,7 +1081,7 @@ export function HorarioScreen() {
                               numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                               ellipsizeMode="tail"
                             >
-                              {ev.materia.nombre}{ev.nombre ? ` - ${ev.nombre}` : ''}
+                              {[ev.nombre || null, ev.salon || null, ev.materia.nombre].filter(Boolean).join(' - ')}
                             </Text>
                           </View>
                         );
@@ -1757,7 +1757,7 @@ export function HorarioScreen() {
             }}
           >
             <Text style={{ color: texto, fontSize: 8, fontWeight: '700' }}>
-              {sigla(bloqueVis.tipo)} - {materia.nombre}
+              {[sigla(bloqueVis.tipo), bloqueVis.salon, materia.nombre].filter(Boolean).join(' - ')}
             </Text>
           </View>
         );
