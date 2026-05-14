@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { calcularPorcentajeEvaluacion } from '../utils/calculos';
@@ -215,7 +215,11 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
 
   const agregarSub = () => {
     const grupo = evaluacion as GrupoEvaluacion;
-    const nueva: SubEvaluacion = { id: Date.now().toString(), nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
+    if (grupo.subEvaluaciones.length >= 50) {
+      Alert.alert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
+      return;
+    }
+    const nueva: SubEvaluacion = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
     onChange({ ...grupo, subEvaluaciones: [...grupo.subEvaluaciones, nueva] });
   };
 
@@ -239,8 +243,16 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
         {/* Fila: Peso% */}
         <View style={estilos.fila}>
           <Text style={estilos.label}>Peso%</Text>
-          <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-            value={String(evaluacion.pesoEnMateria)} onChangeText={v => actualizarSimple({ pesoEnMateria: Number(v) })} />
+          <NotaInput
+            style={[estilos.input, { flex: 0, width: 70 }]}
+            value={evaluacion.pesoEnMateria}
+            onChange={v => {
+              const n = v ?? 0;
+              actualizarSimple({ pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 });
+            }}
+            placeholder="0"
+            placeholderTextColor={tema.textoSecundario}
+          />
         </View>
         {/* Fila: Nota / Máx */}
         <View style={estilos.fila}>
@@ -256,7 +268,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
           <NotaInput
             style={[estilos.input, { flex: 0, width: 70 }]}
             value={evaluacion.notaMaxima}
-            onChange={notaMaxima => actualizarSimple({ notaMaxima: notaMaxima ?? 10 })}
+            onChange={notaMaxima => {
+              const n = notaMaxima ?? 10;
+              actualizarSimple({ notaMaxima: Math.min(9999, Math.max(0.01, n)) });
+            }}
           />
         </View>
         <TouchableOpacity onPress={() => actualizarSimple({ tipoNota: evaluacion.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
@@ -295,7 +310,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
       <View style={estilos.fila}>
         <Text style={estilos.label}>Peso total del grupo en materia (%)</Text>
         <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-          value={String(grupo.pesoEnMateria)} onChangeText={v => onChange({ ...grupo, pesoEnMateria: Number(v) })} />
+          value={String(grupo.pesoEnMateria)} onChangeText={v => { const n = Number(v); if (!isNaN(n)) onChange({ ...grupo, pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 }); }} />
       </View>
       {grupo.subEvaluaciones.map((sub, i) => (
         <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>

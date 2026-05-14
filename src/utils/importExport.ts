@@ -51,6 +51,8 @@ export function normalizarTipo(t: string): string {
     .replace(/\s+/g, '');
 }
 
+const MAX_TIPOS_FORMACION = 50;
+
 export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): string[] {
   const normExistentes = new Set(existentes.map(normalizarTipo));
   const nuevos: string[] = [];
@@ -58,6 +60,7 @@ export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): 
 
   datos.forEach(d => {
     if (!d.tipo_formacion) return;
+    if (existentes.length + nuevos.length >= MAX_TIPOS_FORMACION) return;
     const norm = normalizarTipo(d.tipo_formacion);
     if (!normExistentes.has(norm) && !normNuevos.has(norm)) {
       nuevos.push(d.tipo_formacion);
@@ -94,17 +97,36 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
         }))
       : [];
 
+    const MAX_SUBEVALS_IMPORT = 50;
+    const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
     const evaluaciones: Evaluacion[] = Array.isArray(d.evaluaciones)
-      ? d.evaluaciones.map((ev, i) => ({
-          ...ev,
-          id: (ev as any).id ?? `importada_${d.numero}_ev${i}`,
-        })) as Evaluacion[]
+      ? d.evaluaciones.map((ev, i) => {
+          const e = ev as any;
+          const base = {
+            ...e,
+            id: e.id ?? `importada_${d.numero}_ev${i}`,
+            pesoEnMateria: Math.min(100, Math.max(0, typeof e.pesoEnMateria === 'number' && isFinite(e.pesoEnMateria) ? e.pesoEnMateria : 0)),
+            notaMaxima: typeof e.notaMaxima === 'number' && e.notaMaxima > 0 ? e.notaMaxima : 10,
+          };
+          if (e.tipo === 'grupo' && Array.isArray(e.subEvaluaciones)) {
+            base.subEvaluaciones = e.subEvaluaciones.slice(0, MAX_SUBEVALS_IMPORT).map((sub: any, si: number) => ({
+              ...sub,
+              id: sub.id ?? `importada_${d.numero}_ev${i}_s${si}`,
+              notaMaxima: typeof sub.notaMaxima === 'number' && sub.notaMaxima > 0 ? sub.notaMaxima : 10,
+              fecha: typeof sub.fecha === 'string' && ISO_DATE_RE.test(sub.fecha) ? sub.fecha : undefined,
+            }));
+          }
+          if (typeof base.fecha === 'string' && !ISO_DATE_RE.test(base.fecha)) {
+            base.fecha = undefined;
+          }
+          return base;
+        }) as Evaluacion[]
       : [];
 
     return {
       id: `importada_${d.numero}`,
       numero: d.numero!,
-      nombre: d.nombre,
+      nombre: d.nombre.trim(),
       semestre: d.semestre,
       creditosQueDA: d.creditos_da ?? 0,
       creditosNecesarios: d.creditos_necesarios ?? 0,
@@ -341,12 +363,33 @@ function deriveEsPreviaDe(materias: Materia[]): Materia[] {
  *                   preserves evaluaciones, bloques, faltas, cursando, notas
  * - 'reemplazar':   discards existing, returns fresh list from jsonData
  */
+function validarItemsMateriaJson(datos: MateriaJson[]): void {
+  datos.forEach((d, i) => {
+    if (typeof d.nombre !== 'string' || !d.nombre.trim()) {
+      throw new Error(`Materia ${i + 1}: el campo "nombre" es obligatorio y debe ser texto.`);
+    }
+    if (typeof d.semestre !== 'number' || !isFinite(d.semestre) || d.semestre < 1) {
+      throw new Error(`Materia "${d.nombre}": "semestre" debe ser un número mayor a 0.`);
+    }
+    if (d.creditos_da !== undefined && (typeof d.creditos_da !== 'number' || !isFinite(d.creditos_da) || d.creditos_da < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_da" debe ser un número >= 0.`);
+    }
+    if (d.creditos_necesarios !== undefined && (typeof d.creditos_necesarios !== 'number' || !isFinite(d.creditos_necesarios) || d.creditos_necesarios < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_necesarios" debe ser un número >= 0.`);
+    }
+    if (d.previas !== undefined && (!Array.isArray(d.previas) || !d.previas.every(p => typeof p === 'string'))) {
+      throw new Error(`Materia "${d.nombre}": "previas" debe ser un array de nombres.`);
+    }
+  });
+}
+
 export function mergeImportar(
   existentes: Materia[],
   jsonData: MateriaJson[],
   modo: ModoImport,
   oportunidades: number,
 ): Materia[] {
+  validarItemsMateriaJson(jsonData);
   if (modo === 'reemplazar') {
     return jsonAMaterias(jsonData, oportunidades);
   }

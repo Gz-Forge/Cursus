@@ -830,7 +830,7 @@ export function HorarioScreen() {
                           return (
                             <View
                               key={b.id}
-                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); }}
+                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); else cardRefs.current.delete(b.id); }}
                               style={{
                                 position: 'absolute', top, height,
                                 left, width: bWidth,
@@ -910,7 +910,7 @@ export function HorarioScreen() {
                             }}
                           >
                             <View
-                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); }}
+                              ref={(el) => { if (el) cardRefs.current.set(b.id, el as View); else cardRefs.current.delete(b.id); }}
                               style={{
                                 position: 'absolute', top, height,
                                 left, width: bWidth,

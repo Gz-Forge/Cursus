@@ -97,30 +97,42 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   guardarMateria: (materia) => {
-    const renumeradas = renumerarMaterias(get().materias, materia);
+    const { perfilActivoId, config, materias } = get();
+    const renumeradas = renumerarMaterias(materias, materia);
     set({ materias: renumeradas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: renumeradas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: renumeradas, config }).catch(
+      e => { if (__DEV__) console.error('[store] guardarMateria: fallo al persistir', e); },
+    );
   },
 
   reemplazarMaterias: (nuevas) => {
+    const { perfilActivoId, config } = get();
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] reemplazarMaterias: fallo al persistir', e); },
+    );
   },
 
   eliminarMateria: (id) => {
-    const nuevas = get().materias.filter(m => m.id !== id);
+    const { perfilActivoId, config, materias } = get();
+    const nuevas = materias.filter(m => m.id !== id);
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] eliminarMateria: fallo al persistir', e); },
+    );
   },
 
   actualizarConfig: (parcial) => {
-    const config = { ...get().config, ...parcial };
+    const { perfilActivoId, materias, config: configActual } = get();
+    const config = { ...configActual, ...parcial };
     set({ config });
-    guardarPerfilEstado(get().perfilActivoId, { materias: get().materias, config });
+    guardarPerfilEstado(perfilActivoId, { materias, config }).catch(
+      e => { if (__DEV__) console.error('[store] actualizarConfig: fallo al persistir', e); },
+    );
   },
 
   decrementarPeriodoExamen: () => {
-    const { materias, config } = get();
+    const { perfilActivoId, materias, config } = get();
     const nuevas = materias.map(m => {
       const estado = calcularEstadoFinal(m, config);
       if (estado === 'aprobado' || estado === 'reprobado') {
@@ -129,7 +141,9 @@ export const useStore = create<Store>((set, get) => ({
       return m;
     });
     set({ materias: nuevas });
-    guardarPerfilEstado(get().perfilActivoId, { materias: nuevas, config: get().config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] decrementarPeriodoExamen: fallo al persistir', e); },
+    );
     return nuevas.filter(
       m =>
         m.oportunidadesExamen === 0 &&
@@ -139,9 +153,11 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   cambiarPerfil: async (id) => {
-    const { perfilActivoId, materias, config } = get();
+    const { perfilActivoId } = get();
     if (id === perfilActivoId) return;
-    await guardarPerfilEstado(perfilActivoId, { materias, config });
+    // No se persiste el perfil activo aquí: cada mutación (guardarMateria, eliminarMateria,
+    // actualizarConfig) ya persiste al storage inmediatamente. Un save redundante aquí
+    // compite en escritura async con esas mutaciones (race condition R3-06).
     const estado = await cargarPerfilEstado(id);
     const meta = await cargarMeta();
     await guardarMeta({ ...meta, activoId: id });

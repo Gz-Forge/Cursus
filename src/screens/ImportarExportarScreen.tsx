@@ -155,8 +155,14 @@ function PanelImportar() {
     );
   };
 
+  const MAX_MATERIAS_IMPORT = 500;
+
   const doImport = async (modo: ModoImport) => {
     if (!pendingImport) return;
+    if (pendingImport.json.length > MAX_MATERIAS_IMPORT) {
+      Alert.alert('Archivo demasiado grande', `El máximo es ${MAX_MATERIAS_IMPORT} materias por importación.`);
+      return;
+    }
     setCargando(true);
     try {
       const { mergeImportar } = await import('../utils/importExport');
@@ -544,6 +550,11 @@ Tipos posibles: teorica, practica, parcial, otro`;
         <Checkbox label="Notas" value={inclNotas} onChange={setInclNotas} />
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
+        {(inclNotas || inclEvaluaciones) && (
+          <Text style={{ color: '#FF9800', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
+            ⚠️ El archivo exportado contendrá datos académicos personales (notas y/o evaluaciones). Compartilo solo con personas de confianza.
+          </Text>
+        )}
       </View>
 
       <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>

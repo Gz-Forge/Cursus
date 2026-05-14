@@ -53,7 +53,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           }},
         ]
       );
-    } catch {
+    } catch (e) {
+      if (__DEV__) console.warn('[QrScannerModal] Error al decodificar QR de carrera:', e);
       Alert.alert('Error', 'El QR no es válido o está dañado.');
       procesando.current = false;
     }
@@ -65,7 +66,10 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
     // Detectar payload de QR login
     try {
       const parsed = JSON.parse(data);
-      if (parsed.type === 'cursus-device-sync' && onDeviceSyncDetectado) {
+      if (
+        parsed.type === 'cursus-device-sync' && onDeviceSyncDetectado &&
+        typeof parsed.code === 'string' && typeof parsed.exp === 'number'
+      ) {
         procesando.current = true;
         if (Date.now() > parsed.exp) {
           Alert.alert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
@@ -84,7 +88,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           if (!Array.isArray(evaluaciones)) throw new Error('No es array');
           onEvaluacionesDetectadas(evaluaciones);
           onCerrar();
-        } catch {
+        } catch (e) {
+          if (__DEV__) console.warn('[QrScannerModal] Error al decodificar evaluaciones:', e);
           Alert.alert('Error', 'El QR no contiene evaluaciones válidas.');
           procesando.current = false;
         }
@@ -101,7 +106,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
             `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
             [{ text: 'OK', onPress: onCerrar }],
           );
-        } catch {
+        } catch (e) {
+          if (__DEV__) console.warn('[QrScannerModal] Error al decodificar configuración:', e);
           Alert.alert('Error', 'El QR no contiene una configuración válida.');
           procesando.current = false;
         }
@@ -116,9 +122,12 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           const bloquesStr = JSON.stringify(horarioData.bloques ?? []);
           const bloques = parsearJSONMateria(`{"bloques": ${bloquesStr}}`);
           const { materias: materiasActuales, guardarMateria } = useStore.getState();
-          const match = materiasActuales.find(m =>
-            m.nombre.trim().toLowerCase() === (horarioData.nombre ?? '').trim().toLowerCase()
-          );
+          const nombreNorm = (horarioData.nombre ?? '').trim().toLowerCase();
+          const matches = materiasActuales.filter(m => m.nombre.trim().toLowerCase() === nombreNorm);
+          const match = matches[0];
+          if (matches.length > 1 && __DEV__) {
+            console.warn('[QrScannerModal] Hay', matches.length, 'materias con el mismo nombre normalizado; se importa a la primera encontrada.');
+          }
           if (match) {
             const clave = (b: import('../types').BloqueHorario) =>
               `${b.fecha}|${b.horaInicio}|${b.horaFin}|${b.tipo}`;
@@ -132,7 +141,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
               `No existe una materia llamada "${horarioData.nombre}" en esta app.`,
               [{ text: 'OK', onPress: () => { procesando.current = false; } }]);
           }
-        } catch {
+        } catch (e) {
+          if (__DEV__) console.warn('[QrScannerModal] Error al decodificar horario:', e);
           Alert.alert('Error', 'El QR de horario no es válido.');
           procesando.current = false;
         }

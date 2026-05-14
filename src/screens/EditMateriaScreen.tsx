@@ -149,7 +149,7 @@ export function EditMateriaScreen() {
     const num = parseFloat(normalized);
     if (!isNaN(num)) {
       const pct = form.tipoNotaManual === 'numero' ? (num / config.notaMaxima) * 100 : num;
-      setForm(f => ({ ...f, notaManual: pct }));
+      setForm(f => ({ ...f, notaManual: Math.max(0, Math.min(100, pct)) }));
     } else if (normalized === '' || normalized === '.') {
       setForm(f => ({ ...f, notaManual: null }));
     }
@@ -238,7 +238,7 @@ export function EditMateriaScreen() {
     const diaStr = dia.toString().padStart(2, '0');
     const mesStr = mes.toString().padStart(2, '0');
     const nuevo: BloqueHorario = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha: `${anio}-${mesStr}-${diaStr}`,
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
@@ -253,7 +253,7 @@ export function EditMateriaScreen() {
   };
 
   const agregarEvaluacion = (tipo: 'simple' | 'grupo') => {
-    const id = Date.now().toString();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const nueva: Evaluacion = tipo === 'simple'
       ? { id, tipo: 'simple', nombre: '', pesoEnMateria: 0, tipoNota: 'numero', nota: null, notaMaxima: 10 }
       : { id, tipo: 'grupo', nombre: '', pesoEnMateria: 0, subEvaluaciones: [] };
@@ -318,6 +318,10 @@ export function EditMateriaScreen() {
       Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.');
       return;
     }
+    if (semanas > 52) {
+      Alert.alert('Semanas inválidas', 'El máximo permitido es 52 semanas.');
+      return;
+    }
     const bloques = expandirEventosICS(eventosICS, semanas);
     setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
     setModoImport(null);
@@ -375,6 +379,17 @@ export function EditMateriaScreen() {
         return;
       }
 
+      const esEvalValida = (ev: unknown): ev is Evaluacion => {
+        if (!ev || typeof ev !== 'object') return false;
+        const e = ev as Record<string, unknown>;
+        if (e.tipo !== 'simple' && e.tipo !== 'grupo') return false;
+        if (typeof e.nombre !== 'string' || !e.nombre.trim()) return false;
+        if (typeof e.pesoEnMateria !== 'number' || !isFinite(e.pesoEnMateria as number)) return false;
+        return true;
+      };
+
+      const MAX_EVALS_IMPORT = 50;
+
       if (esFormatoMultiMateriaEval(parsed)) {
         // Multi-materia format: [{materia, evaluaciones}]
         const entradas = parsed as { materia: string; evaluaciones: Evaluacion[] }[];
@@ -386,7 +401,7 @@ export function EditMateriaScreen() {
             String(m.numero) === String(entrada.materia)
           );
           if (!match) return;
-          const incomingEvals = Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : [];
+          const incomingEvals = (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
           const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
           // Keep local form in sync if this is the currently open materia
@@ -398,7 +413,11 @@ export function EditMateriaScreen() {
         Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
       } else {
         // Flat single-materia format: array of evaluaciones for current materia
-        const evaluaciones = parsed as Evaluacion[];
+        const evaluaciones = (parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
+        if (evaluaciones.length === 0) {
+          Alert.alert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
+          return;
+        }
         Alert.alert(
           'Importar evaluaciones',
           `Se encontraron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
@@ -479,7 +498,7 @@ export function EditMateriaScreen() {
       return;
     }
     const nueva: RegistroFalta = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha,
       tipo: faltaNueva.tipo,
       ...(faltaNueva.nota.trim() ? { nota: faltaNueva.nota.trim() } : {}),
@@ -525,10 +544,10 @@ export function EditMateriaScreen() {
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
         {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })))}
-        {campo('Semestre', String(form.semestre), v => setForm(f => ({ ...f, semestre: Number(v) })), true)}
-        {campo('Créditos que da', String(form.creditosQueDA), v => setForm(f => ({ ...f, creditosQueDA: Number(v) })), true)}
-        {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => setForm(f => ({ ...f, creditosNecesarios: Number(v) })), true)}
-        {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => setForm(f => ({ ...f, oportunidadesExamen: Number(v) })), true)}
+        {campo('Semestre', String(form.semestre), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, semestre: Math.max(1, n) })); }, true)}
+        {campo('Créditos que da', String(form.creditosQueDA), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }, true)}
+        {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }, true)}
+        {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }, true)}
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>TIPO DE FORMACIÓN</Text>
         {form.tipoFormacion ? (

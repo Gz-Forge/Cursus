@@ -164,9 +164,12 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                         <TouchableOpacity
                           style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                           onPress={() => handleCambiar(perfil.id)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: perfilActivoId === perfil.id }}
+                          accessibilityLabel={perfil.nombre}
                         >
                           <Text style={{ fontSize: 16, marginRight: 8 }}>
-                            {perfilActivoId === perfil.id ? '✅' : '   '}
+                            {perfilActivoId === perfil.id ? '✅' : '⬜'}
                           </Text>
                           <Text
                             style={{

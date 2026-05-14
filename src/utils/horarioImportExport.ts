@@ -7,6 +7,10 @@ import { isTauri } from './platform';
 
 // ── Helpers internos ──────────────────────────────────────────────────
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function normTxt(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
@@ -126,6 +130,9 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     throw new Error(`Bloque ${idx} incompleto — requiere fecha (string), horaInicio y horaFin (number)`);
   }
   const bloque = b as Record<string, unknown>;
+  if ((bloque.horaFin as number) <= (bloque.horaInicio as number)) {
+    throw new Error(`Bloque ${idx}: horaFin (${bloque.horaFin}) debe ser posterior a horaInicio (${bloque.horaInicio})`);
+  }
   return {
     id: typeof bloque.id === 'string' ? bloque.id : `${Date.now()}_${idx}`,
     fecha: bloque.fecha as string,
@@ -206,7 +213,7 @@ export function extraerEventosICS(texto: string): EventoICS[] {
   const bloques = texto.split('BEGIN:VEVENT').slice(1);
   for (const bloque of bloques) {
     const getVal = (key: string): string | null => {
-      const m = bloque.match(new RegExp(`${key}(?:;[^:]*)?:([^\\r\\n]+)`));
+      const m = bloque.match(new RegExp(`${escapeRegExp(key)}(?:;[^:]*)?:([^\\r\\n]+)`));
       return m ? m[1].trim() : null;
     };
     const dtstartRaw = getVal('DTSTART');
@@ -368,17 +375,29 @@ async function compartirArchivoTauri(nombre: string, contenido: string): Promise
   if (ruta) await writeTextFile(ruta, contenido);
 }
 
+const MAX_ARCHIVO_CHARS = 5 * 1024 * 1024; // 5 MB en caracteres
+
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
   if (isTauri()) return leerArchivoTauri(tipos);
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
   if (!resultado.assets || resultado.assets.length === 0) return null;
   const uri = resultado.assets[0].uri;
+  let texto: string;
   if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    return response.text();
+    try {
+      const response = await fetch(uri);
+      texto = await response.text();
+    } catch (e) {
+      throw new Error('No se pudo leer el archivo seleccionado.');
+    }
+  } else {
+    texto = await FileSystem.readAsStringAsync(uri);
   }
-  return FileSystem.readAsStringAsync(uri);
+  if (texto.length > MAX_ARCHIVO_CHARS) {
+    throw new Error('El archivo es demasiado grande (máximo 5 MB).');
+  }
+  return texto;
 }
 
 export async function compartirArchivo(

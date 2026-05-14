@@ -33,7 +33,16 @@ const EXPIRY_MS = 10 * 60 * 1000; // 10 minutos
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 function genCode(): string {
-  return Array.from({ length: 8 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join('');
+  const array = new Uint8Array(8);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(array);
+  } else {
+    // Fallback para entornos sin Web Crypto API
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(array, byte => CHARS[byte % CHARS.length]).join('');
 }
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
@@ -147,7 +156,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     try {
       await aplicarSnapshot(pendingPayload);
       const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', pendingCode);
-      if (deleteError) console.warn('No se pudo borrar la sesión de sync:', deleteError.message);
+      if (deleteError && __DEV__) console.warn('[SyncDispositivosModal] No se pudo borrar la sesión de sync:', deleteError.message);
       setPendingPayload(null);
       setPendingCode('');
       setEstado('receptor_listo');
