@@ -155,8 +155,14 @@ function PanelImportar() {
     );
   };
 
+  const MAX_MATERIAS_IMPORT = 500;
+
   const doImport = async (modo: ModoImport) => {
     if (!pendingImport) return;
+    if (pendingImport.json.length > MAX_MATERIAS_IMPORT) {
+      Alert.alert('Archivo demasiado grande', `El máximo es ${MAX_MATERIAS_IMPORT} materias por importación.`);
+      return;
+    }
     setCargando(true);
     try {
       const { mergeImportar } = await import('../utils/importExport');

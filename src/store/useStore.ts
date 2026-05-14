@@ -143,9 +143,11 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   cambiarPerfil: async (id) => {
-    const { perfilActivoId, materias, config } = get();
+    const { perfilActivoId } = get();
     if (id === perfilActivoId) return;
-    await guardarPerfilEstado(perfilActivoId, { materias, config });
+    // No se persiste el perfil activo aquí: cada mutación (guardarMateria, eliminarMateria,
+    // actualizarConfig) ya persiste al storage inmediatamente. Un save redundante aquí
+    // compite en escritura async con esas mutaciones (race condition R3-06).
     const estado = await cargarPerfilEstado(id);
     const meta = await cargarMeta();
     await guardarMeta({ ...meta, activoId: id });

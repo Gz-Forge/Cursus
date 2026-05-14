@@ -122,6 +122,12 @@ export function ConfigScreen() {
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const navigation = useNavigation<any>();
+  // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
+  // controlado revierta el texto mientras el usuario escribe (ej: borrar "12" para tipear "5")
+  const [notaMaxStr, setNotaMaxStr] = useState(() => String(config.notaMaxima));
+  const [oportStr, setOportStr] = useState(() => String(config.oportunidadesExamenDefault));
+  React.useEffect(() => { setNotaMaxStr(String(config.notaMaxima)); }, [config.notaMaxima]);
+  React.useEffect(() => { setOportStr(String(config.oportunidadesExamenDefault)); }, [config.oportunidadesExamenDefault]);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
@@ -138,17 +144,25 @@ export function ConfigScreen() {
     return tieneBloques || tieneEvalsEnHorario;
   });
 
-  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault') => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-      <TextInput
-        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
-        value={String(config[key])}
-        keyboardType="numeric"
-        onChangeText={v => { const n = Number(v); if (!isNaN(n) && n > 0) actualizarConfig({ [key]: n }); }}
-      />
-    </View>
-  );
+  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault') => {
+    const str = key === 'notaMaxima' ? notaMaxStr : oportStr;
+    const setStr = key === 'notaMaxima' ? setNotaMaxStr : setOportStr;
+    return (
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
+        <TextInput
+          style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
+          value={str}
+          keyboardType="numeric"
+          onChangeText={v => {
+            setStr(v);
+            const n = Number(v);
+            if (!isNaN(n) && n >= 1) actualizarConfig({ [key]: n });
+          }}
+        />
+      </View>
+    );
+  };
 
   const campoUmbral = (label: string, key: 'umbralExoneracion' | 'umbralAprobacion' | 'umbralPorExamen' | 'umbralExamenExoneracion') => {
     const val = config[key] as number;

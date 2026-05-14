@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { calcularPorcentajeEvaluacion } from '../utils/calculos';
@@ -215,6 +215,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
 
   const agregarSub = () => {
     const grupo = evaluacion as GrupoEvaluacion;
+    if (grupo.subEvaluaciones.length >= 50) {
+      Alert.alert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
+      return;
+    }
     const nueva: SubEvaluacion = { id: Date.now().toString(), nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
     onChange({ ...grupo, subEvaluaciones: [...grupo.subEvaluaciones, nueva] });
   };
@@ -244,7 +248,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
             value={evaluacion.pesoEnMateria}
             onChange={v => {
               const n = v ?? 0;
-              actualizarSimple({ pesoEnMateria: Math.min(100, Math.max(0, n)) });
+              actualizarSimple({ pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 });
             }}
             placeholder="0"
             placeholderTextColor={tema.textoSecundario}

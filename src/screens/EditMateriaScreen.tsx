@@ -388,6 +388,8 @@ export function EditMateriaScreen() {
         return true;
       };
 
+      const MAX_EVALS_IMPORT = 50;
+
       if (esFormatoMultiMateriaEval(parsed)) {
         // Multi-materia format: [{materia, evaluaciones}]
         const entradas = parsed as { materia: string; evaluaciones: Evaluacion[] }[];
@@ -399,7 +401,7 @@ export function EditMateriaScreen() {
             String(m.numero) === String(entrada.materia)
           );
           if (!match) return;
-          const incomingEvals = (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida);
+          const incomingEvals = (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
           const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
           // Keep local form in sync if this is the currently open materia
@@ -411,7 +413,7 @@ export function EditMateriaScreen() {
         Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
       } else {
         // Flat single-materia format: array of evaluaciones for current materia
-        const evaluaciones = (parsed as unknown[]).filter(esEvalValida);
+        const evaluaciones = (parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
         if (evaluaciones.length === 0) {
           Alert.alert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
           return;
