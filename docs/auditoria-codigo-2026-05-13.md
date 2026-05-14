@@ -221,3 +221,45 @@
 | 5 | Agregar tests para `calculos.ts` y `perfiles.ts` |
 | 6 | Agregar guard `__DEV__` a todos los `console.log/warn` |
 | 7 | Definir límite máximo de tamaño de archivo en `ImportarExportarScreen` |
+
+---
+
+## Segunda Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la primera ronda.  
+**Resultado:** Se encontraron **6 hallazgos nuevos** (0 Alta · 5 Media · 1 Baja) y **ninguna corrección regresiva**. No se detectaron falsos negativos de la primera ronda.
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| R-01 | 🟡 MEDIA | `screens/EditMateriaScreen.tsx` | 532–535 | 1 — Validación de inputs | `Number(v)` sin NaN check ni clamping en campos Semestre (acepta 0, negativo, decimal), Créditos que da/necesarios (acepta negativos) y Oportunidades restantes (acepta negativos y valores gigantes). La corrección de `EvaluacionItem.tsx` no se propagó a estos campos. |
+| R-02 | 🟡 MEDIA | `screens/EditMateriaScreen.tsx` | 151–152 | 1 — Validación de inputs | `notaManual` se guarda como porcentaje sin clamping a [0, 100]. Si el usuario escribe un número mayor a `notaMaxima` (tipo "numero") o mayor a 100 (tipo "porcentaje"), el valor persiste fuera de rango y puede romper derivarEstado(). |
+| R-03 | 🟡 MEDIA | `screens/ConfigScreen.tsx` | 148, 164 | 1 — Validación de inputs | Dos `onChangeText` distintos llaman `Number(v)` sin validar NaN. Si el usuario escribe texto alfabético o borra completamente el campo, se guarda `NaN` en `config` (ej: `notaMaxima: NaN`), lo que hace que todos los porcentajes calculados devuelvan `NaN` y la app quede en estado inválido. |
+| R-04 | 🟡 MEDIA | `screens/EditMateriaScreen.tsx` | 376–394 | 16 — Importación/Exportación | Importación de evaluaciones vía JSON solo verifica `Array.isArray()` en el nivel raíz, pero no valida la estructura de cada evaluación (campos obligatorios `id`, `tipo`, `nombre`, `pesoEnMateria`). Un archivo mal formado puede insertar evaluaciones con `undefined` en campos clave. |
+| R-05 | 🟡 MEDIA | `utils/perfiles.ts` | 90–91 | 3 — Gestión de errores | `cargarMeta()` lanza `Error('PerfilesMeta no encontrada')` si el storage está vacío o corrupto. Aunque `migrarSiNecesario()` siempre crea la meta, una corrupción post-migración (ej: fallo de escritura en AsyncStorage) causa un crash sin recuperación ni fallback al estado por defecto. |
+| R-06 | 🟢 BAJA | `screens/ConfigScreen.tsx` | 148 | 1 — Validación de inputs | El helper `campo()` acepta cualquier `keyof Config` como target de escritura directa con `as any`. Esto incluye campos que no deberían ser editables desde ese helper (ej: `coloresHorario`, `fechasEjecutadas`), lo que puede producir escrituras incorrectas si se reutiliza el helper en el futuro. |
+
+---
+
+### Notas sobre hallazgos descartados
+
+Los siguientes ítems fueron considerados y descartados como **falsos positivos o no accionables**:
+
+- **Race condition en `cambiarPerfil`**: el estado se captura antes del primer `await`, por lo que en JavaScript single-threaded no puede haber interleaving. Teóricamente frágil pero irrelevante en la práctica.
+- **IDs predecibles en `importExport.ts`**: los IDs tipo `importada_${numero}_b${i}` son internos y nunca se exponen como tokens de seguridad. No hay riesgo real.
+- **Validación de ciclos en previas**: la app ya acepta estructuras con ciclos; la UI no explota ni produce loops infinitos (el render se detiene correctamente). Es una mejora deseable pero no un bug.
+- **Sin debounce en búsqueda de CarreraScreen**: impacto de rendimiento marginal en el hardware target (máx. ~60 materias). No constituye un bug.
+- **Validación profunda de `payload.estados[]` en `descomprimirPayload`**: la validación de primer nivel (version, type, Array.isArray, meta) es suficiente para el threat model actual (datos propios del usuario, no multi-tenant). Una validación más profunda pertenece a una capa de migración, no al deserializador.
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 0 (pendientes) |
+| **Total acumulado** | **80** | **74** |
