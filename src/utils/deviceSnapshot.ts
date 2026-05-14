@@ -89,5 +89,10 @@ export function descomprimirPayload(compressed: string): DeviceSyncPayload {
   ) {
     throw new Error('Formato de sincronización incompatible. Asegurate de que ambos dispositivos usen la misma versión de Cursus.');
   }
+  for (const e of payload.estados) {
+    if (!e || typeof e.perfilId !== 'string' || !Array.isArray(e.materias) || !e.config) {
+      throw new Error('Payload de sincronización contiene un perfil con estructura inválida.');
+    }
+  }
   return payload as DeviceSyncPayload;
 }
