@@ -100,27 +100,35 @@ export const useStore = create<Store>((set, get) => ({
     const { perfilActivoId, config, materias } = get();
     const renumeradas = renumerarMaterias(materias, materia);
     set({ materias: renumeradas });
-    guardarPerfilEstado(perfilActivoId, { materias: renumeradas, config });
+    guardarPerfilEstado(perfilActivoId, { materias: renumeradas, config }).catch(
+      e => { if (__DEV__) console.error('[store] guardarMateria: fallo al persistir', e); },
+    );
   },
 
   reemplazarMaterias: (nuevas) => {
     const { perfilActivoId, config } = get();
     set({ materias: nuevas });
-    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] reemplazarMaterias: fallo al persistir', e); },
+    );
   },
 
   eliminarMateria: (id) => {
     const { perfilActivoId, config, materias } = get();
     const nuevas = materias.filter(m => m.id !== id);
     set({ materias: nuevas });
-    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] eliminarMateria: fallo al persistir', e); },
+    );
   },
 
   actualizarConfig: (parcial) => {
     const { perfilActivoId, materias, config: configActual } = get();
     const config = { ...configActual, ...parcial };
     set({ config });
-    guardarPerfilEstado(perfilActivoId, { materias, config });
+    guardarPerfilEstado(perfilActivoId, { materias, config }).catch(
+      e => { if (__DEV__) console.error('[store] actualizarConfig: fallo al persistir', e); },
+    );
   },
 
   decrementarPeriodoExamen: () => {
@@ -133,7 +141,9 @@ export const useStore = create<Store>((set, get) => ({
       return m;
     });
     set({ materias: nuevas });
-    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config });
+    guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
+      e => { if (__DEV__) console.error('[store] decrementarPeriodoExamen: fallo al persistir', e); },
+    );
     return nuevas.filter(
       m =>
         m.oportunidadesExamen === 0 &&

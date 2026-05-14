@@ -310,7 +310,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
       <View style={estilos.fila}>
         <Text style={estilos.label}>Peso total del grupo en materia (%)</Text>
         <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-          value={String(grupo.pesoEnMateria)} onChangeText={v => onChange({ ...grupo, pesoEnMateria: Number(v) })} />
+          value={String(grupo.pesoEnMateria)} onChangeText={v => { const n = Number(v); if (!isNaN(n)) onChange({ ...grupo, pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 }); }} />
       </View>
       {grupo.subEvaluaciones.map((sub, i) => (
         <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>

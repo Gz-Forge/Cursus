@@ -378,8 +378,12 @@ export async function leerArchivo(tipos: string[]): Promise<string | null> {
   const uri = resultado.assets[0].uri;
   let texto: string;
   if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    texto = await response.text();
+    try {
+      const response = await fetch(uri);
+      texto = await response.text();
+    } catch (e) {
+      throw new Error('No se pudo leer el archivo seleccionado.');
+    }
   } else {
     texto = await FileSystem.readAsStringAsync(uri);
   }

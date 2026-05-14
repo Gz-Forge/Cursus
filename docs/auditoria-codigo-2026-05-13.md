@@ -299,5 +299,35 @@ Los siguientes ítems fueron considerados y descartados como **falsos positivos 
 |---|---|---|
 | Primera (2026-05-13) | 74 | 74 |
 | Segunda (2026-05-14) | 6 | 6 |
-| Tercera (2026-05-14) | 6 | 0 (pendientes) |
-| **Total acumulado** | **86** | **80** |
+| Tercera (2026-05-14) | 6 | 6 |
+| **Total acumulado** | **86** | **86** |
+
+---
+
+## Cuarta Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la tercera ronda.  
+**Resultado:** Se encontraron **4 hallazgos nuevos** (1 Alta · 1 Media · 2 Baja).
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| R4-01 | 🔴 ALTA | `utils/perfiles.ts` | 113 | 3 — Gestión de errores | `cargarPerfilEstado()` tiene `JSON.parse(raw)` sin try/catch. Si el storage está corrupto, lanza excepción no controlada que se propaga a `useStore.cargar()`, `cambiarPerfil()` y `eliminarPerfil()`, crasheando la app sin recuperación. `cargarMeta()` fue corregida en R-05 pero `cargarPerfilEstado()` quedó sin protección. |
+| R4-02 | 🟡 MEDIA | `components/EvaluacionItem.tsx` | 313 | 1 — Validación de inputs | Campo `pesoEnMateria` en bloque *grupo* usa `Number(v)` sin NaN guard ni clamping a [0,100]. Un input inválido guarda `NaN` en `grupo.pesoEnMateria`, corrompiendo los cálculos de contribución. Las correcciones de R3-05 aplican al bloque simple pero no al bloque grupo (línea 313). |
+| R4-03 | 🟢 BAJA | `store/useStore.ts` | 103–136 | 11 — Concurrencia | `guardarPerfilEstado()` se llama sin `await` en todas las mutaciones (`guardarMateria`, `reemplazarMaterias`, `eliminarMateria`, `actualizarConfig`, `decrementarPeriodoExamen`). Las promesas rechazadas se descartan silenciosamente sin log ni fallback; si AsyncStorage falla, el estado en memoria y el persistido divergen sin notificación al usuario. AsyncStorage serializa internamente, por lo que no es una race condition real, pero los errores son invisibles. |
+| R4-04 | 🟢 BAJA | `utils/horarioImportExport.ts` | 381–382 | 3 — Gestión de errores | `fetch(uri)` y `response.text()` en la rama web de `leerArchivo()` sin try/catch interno. Los callers tienen try/catch externo, pero una excepción de fetch (URI de blob inválida, fallo de lectura) produce un stack trace sin mensaje útil al usuario en lugar de un mensaje descriptivo. |
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 6 |
+| Cuarta (2026-05-14) | 4 | 4 |
+| **Total acumulado** | **90** | **90** |

@@ -110,7 +110,12 @@ export async function guardarMeta(meta: PerfilesMeta): Promise<void> {
 export async function cargarPerfilEstado(id: string): Promise<AppState> {
   const raw = await storage.getItem(keyPerfil(id));
   if (!raw) return { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
-  return JSON.parse(raw) as AppState;
+  try {
+    return JSON.parse(raw) as AppState;
+  } catch {
+    if (__DEV__) console.warn('[perfiles] cargarPerfilEstado: estado corrupto para', id, '— restaurando vacío');
+    return { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
+  }
 }
 
 export async function guardarPerfilEstado(id: string, estado: AppState): Promise<void> {
