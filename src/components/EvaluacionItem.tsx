@@ -268,6 +268,16 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
           horaFin={evaluacion.horaFin}
           onActualizar={actualizarSimple}
         />
+        <View style={{ marginTop: 6 }}>
+          <Text style={estilos.label}>Salón (opcional)</Text>
+          <TextInput
+            style={[estilos.input, { marginTop: 4 }]}
+            placeholder="Ej: Aula 3, Lab 201..."
+            placeholderTextColor={tema.textoSecundario}
+            value={evaluacion.salon ?? ''}
+            onChangeText={salon => actualizarSimple({ salon: salon || undefined })}
+          />
+        </View>
         {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {contribucion.toFixed(2)}% a la nota final</Text>}
       </View>
     );
@@ -321,6 +331,16 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
             horaFin={sub.horaFin}
             onActualizar={p => actualizarSub(i, p)}
           />
+          <View style={{ marginTop: 6 }}>
+            <Text style={estilos.label}>Salón (opcional)</Text>
+            <TextInput
+              style={[estilos.input, { marginTop: 4 }]}
+              placeholder="Ej: Aula 3, Lab 201..."
+              placeholderTextColor={tema.textoSecundario}
+              value={sub.salon ?? ''}
+              onChangeText={salon => actualizarSub(i, { salon: salon || undefined })}
+            />
+          </View>
         </View>
       ))}
       <TouchableOpacity onPress={agregarSub} style={{ padding: 6 }}>
