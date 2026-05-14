@@ -87,8 +87,20 @@ export async function migrarSiNecesario(): Promise<void> {
 
 export async function cargarMeta(): Promise<PerfilesMeta> {
   const raw = await storage.getItem(KEY_META);
-  if (!raw) throw new Error('PerfilesMeta no encontrada');
-  return JSON.parse(raw) as PerfilesMeta;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as PerfilesMeta;
+    } catch {
+      if (__DEV__) console.warn('[perfiles] cargarMeta: meta corrupta en storage — restaurando perfil inicial');
+    }
+  }
+  // Meta ausente o corrupta: crear meta mínima sin tocar el estado de perfiles existente
+  const meta: PerfilesMeta = {
+    activoId: 'p1',
+    perfiles: [{ id: 'p1', nombre: 'Perfil 1' }],
+  };
+  await guardarMeta(meta);
+  return meta;
 }
 
 export async function guardarMeta(meta: PerfilesMeta): Promise<void> {

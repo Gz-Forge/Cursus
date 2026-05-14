@@ -138,19 +138,19 @@ export function ConfigScreen() {
     return tieneBloques || tieneEvalsEnHorario;
   });
 
-  const campo = (label: string, key: keyof typeof config, esNumero = false) => (
+  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault') => (
     <View style={{ marginBottom: 14 }}>
       <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
       <TextInput
-        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, ...(esNumero ? { width: 80 } : {}) }}
+        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
         value={String(config[key])}
-        keyboardType={esNumero ? 'numeric' : 'default'}
-        onChangeText={v => actualizarConfig({ [key]: esNumero ? Number(v) : v } as any)}
+        keyboardType="numeric"
+        onChangeText={v => { const n = Number(v); if (!isNaN(n) && n > 0) actualizarConfig({ [key]: n }); }}
       />
     </View>
   );
 
-  const campoUmbral = (label: string, key: keyof typeof config) => {
+  const campoUmbral = (label: string, key: 'umbralExoneracion' | 'umbralAprobacion' | 'umbralPorExamen' | 'umbralExamenExoneracion') => {
     const val = config[key] as number;
     const equiv = ((val / 100) * config.notaMaxima).toFixed(1);
     return (
@@ -161,7 +161,7 @@ export function ConfigScreen() {
             style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
             value={String(val)}
             keyboardType="numeric"
-            onChangeText={v => actualizarConfig({ [key]: Number(v) } as any)}
+            onChangeText={v => { const n = Number(v); if (!isNaN(n)) actualizarConfig({ [key]: Math.max(0, Math.min(100, n)) }); }}
           />
           <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>→ {equiv} / {config.notaMaxima}</Text>
         </View>
@@ -261,8 +261,8 @@ export function ConfigScreen() {
           {tabActiva === 'notas' && (
           <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
-          {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima', true)}
-          {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault', true)}
+          {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}
+          {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}
 
           <TouchableOpacity
             onPress={() => setMostrarPeriodo(true)}
