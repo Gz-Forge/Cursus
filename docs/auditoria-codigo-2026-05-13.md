@@ -331,3 +331,164 @@ Los siguientes ítems fueron considerados y descartados como **falsos positivos 
 | Tercera (2026-05-14) | 6 | 6 |
 | Cuarta (2026-05-14) | 4 | 4 |
 | **Total acumulado** | **90** | **90** |
+
+---
+
+## Quinta Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la cuarta ronda.  
+**Resultado:** Se encontraron **3 hallazgos nuevos** (0 Alta · 1 Media · 2 Baja) y **3 falsos positivos descartados**.
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| R5-03 | 🟢 BAJA | `utils/fileIOWeb.ts` | 19 | 10 — Seguridad de datos locales | `file.text()` se llama sin verificar `file.size` primero. Un usuario en web puede seleccionar un archivo de varios cientos de MB, cargándolo completamente en memoria antes de que cualquier validación actúe. `leerArchivo()` en `horarioImportExport.ts` tiene la misma comprobación (5MB) pero *después* de leer. En la rama `fileIOWeb.ts` la comprobación no existe en ningún punto de la cadena. |
+| R5-04 | 🟡 MEDIA | `components/QrScannerModal.tsx` | 69–76 | 1 — Validación de inputs | En la rama `cursus-device-sync`, `parsed.code` y `parsed.exp` se usan directamente sin verificar sus tipos (`typeof parsed.code === 'string'` y `typeof parsed.exp === 'number'`). Un QR que contenga `{"type":"cursus-device-sync","code":null,"exp":"never"}` pasa el check `parsed.type` y entrega valores inválidos a `onDeviceSyncDetectado`. Las ramas `cursus-evaluaciones` y `cursus-config` sí tienen try/catch interno pero la rama sync no valida sus campos. |
+| R5-06 | 🟢 BAJA | `components/QrScannerModal.tsx` | 120–122 | 1 — Validación de inputs | En la rama `cursus-horario`, la búsqueda de materia destino usa `.find()` sin advertir si hay más de una materia con el mismo nombre normalizado. Si el usuario tiene dos materias "Cálculo I" con distintos números, los bloques siempre se importan a la primera encontrada sin notificación. No es un crash pero puede producir datos inesperados. |
+
+---
+
+### Falsos positivos descartados
+
+- **R5-01 — División por cero en notaManualStr**: Línea 138 es `(nota / 100) * config.notaMaxima` (multiplicación, no división). El único caso de división real (línea 151) queda clampado por `Math.min(100, ...)`. Además `notaMaxima` siempre es ≥ 1 por la validación de R3-01.
+- **R5-02 — Memory leak en QrShareModal setTimeout**: `return () => clearTimeout(id)` ya existe en línea 39. El callback interno es síncrono — no hay gap async donde pueda ejecutarse sobre un componente desmontado.
+- **R5-05 — Búsqueda sin normalización en CarreraScreen**: La búsqueda en `handleToggleCursandoCard` es por `m.numero === p` (campo numérico), no por nombre. La comparación de strings citada no existe en ese contexto. Falso positivo.
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 6 |
+| Cuarta (2026-05-14) | 4 | 4 |
+| Quinta (2026-05-14) | 3 | 3 |
+| **Total acumulado** | **93** | **93** |
+
+---
+
+## Sexta Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la quinta ronda.  
+**Resultado:** Se encontraron **8 hallazgos nuevos** (0 Alta · 0 Media · 8 Baja) y **8 falsos positivos descartados**.
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| R6-03 | 🟢 BAJA | `utils/horarioImportExport.ts` | 209 | 5 — Inyección | `getVal(key)` construye `new RegExp(\`${key}...\`)` sin escapar `key`. Aunque los callers usan strings hardcodeados ('DTSTART', etc.), no hay defensa para cambios futuros. Este hallazgo estaba en Ronda 1 Cat 5 pero el escaping nunca se aplicó. |
+| R6-04 | 🟢 BAJA | `utils/importExport.ts` | 97–102 | 16 — Import/Export | `jsonAMaterias` mapea `evaluaciones` con `...ev` spread sin validar subevaluaciones: no verifica que `subEvaluaciones.length <= 50`. Un JSON con 200 subevaluaciones en un grupo importa sin error y bypasea el límite de `agregarSub()`. |
+| R6-06 | 🟢 BAJA | `utils/importExport.ts` | 97–102 | 1 — Validación | `pesoEnMateria` y `notaMaxima` de evaluaciones importadas aceptan cualquier valor (`...ev` spread sin validación). `pesoEnMateria: 150` y `notaMaxima: 0` pasan sin error. |
+| R6-07 | 🟢 BAJA | `utils/horarioImportExport.ts` | 118–138 | 1 — Validación | `mapearBloque` acepta bloques donde `horaFin <= horaInicio`. El CSV parser (línea 110) sí valida esto, pero el JSON parser no. Un bloque importado con fin < inicio se renderiza con altura negativa en el horario. |
+| R6-10 | 🟢 BAJA | `utils/importExport.ts` | 107 | 1 — Validación | `validarItemsMateriaJson` verifica `d.nombre.trim()` vacío pero almacena `d.nombre` sin aplicar `.trim()`. Un nombre con espacios iniciales/finales (`" Cálculo I "`) se guarda tal cual y puede duplicarse con `"Cálculo I"` en merges futuros. |
+| R6-12 | 🟢 BAJA | `utils/importExport.ts` | 97–102 | 1 — Validación | `notaMaxima` en evaluaciones importadas acepta `0`. `calcularNotaTotal()` divide por `notaMaxima`; si es 0 produce `Infinity`. |
+| R6-14 | 🟢 BAJA | `utils/importExport.ts` | 54–69 | 16 — Import/Export | `extraerTiposNuevos()` no limita la cantidad de tipos nuevos. Un JSON con 500 materias distintas cada una con tipo único agregaría 500 entradas a `config.tiposFormacion` sin restricción. |
+| R6-16 | 🟢 BAJA | `utils/importExport.ts` | 97–102 | 16 — Import/Export | `fecha` de evaluaciones importadas no se valida como ISO YYYY-MM-DD. Una fecha inválida (`"2099-99-99"`) se almacena y puede causar comportamiento inesperado en el horario. |
+
+---
+
+### Falsos positivos descartados
+
+- **R6-01 / R6-02 — Math.random() en IDs internos**: Los IDs de evaluaciones y bloques son claves internas de React, no tokens de autenticación. `Math.random()` es adecuado. El hallazgo de Ronda 1 fue específicamente para el código de sincronización entre dispositivos.
+- **R6-05 — IDs en expansión ICS**: Mismo razonamiento — IDs de bloques horarios son claves internas.
+- **R6-08 — Tamaño de DeviceSyncPayload**: LZString comprime agresivamente; un usuario necesitaría miles de materias con bloques complejos. Riesgo teórico, no práctico.
+- **R6-09**: Duplicado de R6-03.
+- **R6-11 — normalize('NFD') inconsistente en nombres**: Cambiar la lógica de matching en `mergeImportar` puede romper re-importaciones de usuarios existentes. Inconsistencia aceptable por diseño.
+- **R6-13 — parseInt sin radix**: Falso positivo; el agente verificó y todos los `parseInt` tienen radix 10 explícito.
+- **R6-15 — Consistencia cross-fields en aplicarConfigJson**: La aplicación independiente de campos es por diseño. Agregar cross-validation haría rechazar configs válidas.
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 6 |
+| Cuarta (2026-05-14) | 4 | 4 |
+| Quinta (2026-05-14) | 3 | 3 |
+| Sexta (2026-05-14) | 8 | 8 |
+| **Total acumulado** | **101** | **101** |
+
+---
+
+## Séptima Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la sexta ronda.  
+**Resultado:** Se encontró **1 hallazgo nuevo** (0 Alta · 0 Media · 1 Baja).
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Líneas | Categoría | Problema |
+|---|---|---|---|---|---|
+| N7-01 | 🟢 BAJA | `screens/EditMateriaScreen.tsx`, `components/EvaluacionItem.tsx` | 97, 241, 256, 501, 222 | 11 — Concurrencia | Cuatro lugares usan `Date.now().toString()` como ID sin entropía adicional. `HorarioScreen` y otras partes del mismo archivo ya usan `${Date.now()}_${Math.random()}` como patrón. En uso normal no hay colisión (event loop JS es single-threaded), pero es inconsistente y frágil ante hipotéticos renders rápidos en tests o SSR. |
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 6 |
+| Cuarta (2026-05-14) | 4 | 4 |
+| Quinta (2026-05-14) | 3 | 3 |
+| Sexta (2026-05-14) | 8 | 8 |
+| Séptima (2026-05-14) | 1 | 1 |
+| **Total acumulado** | **102** | **102** |
+
+---
+
+## Octava Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la séptima ronda.  
+**Resultado:** Se encontraron **2 hallazgos nuevos** (0 Alta · 0 Media · 2 Baja) y **2 falsos positivos descartados**.
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| N8-02 | 🟢 BAJA | `utils/deviceSnapshot.ts` | 87–92 | 16 — Import/Export | `descomprimirPayload()` valida la forma exterior del payload (versión, tipo, estados es array) pero no la estructura de cada item en `estados`. Si un estado corrupto llega sin `perfilId` string o sin `materias` array, `aplicarSnapshot()` falla en runtime sin mensaje útil. |
+| N8-04 | 🟢 BAJA | `components/QrScannerModal.tsx` | 91, 108, 135 | 14 — Logs | Los tres `catch` blocks de QR (`cursus-evaluaciones`, `cursus-config`, `cursus-horario`) muestran Alert al usuario pero no loguean en `__DEV__`. En desarrollo, los errores de descompresión o parsing quedan sin trazabilidad. |
+
+---
+
+### Falsos positivos descartados
+
+- **N8-01 — IDs en HorarioScreen**: `${Date.now()}_${Math.random()}` ya tiene suficiente entropía. La diferencia con `Math.random().toString(36).slice(2, 7)` es solo de formato, no de seguridad.
+- **N8-03 — Race condition en aplicarSnapshot**: Limitación aceptada de AsyncStorage (no soporta transacciones). El `try/catch` en `aplicarSnapshot()` y el manejo de errores en el caller (SyncDispositivosModal) ya cubren el escenario de fallo parcial. Agregar atomicidad requeriría un sistema de staging que está fuera del scope de la auditoría.
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 6 |
+| Cuarta (2026-05-14) | 4 | 4 |
+| Quinta (2026-05-14) | 3 | 3 |
+| Sexta (2026-05-14) | 8 | 8 |
+| Séptima (2026-05-14) | 1 | 1 |
+| Octava (2026-05-14) | 2 | 2 |
+| **Total acumulado** | **104** | **104** |
+
+---
+
+## Novena Ronda de Auditoría — 2026-05-14
+
+**Resultado: Sin hallazgos nuevos.** El análisis exhaustivo no detectó problemas adicionales en ninguna de las 16 categorías. Las dos sugerencias menores del agente resultaron falsos positivos: `storageTauri.ts` sin try/catch es correcto (los callers tienen su propia protección), y el `JSON.parse` en `QrScannerModal.onQrLeido` ya está dentro del try/catch externo de la función. La codebase está libre de los patrones de error auditados en este ciclo.
