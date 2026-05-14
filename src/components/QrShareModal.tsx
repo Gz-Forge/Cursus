@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
 import { materiasAJson } from '../utils/importExport';
@@ -28,10 +28,12 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
     const id = setTimeout(() => {
       try {
         setChunks(splitEnChunks(encodeCarrera(materiasAJson(materias))));
-      } catch {
-        setChunks([]);
-      } finally {
         setCargando(false);
+      } catch (e) {
+        if (__DEV__) console.warn('[QrShareModal] Error al generar QR:', e);
+        setChunks([]);
+        setCargando(false);
+        Alert.alert('Error al generar QR', 'No se pudo generar el código QR. Intentá exportar como .json.');
       }
     }, 50);
     return () => clearTimeout(id);

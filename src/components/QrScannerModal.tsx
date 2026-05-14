@@ -53,7 +53,8 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           }},
         ]
       );
-    } catch {
+    } catch (e) {
+      if (__DEV__) console.warn('[QrScannerModal] Error al decodificar QR de carrera:', e);
       Alert.alert('Error', 'El QR no es válido o está dañado.');
       procesando.current = false;
     }

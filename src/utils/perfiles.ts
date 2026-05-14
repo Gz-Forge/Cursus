@@ -61,9 +61,16 @@ export async function migrarSiNecesario(): Promise<void> {
   if (metaRaw) return; // ya migrado, nada que hacer
 
   const legacyRaw = await storage.getItem(KEY_LEGACY);
-  const estado: AppState = legacyRaw
-    ? JSON.parse(legacyRaw)
-    : { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
+  let estadoLegacy: AppState | null = null;
+  if (legacyRaw) {
+    try {
+      estadoLegacy = JSON.parse(legacyRaw);
+    } catch {
+      // Datos legacy corruptos: ignorar y arrancar con estado vacío
+      estadoLegacy = null;
+    }
+  }
+  const estado: AppState = estadoLegacy ?? { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
 
   const meta: PerfilesMeta = {
     activoId: 'p1',
