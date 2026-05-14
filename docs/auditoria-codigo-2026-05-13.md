@@ -261,5 +261,43 @@ Los siguientes ítems fueron considerados y descartados como **falsos positivos 
 | Ronda | Hallazgos encontrados | Corregidos |
 |---|---|---|
 | Primera (2026-05-13) | 74 | 74 |
-| Segunda (2026-05-14) | 6 | 0 (pendientes) |
-| **Total acumulado** | **80** | **74** |
+| Segunda (2026-05-14) | 6 | 6 |
+| **Total acumulado** | **80** | **80** |
+
+---
+
+## Tercera Ronda de Auditoría — 2026-05-14
+
+**Alcance:** Re-análisis completo de `TablaApp/src/` luego de aplicar todas las correcciones de la segunda ronda.  
+**Resultado:** Se encontraron **6 hallazgos nuevos** (0 Alta · 2 Media · 4 Baja) y **2 falsos positivos descartados**.
+
+---
+
+### Nuevos hallazgos
+
+| # | Severidad | Archivo | Línea | Categoría | Problema |
+|---|---|---|---|---|---|
+| R3-01 | 🟢 BAJA | `screens/ConfigScreen.tsx` | 148 | 1 — Validación de inputs | **Regresión UX de R-03**: la condición `n > 0` en `campo()` impide guardar el valor si el usuario borra el campo completo (`Number("") = 0`, `0 > 0 = false`). La store no actualiza y el TextInput controlado revierte al valor anterior. El dato persiste íntegro pero el usuario no puede remplazar un valor seleccionando-todo-borrando. |
+| R3-02 | 🟡 MEDIA | `screens/EditMateriaScreen.tsx` | 414 | 16 — Importación/Exportación | Sin límite de evaluaciones importadas. Un JSON con cientos de evaluaciones sería aceptado sin validación de volumen, causando re-renders masivos y posible lentitud en dispositivos de gama baja. |
+| R3-03 | 🟡 MEDIA | `screens/ImportarExportarScreen.tsx` | 163 | 16 — Importación/Exportación | `doImport()` llama `mergeImportar(materias, pendingImport.json, ...)` sin validar la cantidad de materias. El límite de 5MB del archivo ayuda, pero una carrera de 500 materias simples ocupa ~200KB — muy por debajo del umbral — y causaría un `set()` de Zustand con un array enorme y un re-render catastrófico. |
+| R3-04 | 🟢 BAJA | `components/EvaluacionItem.tsx` | 216 | 1 — Validación de inputs | `agregarSub()` no tiene límite máximo de subevaluaciones por grupo. Un grupo con 200+ items causaría rendering lag significativo. En uso normal esto no ocurre, pero no hay barrera técnica que lo impida. |
+| R3-05 | 🟢 BAJA | `components/EvaluacionItem.tsx` | 243 | 1 — Validación de inputs | `pesoEnMateria` admite múltiples decimales (ej: `33.333`). `calcularNotaTotal` suma contribuciones directamente sin redondeo; la suma puede exceder 100.00% por errores de punto flotante acumulados, produciendo una nota total ligeramente superior a `notaMaxima`. No es un crash pero produce notas "imposibles". |
+| R3-06 | 🟢 BAJA | `store/useStore.ts` | 145 | 11 — Concurrencia | `cambiarPerfil` captura `{ materias, config }` en T0 y luego llama `await guardarPerfilEstado(...)` en T1. Si entre T0 y T1 el usuario dispara `guardarMateria()` (también llama `guardarPerfilEstado` con el estado más nuevo), ambas escrituras async compiten por la misma clave en AsyncStorage. La última en completar "gana" y puede sobrescribir la más reciente. Requiere interacción simultánea muy rápida — edge case real pero poco probable en móvil. |
+
+---
+
+### Falsos positivos descartados
+
+- **R3-06-fp — cardRefs cleanup en HorarioScreen**: La corrección de primera ronda (`else cardRefs.current.delete(b.id)`) ya maneja la eliminación de bloques. Cuando React retira un bloque del array, desmonta el `<View>` y llama el ref callback con `null`, lo que ejecuta el `delete`. Confirmado en líneas 833 y 913.
+- **R3-04-fp — Timezone en validación QR (SyncDispositivosModal)**: El timestamp de expiración se calcula y compara en el mismo cliente (`Date.now()`). La comparación con el campo `expira_en` de Supabase usa `new Date(data.expira_en)` que convierte correctamente a UTC local. Es el patrón estándar para apps móviles y no constituye una vulnerabilidad accionable.
+
+---
+
+### Balance acumulado
+
+| Ronda | Hallazgos encontrados | Corregidos |
+|---|---|---|
+| Primera (2026-05-13) | 74 | 74 |
+| Segunda (2026-05-14) | 6 | 6 |
+| Tercera (2026-05-14) | 6 | 0 (pendientes) |
+| **Total acumulado** | **86** | **80** |
