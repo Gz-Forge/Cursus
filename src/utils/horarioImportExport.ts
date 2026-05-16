@@ -141,6 +141,7 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     tipo: (['teorica', 'practica', 'parcial', 'otro'] as const).includes(bloque.tipo as TipoBloque)
       ? (bloque.tipo as TipoBloque)
       : 'otro',
+    ...(typeof bloque.salon === 'string' && bloque.salon.trim() && { salon: bloque.salon.trim() }),
   };
 }
 
