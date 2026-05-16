@@ -56,6 +56,7 @@ const CONFIG_DEFAULT: Config = {
   metricasOcultas: [],
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,
+  semestreExpandidoMap: {},
 };
 
 interface Store extends AppState {

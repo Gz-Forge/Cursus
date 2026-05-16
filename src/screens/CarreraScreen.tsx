@@ -45,7 +45,6 @@ export function CarreraScreen() {
   const [materiaPinned, setMateriaPinned] = useState<typeof materias[0] | null>(null);
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
-  const [semestreExpandido, setSemestreExpandido] = useState<Record<number, boolean>>({});
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -97,12 +96,13 @@ export function CarreraScreen() {
 
   const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
 
-  const isExpandido = (sem: number) => semestreExpandido[sem] !== undefined ? semestreExpandido[sem] : true;
-  const toggleSemestre = (sem: number) => setSemestreExpandido(prev => ({ ...prev, [sem]: !isExpandido(sem) }));
+  const mapaExpandido = config.semestreExpandidoMap ?? {};
+  const isExpandido = (sem: number) => mapaExpandido[String(sem)] !== undefined ? mapaExpandido[String(sem)] : true;
+  const toggleSemestre = (sem: number) => actualizarConfig({ semestreExpandidoMap: { ...mapaExpandido, [String(sem)]: !isExpandido(sem) } });
   const todosExpandidos = semestres.every(s => isExpandido(s));
   const toggleTodos = () => {
     const nuevo = !todosExpandidos;
-    setSemestreExpandido(Object.fromEntries(semestres.map(s => [s, nuevo])));
+    actualizarConfig({ semestreExpandidoMap: Object.fromEntries(semestres.map(s => [String(s), nuevo])) });
   };
 
   const irAEditar = (m: Materia) => navigation.navigate('EditMateria', { materiaId: m.id });
