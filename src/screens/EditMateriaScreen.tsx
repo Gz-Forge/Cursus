@@ -109,6 +109,7 @@ export function EditMateriaScreen() {
   }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
+  const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
