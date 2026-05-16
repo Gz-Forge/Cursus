@@ -141,6 +141,7 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     tipo: (['teorica', 'practica', 'parcial', 'otro'] as const).includes(bloque.tipo as TipoBloque)
       ? (bloque.tipo as TipoBloque)
       : 'otro',
+    ...(typeof bloque.salon === 'string' && bloque.salon.trim() && { salon: bloque.salon.trim() }),
   };
 }
 
@@ -292,7 +293,7 @@ export function generarEjemploJSONMateria(): string {
   return JSON.stringify({
     nombre: 'Cálculo I',
     bloques: [
-      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica' },
+      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
       { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
     ],
   }, null, 2);
@@ -310,7 +311,8 @@ export function generarPromptHorario(config: Config): string {
           "fecha": "YYYY-MM-DD",
           "horaInicio": 480,
           "horaFin": 600,
-          "tipo": "teorica"
+          "tipo": "teorica",
+          "salon": "Aula 3"
         }
       ]
     }
@@ -324,6 +326,7 @@ Reglas:
   - "teorica"  → para clases de tipo ${config.labelTeorica}
   - "practica" → para clases de tipo ${config.labelPractica}
   - "otro"     → para cualquier otro tipo (${config.labelOtro})
+- "salon" (opcional): nombre del salón o aula donde ocurre la clase (ej: "Aula 3", "Lab 201"). Omitilo si no está disponible.
 - No uses "parcial" como tipo de bloque; los exámenes y evaluaciones se registran aparte desde la sección Evaluaciones.
 
 Pasame solamente el .json para descargar, sin explicaciones adicionales.`;
@@ -335,7 +338,7 @@ export function generarEjemploJSON(): string {
       {
         nombre: 'Cálculo I',
         bloques: [
-          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica' },
+          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
           { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
         ],
       },

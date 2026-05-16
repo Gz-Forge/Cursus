@@ -109,6 +109,7 @@ export function EditMateriaScreen() {
   }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
+  const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
@@ -225,7 +226,6 @@ export function EditMateriaScreen() {
       Alert.alert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
       return;
     }
-    // Validar que el día exista en ese mes (ej: 30 de febrero → inválido)
     const dateObj = new Date(anio, mes - 1, dia);
     if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
       Alert.alert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
@@ -237,16 +237,26 @@ export function EditMateriaScreen() {
     }
     const diaStr = dia.toString().padStart(2, '0');
     const mesStr = mes.toString().padStart(2, '0');
-    const nuevo: BloqueHorario = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    const bloqueActualizado: BloqueHorario = {
+      id: bloqueEditandoId ?? `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha: `${anio}-${mesStr}-${diaStr}`,
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
       ...(bloqueNuevo.salon.trim() && { salon: bloqueNuevo.salon.trim() }),
     };
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), nuevo] }));
+
+    if (bloqueEditandoId) {
+      setForm(f => ({
+        ...f,
+        bloques: (f.bloques ?? []).map(x => x.id === bloqueEditandoId ? bloqueActualizado : x),
+      }));
+    } else {
+      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), bloqueActualizado] }));
+    }
+
     setMostrarFormBloque(false);
+    setBloqueEditandoId(null);
     setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
     setDropdownDia(false);
     setDropdownMes(false);
@@ -763,7 +773,30 @@ export function EditMateriaScreen() {
                   {tiposBloque.find(t => t.key === b.tipo)?.label}{b.salon ? ` · ${b.salon}` : ''}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                onPress={() => {
+                  const [, mesStr, diaStr] = b.fecha.split('-');
+                  setBloqueNuevo({
+                    dia: String(parseInt(diaStr, 10)),
+                    mes: String(parseInt(mesStr, 10)),
+                    horaInicio: b.horaInicio,
+                    horaFin: b.horaFin,
+                    tipo: b.tipo,
+                    salon: b.salon ?? '',
+                  });
+                  setBloqueEditandoId(b.id);
+                  setMostrarFormBloque(true);
+                  setDropdownDia(false);
+                  setDropdownMes(false);
+                }}
+              >
+                <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}
+              >
                 <Text style={{ color: '#F44336' }}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -773,6 +806,9 @@ export function EditMateriaScreen() {
         {/* ── Formulario individual ── */}
         {mostrarFormBloque && (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13, marginBottom: 10 }}>
+              {bloqueEditandoId ? 'Editar bloque' : 'Nuevo bloque'}
+            </Text>
 
             {/* ── Fecha: día + mes (año automático) ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
@@ -889,6 +925,7 @@ export function EditMateriaScreen() {
               <TouchableOpacity
                 onPress={() => {
                   setMostrarFormBloque(false);
+                  setBloqueEditandoId(null);
                   setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
                   setDropdownDia(false);
                   setDropdownMes(false);
@@ -898,7 +935,7 @@ export function EditMateriaScreen() {
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmarBloque}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Agregar</Text>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>{bloqueEditandoId ? 'Guardar' : 'Agregar'}</Text>
               </TouchableOpacity>
             </View>
           </View>
