@@ -764,7 +764,30 @@ export function EditMateriaScreen() {
                   {tiposBloque.find(t => t.key === b.tipo)?.label}{b.salon ? ` · ${b.salon}` : ''}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                onPress={() => {
+                  const [, mesStr, diaStr] = b.fecha.split('-');
+                  setBloqueNuevo({
+                    dia: String(parseInt(diaStr, 10)),
+                    mes: String(parseInt(mesStr, 10)),
+                    horaInicio: b.horaInicio,
+                    horaFin: b.horaFin,
+                    tipo: b.tipo,
+                    salon: b.salon ?? '',
+                  });
+                  setBloqueEditandoId(b.id);
+                  setMostrarFormBloque(true);
+                  setDropdownDia(false);
+                  setDropdownMes(false);
+                }}
+              >
+                <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}
+              >
                 <Text style={{ color: '#F44336' }}>✕</Text>
               </TouchableOpacity>
             </View>
