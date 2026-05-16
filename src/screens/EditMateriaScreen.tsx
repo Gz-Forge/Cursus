@@ -226,7 +226,6 @@ export function EditMateriaScreen() {
       Alert.alert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
       return;
     }
-    // Validar que el día exista en ese mes (ej: 30 de febrero → inválido)
     const dateObj = new Date(anio, mes - 1, dia);
     if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
       Alert.alert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
@@ -238,16 +237,26 @@ export function EditMateriaScreen() {
     }
     const diaStr = dia.toString().padStart(2, '0');
     const mesStr = mes.toString().padStart(2, '0');
-    const nuevo: BloqueHorario = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    const bloqueActualizado: BloqueHorario = {
+      id: bloqueEditandoId ?? `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha: `${anio}-${mesStr}-${diaStr}`,
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
       ...(bloqueNuevo.salon.trim() && { salon: bloqueNuevo.salon.trim() }),
     };
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), nuevo] }));
+
+    if (bloqueEditandoId) {
+      setForm(f => ({
+        ...f,
+        bloques: (f.bloques ?? []).map(x => x.id === bloqueEditandoId ? bloqueActualizado : x),
+      }));
+    } else {
+      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), bloqueActualizado] }));
+    }
+
     setMostrarFormBloque(false);
+    setBloqueEditandoId(null);
     setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
     setDropdownDia(false);
     setDropdownMes(false);
