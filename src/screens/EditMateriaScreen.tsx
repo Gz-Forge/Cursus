@@ -806,6 +806,9 @@ export function EditMateriaScreen() {
         {/* ── Formulario individual ── */}
         {mostrarFormBloque && (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13, marginBottom: 10 }}>
+              {bloqueEditandoId ? 'Editar bloque' : 'Nuevo bloque'}
+            </Text>
 
             {/* ── Fecha: día + mes (año automático) ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
@@ -922,6 +925,7 @@ export function EditMateriaScreen() {
               <TouchableOpacity
                 onPress={() => {
                   setMostrarFormBloque(false);
+                  setBloqueEditandoId(null);
                   setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
                   setDropdownDia(false);
                   setDropdownMes(false);
@@ -931,7 +935,7 @@ export function EditMateriaScreen() {
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmarBloque}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Agregar</Text>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>{bloqueEditandoId ? 'Guardar' : 'Agregar'}</Text>
               </TouchableOpacity>
             </View>
           </View>
