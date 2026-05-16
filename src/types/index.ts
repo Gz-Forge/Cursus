@@ -181,6 +181,8 @@ export interface Config {
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
+  // UI state — persistido para recordar entre sesiones
+  semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
 }
 
 export interface AppState {
