@@ -150,13 +150,27 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         return;
       }
 
-      const syncPayload = descomprimirPayload(data.datos);
-      setPendingPayload(syncPayload);
+      setEncryptedBlob(data.datos);
       setPendingCode(trimmed);
-      setEstado('receptor_confirmando');
+      setPassphrase('');
+      setShowPass(false);
+      setErrorClave('');
+      setEstado('receptor_ingresando_clave');
     } catch (e: any) {
       setErrorMsg(e?.message ?? 'Error descargando los datos. Verificá tu conexión.');
       setEstado('error');
+    }
+  };
+
+  const aplicarClave = async () => {
+    setErrorClave('');
+    try {
+      const comprimido = await decryptPayload(encryptedBlob, passphrase);
+      const syncPayload = descomprimirPayload(comprimido);
+      setPendingPayload(syncPayload);
+      setEstado('receptor_confirmando');
+    } catch (e: any) {
+      setErrorClave(e?.message ?? 'Contraseña incorrecta — verificá que sea la misma que ingresó el emisor');
     }
   };
 
