@@ -1502,7 +1502,7 @@ export function EditMateriaScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
           justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 16, padding: 24,
-            width: '100%', alignItems: 'center' }}>
+            width: '100%', maxWidth: 420, alignItems: 'center' }}>
             <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
               Compartir horario QR
             </Text>

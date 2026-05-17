@@ -39,7 +39,7 @@ export function EvaluacionesQrModal({ visible, evaluaciones, onCerrar }: Props) 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCerrar}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 24, width: '100%', alignItems: 'center' }}>
+        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, alignItems: 'center' }}>
           <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 16 }}>
             Compartir evaluaciones por QR
           </Text>
