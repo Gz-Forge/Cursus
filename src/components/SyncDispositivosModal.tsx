@@ -237,6 +237,43 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
+      case 'emisor_ingresando_clave':
+        return (
+          <View>
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 6 }}>
+              Contraseña de sincronización
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+              Elegí una clave temporal para proteger tus datos.{'\n'}
+              El receptor deberá ingresarla también.
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, marginBottom: 16 }}>
+              <TextInput
+                value={passphrase}
+                onChangeText={setPassphrase}
+                secureTextEntry={!showPass}
+                placeholder="Mínimo 4 caracteres"
+                placeholderTextColor={tema.textoSecundario}
+                autoFocus
+                style={{ flex: 1, color: tema.texto, padding: 12, fontSize: 16 }}
+              />
+              <TouchableOpacity onPress={() => setShowPass(v => !v)} style={{ paddingHorizontal: 12 }}>
+                <Text style={{ fontSize: 18 }}>{showPass ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => iniciarEmisor(passphrase)}
+              disabled={passphrase.length < 4}
+              style={btnStyle(passphrase.length >= 4 ? tema.acento : tema.borde)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Continuar →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resetear} style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}>
+              <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
       case 'emisor_subiendo':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
@@ -324,6 +361,47 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
+      case 'receptor_ingresando_clave':
+        return (
+          <View>
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 6 }}>
+              Contraseña de sincronización
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+              Ingresá la contraseña que configuró{'\n'}el dispositivo emisor.
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, marginBottom: errorClave ? 8 : 16 }}>
+              <TextInput
+                value={passphrase}
+                onChangeText={v => { setPassphrase(v); setErrorClave(''); }}
+                secureTextEntry={!showPass}
+                placeholder="Contraseña del emisor"
+                placeholderTextColor={tema.textoSecundario}
+                autoFocus
+                style={{ flex: 1, color: tema.texto, padding: 12, fontSize: 16 }}
+              />
+              <TouchableOpacity onPress={() => setShowPass(v => !v)} style={{ paddingHorizontal: 12 }}>
+                <Text style={{ fontSize: 18 }}>{showPass ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
+            {errorClave ? (
+              <Text style={{ color: '#F44336', fontSize: 12, textAlign: 'center', marginBottom: 12 }}>
+                {errorClave}
+              </Text>
+            ) : null}
+            <TouchableOpacity
+              onPress={aplicarClave}
+              disabled={passphrase.length < 1}
+              style={btnStyle(passphrase.length >= 1 ? tema.acento : tema.borde)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resetear} style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}>
+              <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
       case 'receptor_confirmando':
         return (
           <View>
@@ -389,7 +467,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   };
 
   const puedeVolver = [
-    'emisor_listo', 'receptor_listo', 'error', 'receptor_escaneando',
+    'emisor_listo', 'receptor_listo', 'error',
+    'receptor_escaneando', 'emisor_ingresando_clave', 'receptor_ingresando_clave',
   ].includes(estado);
 
   return (
