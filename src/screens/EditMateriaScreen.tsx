@@ -127,8 +127,8 @@ export function EditMateriaScreen() {
   // ── Asistencia ──────────────────────────────────────────────────────
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [faltaNueva, setFaltaNueva] = useState<{
-    fechaStr: string; tipo: RegistroFalta['tipo']; nota: string;
-  }>({ fechaStr: '', tipo: 'teorica', nota: '' });
+    fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
+  }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
 
   // ── Nota manual: estado de string para soportar decimales al tipear ──
   const [notaManualStr, setNotaManualStr] = useState<string>(() => {
@@ -511,11 +511,12 @@ export function EditMateriaScreen() {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha,
       tipo: faltaNueva.tipo,
+      ...(faltaNueva.justificada ? { justificada: true } : {}),
       ...(faltaNueva.nota.trim() ? { nota: faltaNueva.nota.trim() } : {}),
     };
     setForm(f => ({ ...f, faltas: [...(f.faltas ?? []), nueva] }));
     setMostrarFormFalta(false);
-    setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' });
+    setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
   };
 
   const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false) => (
@@ -591,6 +592,14 @@ export function EditMateriaScreen() {
                     </TouchableOpacity>
                   ))
                 }
+                {!config.tiposFormacion.some(t => t.toLowerCase() === busquedaTipo.trim().toLowerCase()) && (
+                  <TouchableOpacity
+                    onPress={() => { setForm(f => ({ ...f, tipoFormacion: busquedaTipo.trim() })); setBusquedaTipo(''); }}
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ color: tema.acento }}>Usar: "{busquedaTipo.trim()}"</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -1314,7 +1323,7 @@ export function EditMateriaScreen() {
             { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
           ] as const
         ).map(({ label, tipo, max }) => {
-          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo).length;
+          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length;
           if (max === undefined && cantidad === 0) return null;
           const pct = max ? Math.min(cantidad / max, 1) : 0;
           const colorBarra = max === undefined
@@ -1356,7 +1365,6 @@ export function EditMateriaScreen() {
                 [
                   { key: 'teorica' as const, label: config.labelTeorica || 'Teórica' },
                   { key: 'practica' as const, label: config.labelPractica || 'Práctica' },
-                  { key: 'otro' as const, label: config.labelOtro || 'Otro' },
                 ] as const
               ).map(({ key, label }) => (
                 <TouchableOpacity
@@ -1377,6 +1385,15 @@ export function EditMateriaScreen() {
               ))}
             </View>
 
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Justificada</Text>
+              <Switch
+                value={faltaNueva.justificada}
+                onValueChange={v => setFaltaNueva(f => ({ ...f, justificada: v }))}
+                trackColor={{ true: tema.acento }}
+              />
+            </View>
+
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Nota (opcional)</Text>
             <TextInput
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
@@ -1388,7 +1405,7 @@ export function EditMateriaScreen() {
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' }); }}
+                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false }); }}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}
               >
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
@@ -1424,9 +1441,7 @@ export function EditMateriaScreen() {
               .map(falta => {
                 const tipoLabel = falta.tipo === 'teorica'
                   ? (config.labelTeorica || 'Teórica')
-                  : falta.tipo === 'practica'
-                    ? (config.labelPractica || 'Práctica')
-                    : (config.labelOtro || 'Otro');
+                  : (config.labelPractica || 'Práctica');
                 return (
                   <View
                     key={falta.id}
@@ -1440,6 +1455,7 @@ export function EditMateriaScreen() {
                       <Text style={{ color: tema.texto, fontSize: 13 }}>
                         {fmtFechaBloque(falta.fecha)}
                         <Text style={{ color: tema.acento }}> · {tipoLabel}</Text>
+                        {falta.justificada ? <Text style={{ color: '#4CAF50' }}> · Justificada</Text> : null}
                       </Text>
                       {falta.nota ? (
                         <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>

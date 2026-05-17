@@ -86,7 +86,7 @@ export function materiasDisponibles(materias: Materia[], config: Config): number
       const previasOk = m.previasNecesarias.every(p => aprobadas.has(p));
       const creditosOk = creditos >= m.creditosNecesarios;
       const estado = calcularEstadoFinal(m, config);
-      const noTerminada = estado !== 'aprobado' && estado !== 'exonerado';
+      const noTerminada = estado !== 'aprobado' && estado !== 'exonerado' && estado !== 'cursando';
       return previasOk && creditosOk && noTerminada;
     })
     .map(m => m.numero);

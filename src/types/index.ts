@@ -49,7 +49,8 @@ export type TipoBloque = 'teorica' | 'practica' | 'parcial' | 'otro';
 export interface RegistroFalta {
   id: string;
   fecha: string;                          // 'YYYY-MM-DD'
-  tipo: 'teorica' | 'practica' | 'otro';
+  tipo: 'teorica' | 'practica';
+  justificada?: boolean;                  // si true, no cuenta en el cálculo de faltas
   nota?: string;                          // comentario libre opcional
 }
 
