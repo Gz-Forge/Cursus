@@ -82,8 +82,12 @@
                 "strict": true
               }
             }
-          ]
+          ],
+          "^.+\\.js$": "babel-jest"
         },
+        "transformIgnorePatterns": [
+          "node_modules/(?!(@noble)/)"
+        ],
         "moduleNameMapper": {
           "^react-native$": "<rootDir>/src/__mocks__/react-native.ts",
           "^expo-file-system(/.*)?$": "<rootDir>/src/__mocks__/expo-file-system.ts",
