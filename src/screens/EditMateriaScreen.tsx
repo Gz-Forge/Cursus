@@ -9,6 +9,7 @@ import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
@@ -109,6 +110,7 @@ export function EditMateriaScreen() {
   }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
+  const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
 
   // Import desde tabla
@@ -198,27 +200,7 @@ export function EditMateriaScreen() {
 
   const guardar = () => { guardarMateria(form); navigation.goBack(); };
 
-  const handleEliminar = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm(`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`)) {
-        eliminarMateria(form.id);
-        navigation.goBack();
-      }
-      return;
-    }
-    Alert.alert(
-      'Eliminar materia',
-      `¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => { eliminarMateria(form.id); navigation.goBack(); },
-        },
-      ]
-    );
-  };
+  const handleEliminar = () => setShowConfirmEliminar(true);
 
   const confirmarBloque = () => {
     const anio = new Date().getFullYear();
@@ -1543,6 +1525,16 @@ export function EditMateriaScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={showConfirmEliminar}
+        titulo="Eliminar materia"
+        mensaje={`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`}
+        labelConfirmar="Eliminar"
+        destructivo
+        onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id); navigation.goBack(); }}
+        onCancelar={() => setShowConfirmEliminar(false)}
+      />
     </SafeAreaView>
   );
 }

@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Alert, Platform, Image, ImageBackground,
 } from 'react-native';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -1005,6 +1006,7 @@ export function TemaPersonalizadoScreen() {
   const [pantallaEditando, setPantallaEditando] = useState<PantallaKey>('carrera');
   const [cambiosSinGuardar, setCambiosSinGuardar] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   const actualizarDraft = (parcial: Partial<TemaPersonalizado>) => {
     setDraft(prev => ({ ...prev, ...parcial }));
@@ -1019,17 +1021,8 @@ export function TemaPersonalizadoScreen() {
     setTimeout(() => setGuardadoOk(false), 2500);
   };
 
-  const resetear = () => {
-    const doResetear = () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); };
-    if (Platform.OS === 'web') {
-      if (window.confirm('¿Volver al tema oscuro por defecto?')) doResetear();
-      return;
-    }
-    Alert.alert('Resetear tema', '¿Volver al tema oscuro por defecto?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Resetear', style: 'destructive', onPress: doResetear },
-    ]);
-  };
+  const resetear = () => setShowConfirmReset(true);
+  const doResetear = () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); };
 
   const fondoDePreview = (): FondoPantalla | undefined => {
     switch (paginaPreview) {
@@ -1261,6 +1254,15 @@ export function TemaPersonalizadoScreen() {
         </View>
       )}
 
+      <ConfirmModal
+        visible={showConfirmReset}
+        titulo="Resetear tema"
+        mensaje="¿Volver al tema oscuro por defecto?"
+        labelConfirmar="Resetear"
+        destructivo
+        onConfirmar={() => { setShowConfirmReset(false); doResetear(); }}
+        onCancelar={() => setShowConfirmReset(false)}
+      />
     </SafeAreaView>
   );
 }
