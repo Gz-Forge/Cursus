@@ -130,10 +130,10 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       semestre: d.semestre,
       creditosQueDA: d.creditos_da ?? 0,
       creditosNecesarios: d.creditos_necesarios ?? 0,
-      previasNecesarias: (d.previas ?? [])
+      previasNecesarias: [],
+      esPreviaDe: (d.previas ?? [])
         .map(nombre => nombreANumero.get(nombre.trim()))
         .filter((n): n is number => n !== undefined),
-      esPreviaDe: [],
       cursando: false,
       usarNotaManual: false,
       notaManual: null,
@@ -145,12 +145,12 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
     };
   });
 
-  // Derivar esPreviaDe invirtiendo previasNecesarias
+  // Derivar previasNecesarias invirtiendo esPreviaDe
   materias.forEach(m => {
-    m.previasNecesarias.forEach(numReq => {
-      const req = materias.find(x => x.numero === numReq);
-      if (req && !req.esPreviaDe.includes(m.numero)) {
-        req.esPreviaDe.push(m.numero);
+    m.esPreviaDe.forEach(numDes => {
+      const dest = materias.find(x => x.numero === numDes);
+      if (dest && !dest.previasNecesarias.includes(m.numero)) {
+        dest.previasNecesarias.push(m.numero);
       }
     });
   });
@@ -343,13 +343,17 @@ export function esFormatoMultiMateriaEval(parsed: unknown[]): boolean {
 
 export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';
 
-function deriveEsPreviaDe(materias: Materia[]): Materia[] {
-  const result = materias.map(m => ({ ...m, esPreviaDe: [] as number[] }));
+/**
+ * Given a list of Materias where esPreviaDe is populated,
+ * recomputes previasNecesarias for the whole list by inverting esPreviaDe.
+ */
+function deriveRelaciones(materias: Materia[]): Materia[] {
+  const result = materias.map(m => ({ ...m, previasNecesarias: [] as number[] }));
   result.forEach(m => {
-    m.previasNecesarias.forEach(numReq => {
-      const req = result.find(x => x.numero === numReq);
-      if (req && !req.esPreviaDe.includes(m.numero)) {
-        req.esPreviaDe.push(m.numero);
+    m.esPreviaDe.forEach(numDes => {
+      const dest = result.find(x => x.numero === numDes);
+      if (dest && !dest.previasNecesarias.includes(m.numero)) {
+        dest.previasNecesarias.push(m.numero);
       }
     });
   });
@@ -408,7 +412,7 @@ export function mergeImportar(
     const nuevas = jsonAMaterias(renumbered, oportunidades);
     const combined = [...existentes, ...nuevas];
     combined.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
-    return deriveEsPreviaDe(combined);
+    return deriveRelaciones(combined);
   }
 
   // modo 'actualizar'
@@ -435,7 +439,7 @@ export function mergeImportar(
       creditosQueDA: d.creditos_da ?? existing.creditosQueDA,
       creditosNecesarios: d.creditos_necesarios ?? existing.creditosNecesarios,
       tipoFormacion: d.tipo_formacion ?? existing.tipoFormacion,
-      previasNecesarias: resolvePrevias(d.previas),
+      esPreviaDe: resolvePrevias(d.previas),
     };
   });
 
@@ -449,7 +453,7 @@ export function mergeImportar(
   ];
 
   resultado.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
-  return deriveEsPreviaDe(resultado);
+  return deriveRelaciones(resultado);
 }
 
 export function materiasAJson(materias: Materia[]): MateriaJson[] {
@@ -457,7 +461,7 @@ export function materiasAJson(materias: Materia[]): MateriaJson[] {
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));
 
   return materias.map(m => {
-    const previas = m.previasNecesarias
+    const previas = m.esPreviaDe
       .map(num => numeroANombre.get(num))
       .filter((n): n is string => n !== undefined);
 
