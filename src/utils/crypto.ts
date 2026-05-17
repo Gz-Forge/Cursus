@@ -1,6 +1,6 @@
 import { gcm } from '@noble/ciphers/aes.js';
 import { randomBytes } from '@noble/ciphers/utils.js';
-import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
+import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 const SALT_BYTES = 16;
@@ -10,22 +10,27 @@ const PBKDF2_ITERATIONS = 100_000;
 const PREFIX = 'E1:';
 
 function uint8ToBase64(arr: Uint8Array): string {
-  return Buffer.from(arr).toString('base64');
+  let binary = '';
+  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+  return btoa(binary);
 }
 
 function base64ToUint8(b64: string): Uint8Array {
-  return new Uint8Array(Buffer.from(b64, 'base64'));
+  const binary = atob(b64);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return arr;
 }
 
-function deriveKey(passphrase: string, salt: Uint8Array): Uint8Array {
+async function deriveKey(passphrase: string, salt: Uint8Array): Promise<Uint8Array> {
   const pass = new TextEncoder().encode(passphrase);
-  return pbkdf2(sha256, pass, salt, { c: PBKDF2_ITERATIONS, dkLen: KEY_BYTES });
+  return pbkdf2Async(sha256, pass, salt, { c: PBKDF2_ITERATIONS, dkLen: KEY_BYTES });
 }
 
 export async function encryptPayload(compressedData: string, passphrase: string): Promise<string> {
   const salt = randomBytes(SALT_BYTES);
   const iv = randomBytes(IV_BYTES);
-  const key = deriveKey(passphrase, salt);
+  const key = await deriveKey(passphrase, salt);
   const data = new TextEncoder().encode(compressedData);
   const ciphertext = gcm(key, iv).encrypt(data); // incluye authTag (16 bytes) al final
   const combined = new Uint8Array(SALT_BYTES + IV_BYTES + ciphertext.length);
@@ -53,7 +58,7 @@ export async function decryptPayload(encryptedData: string, passphrase: string):
   const salt = combined.slice(0, SALT_BYTES);
   const iv = combined.slice(SALT_BYTES, SALT_BYTES + IV_BYTES);
   const ciphertext = combined.slice(SALT_BYTES + IV_BYTES);
-  const key = deriveKey(passphrase, salt);
+  const key = await deriveKey(passphrase, salt);
 
   try {
     const decrypted = gcm(key, iv).decrypt(ciphertext);

@@ -25,7 +25,7 @@ describe('decryptPayload', () => {
 
   it('lanza error con contraseña incorrecta', async () => {
     const encrypted = await encryptPayload(DATA, PASS);
-    await expect(decryptPayload(encrypted, 'clave-incorrecta')).rejects.toThrow();
+    await expect(decryptPayload(encrypted, 'clave-incorrecta')).rejects.toThrow('Contraseña incorrecta');
   });
 
   it('datos legacy sin prefijo E1: se devuelven tal cual (compatibilidad)', async () => {
