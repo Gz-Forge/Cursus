@@ -90,7 +90,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                     onPress={() => setPaginaActual(p => Math.max(0, p - 1))}
                     disabled={paginaActual === 0}
                     style={{
-                      flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+                      flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center',
                       backgroundColor: paginaActual === 0 ? tema.borde : tema.tarjeta,
                     }}
                   >
@@ -100,7 +100,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                     onPress={() => setPaginaActual(p => Math.min(chunks.length - 1, p + 1))}
                     disabled={paginaActual === chunks.length - 1}
                     style={{
-                      flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+                      flex: 1, minWidth: 120, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center',
                       backgroundColor: paginaActual === chunks.length - 1 ? tema.borde : tema.tarjeta,
                     }}
                   >
