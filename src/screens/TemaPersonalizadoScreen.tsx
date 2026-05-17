@@ -1020,12 +1020,14 @@ export function TemaPersonalizadoScreen() {
   };
 
   const resetear = () => {
+    const doResetear = () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); };
+    if (Platform.OS === 'web') {
+      if (window.confirm('¿Volver al tema oscuro por defecto?')) doResetear();
+      return;
+    }
     Alert.alert('Resetear tema', '¿Volver al tema oscuro por defecto?', [
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Resetear', style: 'destructive',
-        onPress: () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); },
-      },
+      { text: 'Resetear', style: 'destructive', onPress: doResetear },
     ]);
   };
 
