@@ -604,15 +604,21 @@ export function CarreraScreen() {
                       >
                         <Text style={{ color: filtroEstado === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
                       </TouchableOpacity>
-                      {(Object.keys(ESTADO_LABELS) as EstadoMateria[]).map(e => (
-                        <TouchableOpacity
-                          key={e}
-                          onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
-                          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
-                        >
-                          <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      {(() => {
+                        const estadosPresentes = new Set(materias.map(m => calcularEstadoFinal(m, config)));
+                        return (Object.keys(ESTADO_LABELS) as EstadoMateria[]).filter(e => {
+                          if (e === 'aprobado' && !config.usarEstadoAprobado) return false;
+                          return estadosPresentes.has(e);
+                        }).map(e => (
+                          <TouchableOpacity
+                            key={e}
+                            onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
+                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
+                          >
+                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
+                          </TouchableOpacity>
+                        ));
+                      })()}
                     </View>
 
                     {tiposFormacion.length > 0 && (
