@@ -199,6 +199,13 @@ export function EditMateriaScreen() {
   const guardar = () => { guardarMateria(form); navigation.goBack(); };
 
   const handleEliminar = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`)) {
+        eliminarMateria(form.id);
+        navigation.goBack();
+      }
+      return;
+    }
     Alert.alert(
       'Eliminar materia',
       `¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`,

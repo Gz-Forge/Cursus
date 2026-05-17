@@ -164,45 +164,50 @@ export function CarreraScreen() {
       return;
     }
     if (!datos) return;
+    const doImportar = () => {
+      const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
+      const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
+      if (tiposNuevos.length > 0) {
+        actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
+      }
+      nuevas.forEach(m => guardarMateria(m));
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Se importarán ${datos.length} materias. ¿Reemplazar los datos actuales?`)) {
+        doImportar();
+      }
+      return;
+    }
     Alert.alert(
       'Importar carrera',
       `Se importarán ${datos.length} materias. ¿Reemplazar los datos actuales?`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Importar',
-          onPress: () => {
-            const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
-            const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
-            if (tiposNuevos.length > 0) {
-              actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
-            }
-            nuevas.forEach(m => guardarMateria(m));
-          },
-        },
+        { text: 'Importar', onPress: doImportar },
       ]
     );
   };
 
   const handlePeriodoExamen = () => {
+    const doDecrementar = () => {
+      const sinOportunidades = decrementarPeriodoExamen();
+      if (sinOportunidades.length > 0) {
+        const nombres = sinOportunidades.map(m => m.nombre).join(', ');
+        Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas.')) {
+        doDecrementar();
+      }
+      return;
+    }
     Alert.alert(
       'Período de examen',
       '¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas.',
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: () => {
-            const sinOportunidades = decrementarPeriodoExamen();
-            if (sinOportunidades.length > 0) {
-              const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-              Alert.alert(
-                'Materias sin oportunidades',
-                `Las siguientes materias pasaron a Recursar:\n\n${nombres}`,
-              );
-            }
-          },
-        },
+        { text: 'Confirmar', onPress: doDecrementar },
       ]
     );
   };
