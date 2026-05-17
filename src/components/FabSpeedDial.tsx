@@ -70,8 +70,8 @@ export function FabSpeedDial({ acciones }: Props) {
           accessibilityLabel={abierto ? 'Cerrar menú de acciones' : 'Abrir menú de acciones'}
           accessibilityRole="button"
         >
-          <Animated.View style={{ transform: [{ rotate: rotar }], alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 26, color: '#fff', lineHeight: 26, includeFontPadding: false }}>+</Text>
+          <Animated.View style={{ transform: [{ rotate: rotar }], width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 26, color: '#fff', textAlign: 'center', includeFontPadding: false }}>+</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
