@@ -84,14 +84,14 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   // ── EMISOR ──────────────────────────────────────────────────────────────────
 
-  const iniciarEmisor = async () => {
+  const iniciarEmisor = async (claveEmisor: string) => {
     setEstado('emisor_subiendo');
     try {
       const payload = await capturarSnapshot();
-      const datos = comprimirPayload(payload);
+      const comprimido = comprimirPayload(payload);
+      const datos = await encryptPayload(comprimido, claveEmisor);
       const expira_en = new Date(Date.now() + EXPIRY_MS).toISOString();
 
-      // Generar código único (reintenta si colisiona, prácticamente nunca ocurre)
       let nuevoCode = '';
       let codigoLibre = false;
       for (let intento = 0; intento < 5; intento++) {
@@ -111,8 +111,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
       if (error) throw error;
 
-      const ts = Date.now() + EXPIRY_MS;
-      setExpiryTs(ts);
+      setExpiryTs(Date.now() + EXPIRY_MS);
       setCode(nuevoCode);
       setEstado('emisor_listo');
     } catch (e: any) {
@@ -206,7 +205,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
               El emisor tiene los datos que querés copiar. El receptor los recibirá.
             </Text>
-            <TouchableOpacity onPress={iniciarEmisor} style={btnStyle()}>
+            <TouchableOpacity onPress={() => { setPassphrase(''); setShowPass(false); setEstado('emisor_ingresando_clave'); }} style={btnStyle()}>
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>📤  Soy el EMISOR</Text>
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>
                 Mis datos se copiarán al otro dispositivo
