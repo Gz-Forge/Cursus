@@ -9,6 +9,7 @@ import { FabSpeedDial } from '../components/FabSpeedDial';
 import { QrShareModal } from '../components/QrShareModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PerfilSheet } from '../components/PerfilSheet';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity, useColoresSemestres } from '../utils/useFondoPantalla';
@@ -45,6 +46,8 @@ export function CarreraScreen() {
   const [materiaPinned, setMateriaPinned] = useState<typeof materias[0] | null>(null);
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
+  const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
+  const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -164,52 +167,27 @@ export function CarreraScreen() {
       return;
     }
     if (!datos) return;
-    const doImportar = () => {
-      const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
-      const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
-      if (tiposNuevos.length > 0) {
-        actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
-      }
-      nuevas.forEach(m => guardarMateria(m));
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Se importarán ${datos.length} materias. ¿Reemplazar los datos actuales?`)) {
-        doImportar();
-      }
-      return;
-    }
-    Alert.alert(
-      'Importar carrera',
-      `Se importarán ${datos.length} materias. ¿Reemplazar los datos actuales?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Importar', onPress: doImportar },
-      ]
-    );
+    setConfirmImportar({ datos });
   };
 
-  const handlePeriodoExamen = () => {
-    const doDecrementar = () => {
-      const sinOportunidades = decrementarPeriodoExamen();
-      if (sinOportunidades.length > 0) {
-        const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-        Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
-      }
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm('¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas.')) {
-        doDecrementar();
-      }
-      return;
+  const doImportar = (datos: Awaited<ReturnType<typeof importarCarrera>>) => {
+    if (!datos) return;
+    const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
+    const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
+    if (tiposNuevos.length > 0) {
+      actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
     }
-    Alert.alert(
-      'Período de examen',
-      '¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Confirmar', onPress: doDecrementar },
-      ]
-    );
+    nuevas.forEach(m => guardarMateria(m));
+  };
+
+  const handlePeriodoExamen = () => setShowConfirmPeriodo(true);
+
+  const doDecrementar = () => {
+    const sinOportunidades = decrementarPeriodoExamen();
+    if (sinOportunidades.length > 0) {
+      const nombres = sinOportunidades.map(m => m.nombre).join(', ');
+      Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+    }
   };
 
 
@@ -696,6 +674,24 @@ export function CarreraScreen() {
         onCerrar={() => setMostrarAgregar(false)}
         onManual={() => navigation.navigate('EditMateria', {})}
         onImportar={handleImportar}
+      />
+
+      <ConfirmModal
+        visible={!!confirmImportar}
+        titulo="Importar carrera"
+        mensaje={`Se importarán ${confirmImportar?.datos?.length ?? 0} materias. ¿Reemplazar los datos actuales?`}
+        labelConfirmar="Importar"
+        onConfirmar={() => { doImportar(confirmImportar!.datos); setConfirmImportar(null); }}
+        onCancelar={() => setConfirmImportar(null)}
+      />
+
+      <ConfirmModal
+        visible={showConfirmPeriodo}
+        titulo="Período de examen"
+        mensaje="¿Pasó un período de examen? Se descontará 1 oportunidad a todas las materias aprobadas y reprobadas."
+        labelConfirmar="Confirmar"
+        onConfirmar={() => { setShowConfirmPeriodo(false); doDecrementar(); }}
+        onCancelar={() => setShowConfirmPeriodo(false)}
       />
     </View>
   );
