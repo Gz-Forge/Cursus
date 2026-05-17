@@ -71,7 +71,7 @@ export function FabSpeedDial({ acciones }: Props) {
           accessibilityRole="button"
         >
           <Animated.View style={{ transform: [{ rotate: rotar }], width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 26, color: '#fff', textAlign: 'center', includeFontPadding: false }}>+</Text>
+            <Text style={{ fontSize: 26, lineHeight: 26, color: '#fff', textAlign: 'center', includeFontPadding: false }}>+</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
