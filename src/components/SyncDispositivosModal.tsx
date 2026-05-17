@@ -12,13 +12,16 @@ import {
   comprimirPayload, descomprimirPayload,
 } from '../utils/deviceSnapshot';
 import { QrScannerModal } from './QrScannerModal';
+import { encryptPayload, decryptPayload } from '../utils/crypto';
 
 type Estado =
   | 'idle'
+  | 'emisor_ingresando_clave'
   | 'emisor_subiendo'
   | 'emisor_listo'
   | 'receptor_escaneando'
   | 'receptor_descargando'
+  | 'receptor_ingresando_clave'
   | 'receptor_confirmando'
   | 'receptor_aplicando'
   | 'receptor_listo'
@@ -55,6 +58,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [errorMsg, setErrorMsg] = useState('');
   const [pendingPayload, setPendingPayload] = useState<import('../utils/deviceSnapshot').DeviceSyncPayload | null>(null);
   const [pendingCode, setPendingCode] = useState('');
+  const [passphrase, setPassphrase] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [errorClave, setErrorClave] = useState('');
+  const [encryptedBlob, setEncryptedBlob] = useState('');
 
   const resetear = useCallback(() => {
     setEstado('idle');
@@ -65,6 +72,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setErrorMsg('');
     setPendingPayload(null);
     setPendingCode('');
+    setPassphrase('');
+    setShowPass(false);
+    setErrorClave('');
+    setEncryptedBlob('');
   }, []);
 
   useEffect(() => {
