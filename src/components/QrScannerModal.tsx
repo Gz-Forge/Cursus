@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import LZString from 'lz-string';
 import { decodeCarrera, esChunkQR, joinChunks } from '../utils/qrPayload';
 import { jsonAMaterias, extraerTiposNuevos, aplicarConfigJson } from '../utils/importExport';
@@ -17,6 +18,7 @@ interface Props {
 
 export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, onDeviceSyncDetectado }: Props) {
   const tema = useTema();
+  const { showAlert, showConfirm } = useAlert();
   const { guardarMateria, config, actualizarConfig } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [totalEsperado, setTotalEsperado] = useState<number | null>(null);
@@ -38,24 +40,22 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
     try {
       const materiaJson = decodeCarrera(encoded);
       const materias = jsonAMaterias(materiaJson, config.oportunidadesExamenDefault);
-      Alert.alert(
+      showConfirm(
         'Importar carrera',
         `Se encontraron ${materias.length} materias. ¿Importar?`,
-        [
-          { text: 'Cancelar', style: 'cancel', onPress: () => { procesando.current = false; } },
-          { text: 'Importar', onPress: () => {
-              const tiposNuevos = extraerTiposNuevos(materiaJson, config.tiposFormacion);
-              if (tiposNuevos.length > 0) {
-                actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
-              }
-              materias.forEach(m => guardarMateria(m));
-              onCerrar();
-          }},
-        ]
+        () => {
+          const tiposNuevos = extraerTiposNuevos(materiaJson, config.tiposFormacion);
+          if (tiposNuevos.length > 0) {
+            actualizarConfig({ tiposFormacion: [...config.tiposFormacion, ...tiposNuevos] });
+          }
+          materias.forEach(m => guardarMateria(m));
+          onCerrar();
+        },
+        { labelConfirmar: 'Importar' },
       );
     } catch (e) {
       if (__DEV__) console.warn('[QrScannerModal] Error al decodificar QR de carrera:', e);
-      Alert.alert('Error', 'El QR no es válido o está dañado.');
+      showAlert('Error', 'El QR no es válido o está dañado.');
       procesando.current = false;
     }
   };
@@ -72,7 +72,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
       ) {
         procesando.current = true;
         if (Date.now() > parsed.exp) {
-          Alert.alert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
+          showAlert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
           procesando.current = false;
           return;
         }
@@ -90,7 +90,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           onCerrar();
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar evaluaciones:', e);
-          Alert.alert('Error', 'El QR no contiene evaluaciones válidas.');
+          showAlert('Error', 'El QR no contiene evaluaciones válidas.');
           procesando.current = false;
         }
         return;
@@ -101,14 +101,10 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           const decoded = LZString.decompressFromBase64(parsed.data);
           const configData = JSON.parse(decoded ?? '{}');
           const resultado = aplicarConfigJson(configData, actualizarConfig);
-          Alert.alert(
-            'Configuración aplicada',
-            `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
-            [{ text: 'OK', onPress: onCerrar }],
-          );
+          showAlert('Configuración aplicada', `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`, 'OK', onCerrar);
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar configuración:', e);
-          Alert.alert('Error', 'El QR no contiene una configuración válida.');
+          showAlert('Error', 'El QR no contiene una configuración válida.');
           procesando.current = false;
         }
         return;
@@ -134,16 +130,13 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
             const existentes = new Set((match.bloques ?? []).map(clave));
             const nuevos = bloques.filter(b => !existentes.has(clave(b)));
             guardarMateria({ ...match, bloques: [...(match.bloques ?? []), ...nuevos] });
-            Alert.alert('Horario importado', `Se agregaron ${nuevos.length} bloque(s) a "${match.nombre}".`,
-              [{ text: 'OK', onPress: onCerrar }]);
+            showAlert('Horario importado', `Se agregaron ${nuevos.length} bloque(s) a "${match.nombre}".`, 'OK', onCerrar);
           } else {
-            Alert.alert('Materia no encontrada',
-              `No existe una materia llamada "${horarioData.nombre}" en esta app.`,
-              [{ text: 'OK', onPress: () => { procesando.current = false; } }]);
+            showAlert('Materia no encontrada', `No existe una materia llamada "${horarioData.nombre}" en esta app.`, 'OK', () => { procesando.current = false; });
           }
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar horario:', e);
-          Alert.alert('Error', 'El QR de horario no es válido.');
+          showAlert('Error', 'El QR de horario no es válido.');
           procesando.current = false;
         }
         return;

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Platform, Image, ImageBackground,
+  Platform, Image, ImageBackground,
 } from 'react-native';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { temaOscuro } from '../theme/colors';
+import { useAlert } from '../contexts/AlertContext';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -46,16 +47,17 @@ function FondoEditor({
   valor, onChange, label,
 }: { valor: FondoPantalla | undefined; onChange: (v: FondoPantalla | undefined) => void; label: string }) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const tipo = valor?.tipo ?? 'color';
   const colorActual = tipo === 'color' ? (valor?.valor ?? tema.fondo) : tema.fondo;
 
   const elegirImagen = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Web', 'En la versión web ingresá una URL de imagen directamente.');
+      showAlert('Web', 'En la versión web ingresá una URL de imagen directamente.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permiso denegado', 'Necesitamos acceso a la galería.'); return; }
+    if (!perm.granted) { showAlert('Permiso denegado', 'Necesitamos acceso a la galería.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,

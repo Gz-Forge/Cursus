@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, Animated, useWindowDimensions, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -17,6 +17,7 @@ import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '..
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
 import { EstadoMateria, Materia } from '../types';
+import { useAlert } from '../contexts/AlertContext';
 import { estadoColores, temaOscuro } from '../theme/colors';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
@@ -48,6 +49,7 @@ export function CarreraScreen() {
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
   const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
+  const { showAlert } = useAlert();
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -138,7 +140,7 @@ export function CarreraScreen() {
         .map(p => { const mx = materias.find(x => x.numero === p); return `  - ${p}${mx ? ` · ${mx.nombre}` : ''}`; });
       faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
     }
-    Alert.alert('No cumple los requisitos', `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`, [{ text: 'Entendido' }]);
+    showAlert('No cumple los requisitos', `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`);
   };
 
   useEffect(() => {
@@ -152,7 +154,7 @@ export function CarreraScreen() {
     actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });
     if (sinOportunidades.length > 0) {
       const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-      Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez al montar para verificar períodos de examen pendientes
   }, []);
@@ -163,7 +165,7 @@ export function CarreraScreen() {
       datos = await importarCarrera();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Error al leer el archivo';
-      Alert.alert('Error al importar', msg);
+      showAlert('Error al importar', msg);
       return;
     }
     if (!datos) return;
@@ -186,7 +188,7 @@ export function CarreraScreen() {
     const sinOportunidades = decrementarPeriodoExamen();
     if (sinOportunidades.length > 0) {
       const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-      Alert.alert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
     }
   };
 
@@ -483,46 +485,29 @@ export function CarreraScreen() {
             ) : (
               /* ── Panel original cuando no hay búsqueda ── */
               <>
-                {/* Toggle: Todas / Solo disponibles */}
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
+                {/* Segmented: Todas / Para cursar / Para dar examen */}
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                  <TouchableOpacity
-                    onPress={() => setMostrarSoloDisponibles(false)}
-                    style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                      backgroundColor: !mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
-                  >
-                    <Text style={{ color: !mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todas</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setMostrarSoloDisponibles(true)}
-                    style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                      backgroundColor: mostrarSoloDisponibles ? tema.acento : tema.tarjeta }}
-                  >
-                    <Text style={{ color: mostrarSoloDisponibles ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
-                  </TouchableOpacity>
+                  {[
+                    { key: 'todas',       label: 'Todas',              active: !mostrarSoloDisponibles,                                   onPress: () => setMostrarSoloDisponibles(false) },
+                    { key: 'para_cursar', label: '📚 Para cursar',     active: mostrarSoloDisponibles && subFiltroDisp === 'para_cursar', onPress: () => { setMostrarSoloDisponibles(true); setSubFiltroDisp('para_cursar'); } },
+                    { key: 'para_examen', label: '📝 Para dar examen', active: mostrarSoloDisponibles && subFiltroDisp === 'para_examen', onPress: () => { setMostrarSoloDisponibles(true); setSubFiltroDisp('para_examen'); } },
+                  ].map(({ key, label, active, onPress }) => (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={onPress}
+                      style={{ flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center',
+                        backgroundColor: active ? tema.acento : tema.tarjeta }}
+                    >
+                      <Text style={{ color: active ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
 
                 {mostrarSoloDisponibles ? (
                   /* ── Vista: disponibles con sub-tabs ── */
                   <>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                      {([
-                        { key: 'para_cursar', label: '📚 Para cursar' },
-                        { key: 'para_examen', label: '📝 Para dar examen' },
-                      ] as const).map(({ key, label }) => (
-                        <TouchableOpacity
-                          key={key}
-                          onPress={() => setSubFiltroDisp(key)}
-                          style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
-                            backgroundColor: subFiltroDisp === key ? tema.acento : tema.tarjeta }}
-                        >
-                          <Text style={{ color: subFiltroDisp === key ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
-                            {label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
                     {subFiltroDisp === 'para_cursar' && (() => {
                       const numerosDisp = new Set(materiasDisponibles(materias, config));
                       const lista = materias.filter(m => numerosDisp.has(m.numero) && calcularEstadoFinal(m, config) !== 'cursando');
@@ -557,7 +542,7 @@ export function CarreraScreen() {
                     })()}
 
                     {subFiltroDisp === 'para_examen' && (() => {
-                      const paraExamen = materias.filter(m => calcularEstadoFinal(m, config) === 'reprobado');
+                      const paraExamen = materias.filter(m => ['reprobado', 'aprobado'].includes(calcularEstadoFinal(m, config)));
                       return (
                         <>
                           {paraExamen.length === 0 ? (
@@ -693,6 +678,7 @@ export function CarreraScreen() {
         onConfirmar={() => { setShowConfirmPeriodo(false); doDecrementar(); }}
         onCancelar={() => setShowConfirmPeriodo(false)}
       />
+
     </View>
   );
 

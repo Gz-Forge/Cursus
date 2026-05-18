@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform, Modal } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import {
 } from '../utils/horarioImportExport';
 import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
+import { useAlert } from '../contexts/AlertContext';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -92,6 +93,7 @@ export function EditMateriaScreen() {
   const navigation = useNavigation();
   const { materias, config, guardarMateria, eliminarMateria } = useStore();
   const tema = useTema();
+  const { showAlert, showConfirm } = useAlert();
 
   const materiaOriginal = materias.find(m => m.id === route.params?.materiaId);
   const [form, setForm] = useState<Materia>(materiaOriginal ?? {
@@ -208,20 +210,20 @@ export function EditMateriaScreen() {
     const mes = parseInt(bloqueNuevo.mes, 10);
 
     if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
-      Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
+      showAlert('Día inválido', 'Ingresá un día entre 1 y 31.');
       return;
     }
     if (!bloqueNuevo.mes || isNaN(mes) || mes < 1 || mes > 12) {
-      Alert.alert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
+      showAlert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
       return;
     }
     const dateObj = new Date(anio, mes - 1, dia);
     if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
-      Alert.alert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
+      showAlert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
       return;
     }
     if (bloqueNuevo.horaFin <= bloqueNuevo.horaInicio) {
-      Alert.alert('Horario inválido', 'El fin debe ser posterior al inicio.');
+      showAlert('Horario inválido', 'El fin debe ser posterior al inicio.');
       return;
     }
     const diaStr = dia.toString().padStart(2, '0');
@@ -261,7 +263,7 @@ export function EditMateriaScreen() {
 
   const importarDesdeCSV = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -271,13 +273,13 @@ export function EditMateriaScreen() {
       setFilasParseadas(parsearCSV(texto));
       setModoImport('csv');
     } catch (e: any) {
-      Alert.alert('Error al abrir CSV', e.message);
+      showAlert('Error al abrir CSV', e.message);
     }
   };
 
   const importarDesdeJSON = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -285,15 +287,15 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
       setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      Alert.alert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
     } catch (e: any) {
-      Alert.alert('Error al importar JSON', e.message);
+      showAlert('Error al importar JSON', e.message);
     }
   };
 
   const importarDesdeICS = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -301,24 +303,24 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const eventos = extraerEventosICS(texto);
       if (eventos.length === 0) {
-        Alert.alert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
+        showAlert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
         return;
       }
       setEventosICS(eventos);
       setModoImport('ics');
     } catch (e: any) {
-      Alert.alert('Error al importar ICS', e.message);
+      showAlert('Error al importar ICS', e.message);
     }
   };
 
   const confirmarICS = () => {
     const semanas = parseInt(semanasICS, 10);
     if (isNaN(semanas) || semanas < 1) {
-      Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.');
+      showAlert('Semanas inválidas', 'Ingresá un número mayor a 0.');
       return;
     }
     if (semanas > 52) {
-      Alert.alert('Semanas inválidas', 'El máximo permitido es 52 semanas.');
+      showAlert('Semanas inválidas', 'El máximo permitido es 52 semanas.');
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
@@ -335,20 +337,20 @@ export function EditMateriaScreen() {
         'application/json',
       );
     } catch (e: any) {
-      Alert.alert('Error al exportar', e.message);
+      showAlert('Error al exportar', e.message);
     }
   };
 
   const copiarAlPortapapeles = async (texto: string, etiqueta = 'Copiado') => {
     await Clipboard.setStringAsync(texto);
-    Alert.alert(etiqueta, 'Contenido copiado al portapapeles.');
+    showAlert(etiqueta, 'Contenido copiado al portapapeles.');
   };
 
   const descargarEjemploCSV = async () => {
     try {
       await compartirArchivo('ejemplo_horario.csv', generarEjemploCSV(), 'text/csv');
     } catch (e: any) {
-      Alert.alert('Error al descargar ejemplo', e.message);
+      showAlert('Error al descargar ejemplo', e.message);
     }
   };
 
@@ -360,13 +362,13 @@ export function EditMateriaScreen() {
         'application/json',
       );
     } catch (e: any) {
-      Alert.alert('Error al exportar', e.message);
+      showAlert('Error al exportar', e.message);
     }
   };
 
   const importarEvaluaciones = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'Importá desde la app móvil.');
+      showAlert('No disponible', 'Importá desde la app móvil.');
       return;
     }
     try {
@@ -374,7 +376,7 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const parsed = JSON.parse(texto);
       if (!Array.isArray(parsed)) {
-        Alert.alert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
+        showAlert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
         return;
       }
 
@@ -409,38 +411,32 @@ export function EditMateriaScreen() {
           }
           procesadas++;
         });
-        Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
+        showAlert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
       } else {
         // Flat single-materia format: array of evaluaciones for current materia
         const evaluaciones = (parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
         if (evaluaciones.length === 0) {
-          Alert.alert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
+          showAlert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
           return;
         }
-        Alert.alert(
+        showConfirm(
           'Importar evaluaciones',
           `Se encontraron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
-            { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
-          ]
+          () => setForm(f => ({ ...f, evaluaciones })),
+          { labelConfirmar: 'Reemplazar', destructivo: true }
         );
       }
     } catch (e: any) {
-      Alert.alert('Error al importar', e.message);
+      showAlert('Error al importar', e.message);
     }
   };
 
   const handleEvaluacionesDetectadas = (evaluaciones: Evaluacion[]) => {
-    Alert.alert(
+    showConfirm(
       'Evaluaciones recibidas por QR',
       `Se recibieron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
-        { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
-      ]
+      () => setForm(f => ({ ...f, evaluaciones })),
+      { labelConfirmar: 'Reemplazar', destructivo: true }
     );
   };
 
@@ -483,17 +479,17 @@ export function EditMateriaScreen() {
       faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
     }
 
-    Alert.alert(
+    showAlert(
       'No cumple los requisitos',
       `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`,
-      [{ text: 'Entendido' }]
+      'Entendido'
     );
   };
 
   const confirmarFalta = () => {
     const fecha = parsearFecha(faltaNueva.fechaStr);
     if (!fecha) {
-      Alert.alert('Fecha inválida', 'Usá el formato DD/MM/AAAA.');
+      showAlert('Fecha inválida', 'Usá el formato DD/MM/AAAA.');
       return;
     }
     const nueva: RegistroFalta = {
@@ -1125,7 +1121,7 @@ export function EditMateriaScreen() {
                     onPress={async () => {
                       try {
                         await compartirArchivo('ejemplo_horario.json', generarEjemploJSONMateria(), 'application/json');
-                      } catch (e: any) { Alert.alert('Error', e.message); }
+                      } catch (e: any) { showAlert('Error', e.message); }
                     }}
                     style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                     <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>⬇ Descargar .json</Text>

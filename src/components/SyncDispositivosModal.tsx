@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal, View, Text, TouchableOpacity, ActivityIndicator,
-  Alert, Platform, TextInput,
+  Platform, TextInput,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import { supabase } from '../services/supabase';
 import {
   capturarSnapshot, aplicarSnapshot,
@@ -50,6 +51,7 @@ function genCode(): string {
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const [estado, setEstado] = useState<Estado>('idle');
   const [code, setCode] = useState('');
   const [expiryTs, setExpiryTs] = useState(0);
@@ -125,7 +127,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const descargarComoReceptor = async (inputCode: string) => {
     const trimmed = inputCode.trim().toUpperCase();
     if (trimmed.length !== 8) {
-      Alert.alert('Código inválido', 'El código debe tener exactamente 8 caracteres.');
+      showAlert('Código inválido', 'El código debe tener exactamente 8 caracteres.');
       return;
     }
     setEstado('receptor_descargando');

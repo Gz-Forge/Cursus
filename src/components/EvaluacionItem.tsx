@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion } from '../types';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import { calcularPorcentajeEvaluacion } from '../utils/calculos';
 
 // ── Helpers de formato ────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ interface Props {
 
 export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const contribucion = calcularPorcentajeEvaluacion(evaluacion);
 
   const actualizarSimple = (campo: Partial<EvaluacionSimple>) => {
@@ -216,7 +218,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
   const agregarSub = () => {
     const grupo = evaluacion as GrupoEvaluacion;
     if (grupo.subEvaluaciones.length >= 50) {
-      Alert.alert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
+      showAlert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
       return;
     }
     const nueva: SubEvaluacion = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
