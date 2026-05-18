@@ -91,7 +91,7 @@ function HoraPicker({ value, onChange, label }: {
 export function EditMateriaScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
-  const { materias, config, guardarMateria, eliminarMateria } = useStore();
+  const { materias, config, guardarMateria, eliminarMateria, actualizarConfig } = useStore();
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
 
@@ -579,7 +579,12 @@ export function EditMateriaScreen() {
                 }
                 {!config.tiposFormacion.some(t => t.toLowerCase() === busquedaTipo.trim().toLowerCase()) && (
                   <TouchableOpacity
-                    onPress={() => { setForm(f => ({ ...f, tipoFormacion: busquedaTipo.trim() })); setBusquedaTipo(''); }}
+                    onPress={() => {
+                      const t = busquedaTipo.trim();
+                      setForm(f => ({ ...f, tipoFormacion: t }));
+                      actualizarConfig({ tiposFormacion: [...config.tiposFormacion, t] });
+                      setBusquedaTipo('');
+                    }}
                     style={{ padding: 10 }}
                   >
                     <Text style={{ color: tema.acento }}>Usar: "{busquedaTipo.trim()}"</Text>
