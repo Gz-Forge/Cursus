@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
   Text,
   TouchableOpacity,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   type DimensionValue,
 } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import { MAX_PERFILES, MAX_NOMBRE } from '../utils/perfiles';
 
 interface Props {
@@ -23,6 +23,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
   const { perfiles, perfilActivoId, cambiarPerfil, crearPerfil, renombrarPerfil, eliminarPerfil } =
     useStore();
   const tema = useTema();
+  const { showConfirm } = useAlert();
 
   const isWeb = Platform.OS === 'web';
 
@@ -30,11 +31,6 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
   const [nombreEdicion, setNombreEdicion] = useState('');
   const [creando, setCreando] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState('');
-  const [confirmandoEliminarId, setConfirmandoEliminarId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!visible) setConfirmandoEliminarId(null);
-  }, [visible]);
 
   const handleCambiar = async (id: string) => {
     await cambiarPerfil(id);
@@ -49,21 +45,11 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
   };
 
   const handleEliminar = (id: string, _nombre: string) => {
-    if (isWeb) {
-      setConfirmandoEliminarId(id);
-      return;
-    }
-    Alert.alert(
+    showConfirm(
       'Eliminar perfil',
       `¿Eliminar "${_nombre}"? Se perderán todas sus materias y configuración.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => eliminarPerfil(id),
-        },
-      ],
+      () => eliminarPerfil(id),
+      { labelConfirmar: 'Eliminar', destructivo: true },
     );
   };
 
@@ -189,27 +175,9 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                           <Text style={{ fontSize: 16 }}>✏️</Text>
                         </TouchableOpacity>
                         {perfiles.length > 1 && (
-                          confirmandoEliminarId === perfil.id ? (
-                            <>
-                              <Text style={{ color: '#FF6B6B', fontSize: 12, marginLeft: 8 }}>¿Eliminar?</Text>
-                              <TouchableOpacity
-                                onPress={() => { eliminarPerfil(perfil.id); setConfirmandoEliminarId(null); }}
-                                style={{ marginLeft: 8, padding: 4 }}
-                              >
-                                <Text style={{ color: '#FF6B6B', fontWeight: '700', fontSize: 15 }}>✓</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => setConfirmandoEliminarId(null)}
-                                style={{ marginLeft: 6, padding: 4 }}
-                              >
-                                <Text style={{ color: tema.textoSecundario, fontSize: 15 }}>✕</Text>
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <TouchableOpacity onPress={() => handleEliminar(perfil.id, perfil.nombre)} style={{ marginLeft: 10, padding: 4 }}>
-                              <Text style={{ fontSize: 16 }}>🗑️</Text>
-                            </TouchableOpacity>
-                          )
+                          <TouchableOpacity onPress={() => handleEliminar(perfil.id, perfil.nombre)} style={{ marginLeft: 10, padding: 4 }}>
+                            <Text style={{ fontSize: 16 }}>🗑️</Text>
+                          </TouchableOpacity>
                         )}
                       </>
                     )}

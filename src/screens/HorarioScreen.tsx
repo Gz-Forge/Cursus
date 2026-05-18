@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Alert, Platform, Animated, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
+import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -76,6 +77,7 @@ function fmtFechaCorta(iso: string): string {
 
 export function HorarioScreen() {
   const { materias, config, actualizarConfig } = useStore();
+  const { showAlert } = useAlert();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
   const [weekOffset, setWeekOffset] = useState(0);
@@ -319,7 +321,7 @@ export function HorarioScreen() {
       await compartirArchivo('horarios.json', exportarJSONMultiMateria(elegidas), 'application/json');
       cerrarModal();
     } catch (e: any) {
-      Alert.alert('Error al exportar', e.message);
+      showAlert('Error al exportar', e.message);
     }
   };
 
@@ -328,9 +330,9 @@ export function HorarioScreen() {
       const elegidas = materias.filter(m => seleccionadas.has(m.id));
       if (elegidas.length === 0) return;
       await Clipboard.setStringAsync(exportarJSONMultiMateria(elegidas));
-      Alert.alert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
+      showAlert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
     } catch (e: any) {
-      Alert.alert('Error al copiar', e.message);
+      showAlert('Error al copiar', e.message);
     }
   };
 
@@ -1303,8 +1305,8 @@ export function HorarioScreen() {
                             }
                           });
                           setModalImport(false); resetImport();
-                          Alert.alert('Importado', `Se procesaron ${importadas.length} materia(s).`);
-                        } catch (e: any) { Alert.alert('Error al importar', e.message); }
+                          showAlert('Importado', `Se procesaron ${importadas.length} materia(s).`);
+                        } catch (e: any) { showAlert('Error al importar', e.message); }
                       }}
                       style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
                       <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir archivo</Text>
@@ -1350,7 +1352,7 @@ export function HorarioScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         if (importMateriasSelec.size === 0) {
-                          Alert.alert('Sin materias', 'Seleccioná al menos una materia.');
+                          showAlert('Sin materias', 'Seleccioná al menos una materia.');
                           return;
                         }
                         setImportMateriaConfirmada(true);
@@ -1390,13 +1392,13 @@ export function HorarioScreen() {
                         <TouchableOpacity
                           onPress={async () => {
                             try { await compartirArchivo('ejemplo.csv', generarEjemploTexto(), 'text/csv'); }
-                            catch (e: any) { Alert.alert('Error', e.message); }
+                            catch (e: any) { showAlert('Error', e.message); }
                           }}
                           style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploTexto()); Alert.alert('Copiado', ''); }}
+                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploTexto()); showAlert('Copiado', ''); }}
                           style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
                             borderWidth: 1, borderColor: tema.acento }}>
                           <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
@@ -1436,14 +1438,14 @@ export function HorarioScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         const validas = importFilas.filter(f => !f.error);
-                        if (validas.length === 0) { Alert.alert('Sin datos', 'Pegá texto con al menos una fila válida.'); return; }
+                        if (validas.length === 0) { showAlert('Sin datos', 'Pegá texto con al menos una fila válida.'); return; }
                         const bloques: BloqueHorario[] = validas.map(f => ({
                           id: `${Date.now()}_${Math.random()}`,
                           fecha: f.fecha!, horaInicio: f.horaInicio!, horaFin: f.horaFin!, tipo: f.tipo!,
                         }));
                         const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
                         setModalImport(false); resetImport();
-                        Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                        showAlert('Importado', `${total} bloque(s) agregados.`);
                       }}
                       disabled={importFilas.filter(f => !f.error).length === 0}
                       style={{ flex: 2, padding: 12,
@@ -1478,12 +1480,12 @@ export function HorarioScreen() {
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                         <TouchableOpacity
-                          onPress={async () => { try { await compartirArchivo('ejemplo.csv', generarEjemploCSV(), 'text/csv'); } catch (e: any) { Alert.alert('Error', e.message); } }}
+                          onPress={async () => { try { await compartirArchivo('ejemplo.csv', generarEjemploCSV(), 'text/csv'); } catch (e: any) { showAlert('Error', e.message); } }}
                           style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploCSV()); Alert.alert('Copiado', ''); }}
+                          onPress={async () => { await Clipboard.setStringAsync(generarEjemploCSV()); showAlert('Copiado', ''); }}
                           style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
                             borderWidth: 1, borderColor: tema.acento }}>
                           <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
@@ -1513,7 +1515,7 @@ export function HorarioScreen() {
                             const texto = await leerArchivo(['text/csv', 'text/plain', '*/*']);
                             if (!texto) return;
                             setImportFilas(parsearCSV(texto));
-                          } catch (e: any) { Alert.alert('Error', e.message); }
+                          } catch (e: any) { showAlert('Error', e.message); }
                         }}
                         style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
                         <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir CSV</Text>
@@ -1528,7 +1530,7 @@ export function HorarioScreen() {
                           }));
                           const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
                           setModalImport(false); resetImport();
-                          Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                          showAlert('Importado', `${total} bloque(s) agregados.`);
                         }}
                         disabled={importFilas.filter(f => !f.error).length === 0}
                         style={{ flex: 2, padding: 12,
@@ -1566,9 +1568,9 @@ export function HorarioScreen() {
                               const texto = await leerArchivo(['text/calendar', '*/*']);
                               if (!texto) return;
                               const eventos = extraerEventosICS(texto);
-                              if (eventos.length === 0) { Alert.alert('Sin eventos', 'No se encontraron eventos en el archivo ICS.'); return; }
+                              if (eventos.length === 0) { showAlert('Sin eventos', 'No se encontraron eventos en el archivo ICS.'); return; }
                               setImportEventosICS(eventos);
-                            } catch (e: any) { Alert.alert('Error', e.message); }
+                            } catch (e: any) { showAlert('Error', e.message); }
                           }}
                           style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir ICS</Text>
@@ -1596,12 +1598,12 @@ export function HorarioScreen() {
                         <TouchableOpacity
                           onPress={() => {
                             const semanas = parseInt(importSemanasICS, 10);
-                            if (isNaN(semanas) || semanas < 1) { Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.'); return; }
-                            if (semanas > 52) { Alert.alert('Máximo 52 semanas permitidas'); return; }
+                            if (isNaN(semanas) || semanas < 1) { showAlert('Semanas inválidas', 'Ingresá un número mayor a 0.'); return; }
+                            if (semanas > 52) { showAlert('Máximo 52 semanas permitidas', ''); return; }
                             const bloques = expandirEventosICS(importEventosICS, semanas);
                             const total = aplicarBloquesAMaterias(bloques, [...importMateriasSelec]);
                             setModalImport(false); resetImport();
-                            Alert.alert('Importado', `${total} bloque(s) agregados.`);
+                            showAlert('Importado', `${total} bloque(s) agregados.`);
                           }}
                           style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontWeight: '700' }}>Importar</Text>

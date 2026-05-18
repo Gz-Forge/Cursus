@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';

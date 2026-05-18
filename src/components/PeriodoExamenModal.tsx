@@ -1,8 +1,9 @@
 // Cursus/src/components/PeriodoExamenModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Alert } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform } from 'react-native';
 import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   visible: boolean;
@@ -25,6 +26,7 @@ function autoFormatISO(prev: string, next: string): string {
 export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   const tema = useTema();
   const { config, actualizarConfig } = useStore();
+  const { showAlert } = useAlert();
   const [nuevaFecha, setNuevaFecha] = useState('');
 
   const modo = config.modoExamen;
@@ -35,11 +37,11 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   const agregarFecha = () => {
     const f = nuevaFecha.trim();
     if (!esFechaValida(f)) {
-      Alert.alert('Fecha inválida', 'Usá el formato AAAA-MM-DD (ej: 2026-07-15).');
+      showAlert('Fecha inválida', 'Usá el formato AAAA-MM-DD (ej: 2026-07-15).');
       return;
     }
     if (fechas.includes(f)) {
-      Alert.alert('Fecha duplicada', 'Esa fecha límite ya está en la lista.');
+      showAlert('Fecha duplicada', 'Esa fecha límite ya está en la lista.');
       return;
     }
     actualizarConfig({ fechasLimiteExamen: [...fechas, f].sort() });

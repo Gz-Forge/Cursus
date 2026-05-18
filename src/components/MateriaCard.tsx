@@ -160,7 +160,10 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
             {(mostrarToggleCursando ?? true) && onToggleCursando && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+                onStartShouldSetResponder={() => true}
+              >
                 <Switch
                   value={materia.cursando ?? false}
                   onValueChange={onToggleCursando}
