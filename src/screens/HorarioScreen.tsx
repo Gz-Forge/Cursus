@@ -1207,18 +1207,13 @@ export function HorarioScreen() {
                                 const prevColsWidth = dayColWidthsRef.current
                                   .slice(0, diaIdx)
                                   .reduce((s, w) => s + w, 0);
+                                // Guardar origen — ghost se muestra en onBegan del Pan (igual que bloques)
                                 ghostOriginRef.current = {
                                   x: outerOriginRef.current.x + TIME_COL_W + prevColsWidth + 1,
                                   y: outerOriginRef.current.y + blockTopInGrid - vScrollOffRef.current,
                                 };
                                 evalDragDataRef.current = { fondoColor, textoColor, labelBloque, height };
                                 setEvalEnDrag(ev.id);
-                                setGhostPos({
-                                  x: TIME_COL_W + prevColsWidth + 1,
-                                  y: blockTopInGrid - vScrollOffRef.current,
-                                  w: colW - 2,
-                                  h: height,
-                                });
                               }
                             }}
                           >
@@ -1227,7 +1222,7 @@ export function HorarioScreen() {
                               left: 1, right: 1,
                               backgroundColor: fondoColor,
                               borderRadius: 3,
-                              borderWidth: 1.5,
+                              borderWidth: esEnDrag ? 2 : 1.5,
                               borderColor: textoColor,
                               borderStyle: 'dashed',
                               overflow: 'hidden',
@@ -1236,8 +1231,17 @@ export function HorarioScreen() {
                             }}>
                               {esEnDrag ? (
                                 <PanGestureHandler
-                                  activeOffsetX={[-5, 5]}
-                                  activeOffsetY={[-5, 5]}
+                                  activeOffsetX={[-10, 10]}
+                                  activeOffsetY={[-10, 10]}
+                                  onBegan={() => {
+                                    if (!ghostOriginRef.current) return;
+                                    setGhostPos({
+                                      x: ghostOriginRef.current.x - outerOriginRef.current.x,
+                                      y: ghostOriginRef.current.y - outerOriginRef.current.y,
+                                      w: colW - 2,
+                                      h: height,
+                                    });
+                                  }}
                                   onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
                                     if (!ghostOriginRef.current) return;
                                     setGhostPos(prev => prev ? {
