@@ -8,17 +8,12 @@ import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondo
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { estadoColores } from '../theme/colors';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, creditosAcumulados, calcularEstadoFinal } from '../utils/calculos';
 import { EstadoMateria } from '../types';
 
 const PALETA_TIPOS = ['#7C4DFF','#00BCD4','#4CAF50','#FF9800','#F44336','#FFD700','#2196F3','#E91E63','#009688','#FF5722'];
 
-const ESTADO_LABELS: Record<EstadoMateria, string> = {
-  aprobado: '✅ Aprobadas', exonerado: '⭐ Exoneradas',
-  cursando: '🔵 Cursando', por_cursar: '⬜ Por cursar',
-  reprobado: '🟠 Reprobadas', recursar: '🔴 Recursar',
-};
 
 const ORDEN_ESTADOS: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
 
@@ -61,6 +56,7 @@ function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
 export function MetricsScreen() {
   const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('metricas');
+  const { getColor, getLabel } = useEstadoEstilo();
   const { width, height } = useWindowDimensions();
   const [semestreTorta, setSemestreTorta] = useState<number | null>(null);
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
@@ -224,10 +220,10 @@ export function MetricsScreen() {
     else                                    conteoRangos.recursar++;
   });
   const barrasRangos = [
-    { value: conteoRangos.recursar,  label: 'Recursar',  frontColor: estadoColores.recursar },
-    { value: conteoRangos.reprobado, label: 'Reprobado', frontColor: estadoColores.reprobado },
-    { value: conteoRangos.aprobado,  label: 'Aprobado',  frontColor: estadoColores.aprobado },
-    { value: conteoRangos.exonerado, label: 'Exonerado', frontColor: estadoColores.exonerado },
+    { value: conteoRangos.recursar,  label: 'Recursar',  frontColor: getColor('recursar') },
+    { value: conteoRangos.reprobado, label: 'Reprobado', frontColor: getColor('reprobado') },
+    { value: conteoRangos.aprobado,  label: 'Aprobado',  frontColor: getColor('aprobado') },
+    { value: conteoRangos.exonerado, label: 'Exonerado', frontColor: getColor('exonerado') },
   ].filter(b => b.value > 0);
   const maxRangos = barrasRangos.length > 0 ? Math.max(...barrasRangos.map(b => b.value)) : 1;
   const { maxValue: rangosMax, noOfSections: rangosSections } = yAxis(maxRangos);
@@ -677,7 +673,7 @@ export function MetricsScreen() {
                         <View style={{ flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: tema.borde }}>
                           {ORDEN_ESTADOS.map(e =>
                             c[e] > 0 ? (
-                              <View key={e} style={{ flex: c[e], backgroundColor: estadoColores[e] }} />
+                              <View key={e} style={{ flex: c[e], backgroundColor: getColor(e) }} />
                             ) : null
                           )}
                         </View>
@@ -694,14 +690,14 @@ export function MetricsScreen() {
                     <View style={{ flexDirection: 'row', height: 20, borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
                       {ORDEN_ESTADOS.map(e =>
                         conteo[e] > 0 ? (
-                          <View key={e} style={{ flex: conteo[e], backgroundColor: estadoColores[e] }} />
+                          <View key={e} style={{ flex: conteo[e], backgroundColor: getColor(e) }} />
                         ) : null
                       )}
                     </View>
-                    {ORDEN_ESTADOS.map(e => (
+                    {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
                       <View key={e} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: tema.texto, fontSize: 13 }}>{ESTADO_LABELS[e]}</Text>
-                        <Text style={{ color: estadoColores[e], fontWeight: '700', fontSize: 13 }}>
+                        <Text style={{ color: tema.texto, fontSize: 13 }}>{getLabel(e)}</Text>
+                        <Text style={{ color: getColor(e), fontWeight: '700', fontSize: 13 }}>
                           {conteo[e]}  ({Math.round((conteo[e] / total) * 100)}%)
                         </Text>
                       </View>
@@ -767,7 +763,7 @@ export function MetricsScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
                               <View style={{
                                 width: 10, height: 10, borderRadius: 5,
-                                backgroundColor: estadoColores[estado],
+                                backgroundColor: getColor(estado),
                               }} />
                               <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13, flex: 1 }}>
                                 {mat.nombre}
@@ -909,7 +905,7 @@ export function MetricsScreen() {
                                     key={mat.id}
                                     style={{
                                       width: 18, height: 18, borderRadius: 3,
-                                      backgroundColor: estadoColores[calcularEstadoFinal(mat, config)],
+                                      backgroundColor: getColor(calcularEstadoFinal(mat, config)),
                                     }}
                                   />
                                 ))}
@@ -920,8 +916,8 @@ export function MetricsScreen() {
                             paddingTop: 10, borderTopWidth: 1, borderTopColor: tema.borde }}>
                             {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
                               <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: estadoColores[e] }} />
-                                <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{ESTADO_LABELS[e].split(' ').slice(1).join(' ')}</Text>
+                                <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: getColor(e) }} />
+                                <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{getLabel(e).split(' ').slice(1).join(' ')}</Text>
                               </View>
                             ))}
                           </View>
