@@ -15,7 +15,7 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
-import type { MateriaJson, ModoImport, ConfigJsonResult } from '../utils/importExport';
+import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -72,7 +72,6 @@ function PanelImportar() {
   const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [cargandoColores, setCargandoColores] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
     tiposNuevos: string[];
@@ -97,6 +96,25 @@ function PanelImportar() {
       datos = JSON.parse(contenido);
     } catch {
       showAlert('Error', 'El archivo no es un JSON válido.');
+      return;
+    }
+
+    // Detectar JSON de colores (generado por prompt IA)
+    if (
+      typeof datos === 'object' && datos !== null &&
+      !Array.isArray(datos) &&
+      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales)
+    ) {
+      const d = datos as any;
+      const updates: Record<string, unknown> = {};
+      if (d.coloresHorario && typeof d.coloresHorario === 'object') {
+        updates.coloresHorario = { ...(config.coloresHorario ?? {}), ...d.coloresHorario };
+      }
+      if (d.coloresEvaluacionesGrupales && typeof d.coloresEvaluacionesGrupales === 'object') {
+        updates.coloresEvaluacionesGrupales = d.coloresEvaluacionesGrupales;
+      }
+      actualizarConfig(updates as Partial<typeof config>);
+      showAlert('Colores importados', 'Los colores se aplicaron correctamente.');
       return;
     }
 
@@ -151,9 +169,34 @@ function PanelImportar() {
       return;
     }
 
+    // Detectar formato configuración JSON (cursus_config)
+    if (
+      typeof datos === 'object' && datos !== null && !Array.isArray(datos) &&
+      (datos as any).cursus_config === 1
+    ) {
+      try {
+        const { aplicarConfigJson } = await import('../utils/importExport');
+        const resultado = aplicarConfigJson(datos, actualizarConfig);
+        if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
+          showAlert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
+          return;
+        }
+        const resumen = [
+          `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
+          resultado.ignorados.length > 0
+            ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos:\n${resultado.ignorados.map((x: any) => `• ${x.campo}: ${x.motivo}`).join('\n')}`
+            : null,
+        ].filter(Boolean).join('\n\n');
+        showAlert('Configuración importada', resumen);
+      } catch {
+        showAlert('Error', 'No se pudo aplicar la configuración.');
+      }
+      return;
+    }
+
     showAlert(
       'Formato no reconocido',
-      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla',
+      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla\n• Configuración: generada con "Generar configuración" en Prompts para IA\n• Colores: generados con el prompt de colores de horario',
     );
   };
 
@@ -186,83 +229,6 @@ function PanelImportar() {
     } finally {
       setCargando(false);
     }
-  };
-
-  const handleImportarColores = async () => {
-    setCargandoColores(true);
-    let contenido: string | null = null;
-    try {
-      contenido = await fileIO.importarArchivo();
-    } catch {
-      showAlert('Error', 'No se pudo abrir el archivo.');
-      setCargandoColores(false);
-      return;
-    }
-    setCargandoColores(false);
-    if (!contenido) return;
-
-    let datos: unknown;
-    try {
-      datos = JSON.parse(contenido);
-    } catch {
-      showAlert('Error', 'El archivo no es un JSON válido.');
-      return;
-    }
-
-    if (!datos || typeof datos !== 'object' || !(datos as any).coloresHorario || typeof (datos as any).coloresHorario !== 'object') {
-      showAlert('Formato inválido', 'El JSON debe tener la clave "coloresHorario".\n\nGenerá el archivo con "Exportar para IA" en la pestaña Exportar.');
-      return;
-    }
-    actualizarConfig({ coloresHorario: { ...(config.coloresHorario ?? {}), ...(datos as any).coloresHorario } });
-    showAlert('Colores importados', 'Los colores se aplicaron correctamente.');
-  };
-
-  const handleImportarConfig = async () => {
-    setCargando(true);
-    let contenido: string | null = null;
-    try {
-      contenido = await fileIO.importarArchivo();
-    } catch {
-      showAlert('Error', 'No se pudo abrir el archivo.');
-      setCargando(false);
-      return;
-    }
-    setCargando(false);
-    if (!contenido) return;
-
-    let datos: unknown;
-    try {
-      datos = JSON.parse(contenido);
-    } catch {
-      showAlert('Error', 'El archivo no es un JSON válido.');
-      return;
-    }
-
-    let resultado: ConfigJsonResult;
-    try {
-      const { aplicarConfigJson } = await import('../utils/importExport');
-      resultado = aplicarConfigJson(datos, actualizarConfig);
-    } catch {
-      showAlert(
-        'Formato no reconocido',
-        'El archivo no parece ser un JSON de configuración de Cursus.\n\nAsegurate de generarlo con el prompt "Generar configuración" en Configuración → Prompts para IA.',
-      );
-      return;
-    }
-
-    if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
-      showAlert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
-      return;
-    }
-
-    const resumen = [
-      `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
-      resultado.ignorados.length > 0
-        ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos:\n${resultado.ignorados.map(x => `• ${x.campo}: ${x.motivo}`).join('\n')}`
-        : null,
-    ].filter(Boolean).join('\n\n');
-
-    showAlert('Configuración importada', resumen);
   };
 
   return (
@@ -376,61 +342,6 @@ function PanelImportar() {
         </>
       )}
 
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
-        CONFIGURACIÓN DESDE JSON
-      </Text>
-      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Importá un JSON generado con el prompt{' '}
-          <Text style={{ color: tema.texto }}>"Generar configuración"</Text>
-          {' '}(Configuración → Prompts para IA) para configurar la app de una vez.{'\n\n'}
-          Solo se actualizan los campos presentes en el JSON; el resto queda como está.
-        </Text>
-        <TouchableOpacity
-          onPress={handleImportarConfig}
-          disabled={cargando}
-          style={{
-            backgroundColor: tema.tarjeta,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: tema.acento,
-          }}
-        >
-          {cargando
-            ? <ActivityIndicator color={tema.acento} />
-            : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Importar configuración JSON</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
-        COLORES DE HORARIO
-      </Text>
-      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Importá el JSON de colores generado por la IA para aplicar los colores a tu horario.{'\n\n'}
-          Generá primero el archivo desde la pestaña{' '}
-          <Text style={{ color: tema.acento }}>Exportar → Colores de horario</Text>.
-        </Text>
-        <TouchableOpacity
-          onPress={handleImportarColores}
-          disabled={cargandoColores}
-          style={{
-            backgroundColor: tema.tarjeta,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: tema.acento,
-          }}
-        >
-          {cargandoColores
-            ? <ActivityIndicator color={tema.acento} />
-            : <Text style={{ color: tema.acento, fontWeight: '700' }}>🎨 Importar colores JSON</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
     </View>
   );
 }
@@ -443,11 +354,9 @@ function PanelExportar() {
   const [inclEvaluaciones, setInclEvaluaciones] = useState(false);
   const [inclHorarios, setInclHorarios] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
-  const [cargandoConfig, setCargandoConfig] = useState(false);
-  const [cargandoColores, setCargandoColores] = useState(false);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
 
-  const generarPayloadColoresParaIA = () => {
+  const generarPromptColoresParaIA = () => {
     const labelTipo = (tipo: string) => {
       switch (tipo) {
         case 'teorica':  return config.labelTeorica  || 'Teórica';
@@ -476,45 +385,33 @@ function PanelExportar() {
         coloresActuales: config.coloresHorario?.[m.id] ?? {},
       };
     });
-    const instruccion = `Sos un asistente de diseño de colores para una app académica.
-En el horario semanal, cada materia tiene bloques de diferentes tipos y necesito elegir colores para cada uno.
+    const coloresEvGrupales = (config as any).coloresEvaluacionesGrupales
+      ? JSON.stringify((config as any).coloresEvaluacionesGrupales)
+      : 'no configurado';
+    return `Sos un asistente de diseño de colores para una app académica de horarios.
 
-Preguntame materia por materia, y dentro de cada materia, tipo de bloque por tipo de bloque, qué color de fondo y qué color de texto quiero usar. Podés sugerir combinaciones que queden bien visualmente.
+Estado actual de colores de mis materias:
+${JSON.stringify(materiasExport, null, 2)}
 
-Cuando terminés de preguntar todo, devolvé SOLAMENTE el JSON final con este formato exacto (sin texto adicional antes ni después):
+Evaluaciones grupales (color compartido): ${coloresEvGrupales}
+
+Ayudame a elegir colores para cada materia y tipo de bloque.
+Preguntame materia por materia qué colores quiero usar para fondo y texto.
+También preguntame si quiero cambiar el color de las evaluaciones grupales.
+Cuando termines, devolvé SOLO el JSON con este formato:
 {
-  "coloresHorario": {
-    "[id de la materia]": {
-      "[tipo de bloque]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
-    }
-  }
-}
-
-Tipos posibles: teorica, practica, parcial, otro`;
-    return JSON.stringify({ instruccion, materias: materiasExport }, null, 2);
+  "coloresHorario": { "[id_materia]": { "[tipo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
+  "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
+}`;
   };
 
-  const handleExportarColores = async () => {
-    setCargandoColores(true);
+  const handleCopiarPromptColores = async () => {
     try {
-      await fileIO.exportarArchivo('cursus-colores.json', generarPayloadColoresParaIA());
+      const prompt = generarPromptColoresParaIA();
+      await Clipboard.setStringAsync(prompt);
+      showAlert('¡Copiado!', 'El prompt fue copiado al portapapeles. Pegalo en tu IA favorita.');
     } catch {
-      showAlert('Error', 'No se pudo exportar el archivo.');
-    } finally {
-      setCargandoColores(false);
-    }
-  };
-
-  const handleExportarConfig = async () => {
-    setCargandoConfig(true);
-    try {
-      const { configAJson } = await import('../utils/importExport');
-      const contenido = JSON.stringify(configAJson(config), null, 2);
-      await fileIO.exportarArchivo('cursus-config.json', contenido);
-    } catch {
-      showAlert('Error', 'No se pudo exportar la configuración.');
-    } finally {
-      setCargandoConfig(false);
+      showAlert('Error', 'No se pudo copiar el prompt.');
     }
   };
 
@@ -601,40 +498,19 @@ Tipos posibles: teorica, practica, parcial, otro`;
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Exporta la configuración actual (umbrales, horario, tarjetas, etc.) como un archivo JSON independiente.{'\n\n'}
-          Podés importarlo en otro dispositivo desde{' '}
-          <Text style={{ color: tema.acento }}>Importar → Configuración desde JSON</Text>.
+          Compartí la configuración actual (umbrales, horario, tarjetas, etc.) por QR para aplicarla en otro dispositivo con la app Cursus.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={handleExportarConfig}
-            disabled={cargandoConfig}
-            style={{
-              flex: 1,
-              backgroundColor: tema.tarjeta,
-              padding: 14, borderRadius: 10,
-              alignItems: 'center',
-              borderWidth: 1, borderColor: tema.acento,
-            }}
-          >
-            {cargandoConfig
-              ? <ActivityIndicator color={tema.acento} />
-              : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Exportar .json</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setMostrarQrConfig(true)}
-            style={{
-              flex: 1,
-              backgroundColor: tema.tarjeta,
-              padding: 14, borderRadius: 10,
-              alignItems: 'center',
-              borderWidth: 1, borderColor: tema.acento,
-            }}
-          >
-            <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => setMostrarQrConfig(true)}
+          style={{
+            backgroundColor: tema.tarjeta,
+            padding: 14, borderRadius: 10,
+            alignItems: 'center',
+            borderWidth: 1, borderColor: tema.acento,
+          }}
+        >
+          <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
+        </TouchableOpacity>
       </View>
 
       <QrConfigModal
@@ -644,17 +520,16 @@ Tipos posibles: teorica, practica, parcial, otro`;
       />
 
       <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
-        COLORES DE HORARIO
+        COLORES DE HORARIO (PROMPT IA)
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Exporta un JSON con tus materias y sus tipos de bloque para que la IA te sugiera colores.{'\n\n'}
-          Pegalo en tu IA favorita, elegí los colores, y luego importá el resultado desde{' '}
-          <Text style={{ color: tema.acento }}>Importar → Colores de horario</Text>.
+          Copiá el prompt con el estado actual de tus colores y pedile a la IA que te ayude a configurarlos.{'\n\n'}
+          Una vez que la IA te devuelva el JSON, importalo desde{' '}
+          <Text style={{ color: tema.acento }}>Importar → Seleccionar archivo .json</Text>.
         </Text>
         <TouchableOpacity
-          onPress={handleExportarColores}
-          disabled={cargandoColores}
+          onPress={handleCopiarPromptColores}
           style={{
             backgroundColor: tema.tarjeta,
             padding: 14, borderRadius: 10,
@@ -662,10 +537,7 @@ Tipos posibles: teorica, practica, parcial, otro`;
             borderWidth: 1, borderColor: tema.acento,
           }}
         >
-          {cargandoColores
-            ? <ActivityIndicator color={tema.acento} />
-            : <Text style={{ color: tema.acento, fontWeight: '700' }}>🎨 Exportar para IA .json</Text>
-          }
+          <Text style={{ color: tema.acento, fontWeight: '700' }}>📋 Copiar prompt de colores</Text>
         </TouchableOpacity>
       </View>
 

@@ -180,8 +180,13 @@ export interface Config {
   horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
   // Métricas personalizables
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
+  metricasOrden?: string[];            // orden de las métricas (array de IDs); ausente = orden por defecto
+  notasObtenidasRedondeo?: 'abajo' | 'arriba'; // modo de redondeo para métrica "Notas obtenidas"
+  notasObtenidasModo?: 'exacta' | 'rangos';    // agrupar notas exactas o en rangos
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
+  // Horario — evaluaciones grupales
+  coloresEvaluacionesGrupales?: ColorBloque; // color compartido de todas las evaluaciones de grupo
   // UI state — persistido para recordar entre sesiones
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
 }
