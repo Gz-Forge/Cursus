@@ -53,6 +53,15 @@ function yAxis(maxVal: number): { maxValue: number; noOfSections: number } {
   return { maxValue: Math.ceil(n / sections) * sections, noOfSections: sections };
 }
 
+/** Eje Y para gráficas de notas: maxValue = notaMaxima exacto, secciones limpias */
+function yAxisNota(max: number): { maxValue: number; noOfSections: number } {
+  const divisores = [5, 4, 2, 10];
+  for (const d of divisores) {
+    if (max % d === 0) return { maxValue: max, noOfSections: d };
+  }
+  return { maxValue: max, noOfSections: Math.min(max, 5) };
+}
+
 export function MetricsScreen() {
   const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('metricas');
@@ -208,7 +217,7 @@ export function MetricsScreen() {
     const avg = mats.reduce((a, m) => a + obtenerNotaFinal(m)!, 0) / mats.length;
     return { value: parseFloat(((avg / 100) * config.notaMaxima).toFixed(2)), label: `${sem}°` };
   }).filter(Boolean) as { value: number; label: string }[];
-  const { maxValue: lineMax, noOfSections: lineSections } = yAxis(config.notaMaxima);
+  const { maxValue: lineMax, noOfSections: lineSections } = yAxisNota(config.notaMaxima);
 
   // ── Gráfico 2: Distribución por rango ────────────────────────────────────
   const conteoRangos = { recursar: 0, reprobado: 0, aprobado: 0, exonerado: 0 };
