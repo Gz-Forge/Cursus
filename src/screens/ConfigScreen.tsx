@@ -4,6 +4,7 @@ import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
+import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto, generarPromptConfig } from '../utils/importExport';
 import { useNavigation } from '@react-navigation/native';
@@ -108,7 +109,8 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
 }
 
 export function ConfigScreen() {
-  const { config, actualizarConfig, materias } = useStore();
+  const { config, actualizarConfig, materias, guardarMateria } = useStore();
+  const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
@@ -307,7 +309,27 @@ export function ConfigScreen() {
             {config.tiposFormacion.map((tipo, i) => (
               <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
-                <TouchableOpacity onPress={() => actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) })}>
+                <TouchableOpacity onPress={() => {
+                  const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
+                  const eliminar = () => {
+                    actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) });
+                    if (usadas > 0) {
+                      materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
+                        guardarMateria({ ...m, tipoFormacion: undefined })
+                      );
+                    }
+                  };
+                  if (usadas > 0) {
+                    showConfirm(
+                      'Eliminar tipo de formación',
+                      `"${tipo}" está siendo usado por ${usadas} materia${usadas !== 1 ? 's' : ''}. Al eliminar, esas materias quedarán sin tipo de formación asignado.`,
+                      eliminar,
+                      { labelConfirmar: 'Eliminar', destructivo: true },
+                    );
+                  } else {
+                    eliminar();
+                  }
+                }}>
                   <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
                 </TouchableOpacity>
               </View>

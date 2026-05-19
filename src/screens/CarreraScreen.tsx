@@ -495,7 +495,7 @@ export function CarreraScreen() {
                     <TouchableOpacity
                       key={key}
                       onPress={onPress}
-                      style={{ flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center',
+                      style={{ flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
                         backgroundColor: active ? tema.acento : tema.tarjeta }}
                     >
                       <Text style={{ color: active ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>

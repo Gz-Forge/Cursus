@@ -6,7 +6,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
-import { BloqueHorario, EvaluacionSimple, TipoBloque } from '../types';
+import { BloqueHorario, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoBloque } from '../types';
 import { calcularEstadoFinal } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
@@ -390,15 +390,34 @@ export function HorarioScreen() {
     config.horarioFiltroOcultarEvaluaciones;
 
   // Evaluaciones con fecha de materias en curso
-  type EvalConMateria = EvaluacionSimple & { materia: typeof todosLosBloques[0]['materia'] };
+  type MateriaRef = typeof todosLosBloques[0]['materia'];
+  type EvalSimpleConMateria = EvaluacionSimple & { materia: MateriaRef; esGrupal?: false; grupoNombre?: undefined };
+  type EvalGrupalConMateria = SubEvaluacion & { materia: MateriaRef; esGrupal: true; grupoNombre: string };
+  type EvalConMateria = EvalSimpleConMateria | EvalGrupalConMateria;
+
   const todasLasEvaluaciones: EvalConMateria[] = config.horarioMostrarEvaluaciones
-    ? materiasEnCurso.flatMap(m =>
-        m.evaluaciones
+    ? materiasEnCurso.flatMap(m => {
+        const simples: EvalConMateria[] = m.evaluaciones
           .filter((ev): ev is EvaluacionSimple =>
             ev.tipo === 'simple' && !!ev.fecha && ev.hora !== undefined
           )
-          .map(ev => ({ ...ev, materia: m }))
-      )
+          .map(ev => ({ ...ev, materia: m, esGrupal: false as const }));
+
+        const grupales: EvalConMateria[] = m.evaluaciones
+          .filter((ev): ev is GrupoEvaluacion => ev.tipo === 'grupo')
+          .flatMap(grupo =>
+            grupo.subEvaluaciones
+              .filter(sub => !!sub.fecha && sub.hora !== undefined)
+              .map(sub => ({
+                ...sub,
+                materia: m,
+                esGrupal: true as const,
+                grupoNombre: grupo.nombre,
+              }))
+          );
+
+        return [...simples, ...grupales];
+      })
     : [];
 
   // Calcular rango horario combinando bloques y evaluaciones
@@ -1063,29 +1082,197 @@ export function HorarioScreen() {
                         const horaF  = ev.horaFin ?? horaI + 60;
                         const top    = (horaI - horaInicio) * PX_POR_MIN;
                         const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
-                        const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
-                        const fondoColor  = colorConfig?.fondo ?? '#FF9800';
-                        const textoColor  = colorConfig?.texto ?? '#fff';
-                        return (
-                          <View key={ev.id} style={{
-                            position: 'absolute', top, height,
-                            left: 1, right: 1,
-                            backgroundColor: fondoColor,
-                            borderRadius: 3,
-                            borderWidth: 1.5,
-                            borderColor: textoColor,
-                            borderStyle: 'dashed',
-                            padding: 2,
-                            overflow: 'hidden',
-                          }}>
-                            <Text
-                              style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                              numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                              ellipsizeMode="tail"
+
+                        // Colores: grupales usan coloresEvaluacionesGrupales, simples usan color parcial de la materia
+                        let fondoColor: string;
+                        let textoColor: string;
+                        if (ev.esGrupal) {
+                          fondoColor = config.coloresEvaluacionesGrupales?.fondo ?? '#9C27B0';
+                          textoColor = config.coloresEvaluacionesGrupales?.texto ?? '#fff';
+                        } else {
+                          const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
+                          fondoColor = colorConfig?.fondo ?? '#FF9800';
+                          textoColor = colorConfig?.texto ?? '#fff';
+                        }
+
+                        // Texto del bloque
+                        let labelBloque: string;
+                        if (ev.esGrupal) {
+                          // "NombreGrupo / NombreSub - Materia"
+                          labelBloque = [
+                            [ev.grupoNombre, ev.nombre].filter(Boolean).join(' / ') || null,
+                            ev.salon || null,
+                            ev.materia.nombre,
+                          ].filter(Boolean).join(' - ');
+                        } else {
+                          labelBloque = [ev.nombre || null, ev.salon || null, ev.materia.nombre].filter(Boolean).join(' - ');
+                        }
+
+                        // Persistencia al soltar una evaluación arrastrada
+                        const persistirEval = (nuevoFecha: string, nuevaHora: number, nuevaHoraFin: number | undefined) => {
+                          const { guardarMateria: gm } = useStore.getState();
+                          const materia = materiasEnCurso.find(m => m.id === ev.materia.id);
+                          if (!materia) return;
+                          if (ev.esGrupal) {
+                            // actualizar sub-evaluación dentro del grupo
+                            const evals = materia.evaluaciones.map(e => {
+                              if (e.tipo !== 'grupo') return e;
+                              return {
+                                ...e,
+                                subEvaluaciones: e.subEvaluaciones.map(sub =>
+                                  sub.id === ev.id
+                                    ? { ...sub, fecha: nuevoFecha, hora: nuevaHora, horaFin: nuevaHoraFin }
+                                    : sub
+                                ),
+                              };
+                            });
+                            gm({ ...materia, evaluaciones: evals });
+                          } else {
+                            // actualizar evaluación simple
+                            const evals = materia.evaluaciones.map(e =>
+                              e.tipo === 'simple' && e.id === ev.id
+                                ? { ...e, fecha: nuevoFecha, hora: nuevaHora, horaFin: nuevaHoraFin }
+                                : e
+                            );
+                            gm({ ...materia, evaluaciones: evals });
+                          }
+                        };
+
+                        // ── Web: drag nativo con pointerdown ──
+                        if (Platform.OS === 'web') {
+                          return (
+                            <View
+                              key={ev.id}
+                              style={{
+                                position: 'absolute', top, height,
+                                left: 1, right: 1,
+                                backgroundColor: fondoColor,
+                                borderRadius: 3,
+                                borderWidth: 1.5,
+                                borderColor: textoColor,
+                                borderStyle: 'dashed',
+                                padding: 2,
+                                overflow: 'hidden',
+                                zIndex: 1,
+                                cursor: 'grab' as any,
+                              }}
+                              // @ts-ignore — web only
+                              onPointerDown={(e: any) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const startY = e.clientY;
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                const duracion = horaF - horaI;
+
+                                const handleMove = (me: PointerEvent) => {
+                                  me.preventDefault();
+                                };
+                                const handleUp = (ue: PointerEvent) => {
+                                  document.removeEventListener('pointermove', handleMove);
+                                  document.removeEventListener('pointerup', handleUp);
+                                  const dy = ue.clientY - startY;
+                                  const ghostTopY = rect.top + dy;
+                                  const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ue.clientX, ghostTopY);
+                                  persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
+                                };
+                                document.addEventListener('pointermove', handleMove, { passive: false });
+                                document.addEventListener('pointerup', handleUp);
+                              }}
                             >
-                              {[ev.nombre || null, ev.salon || null, ev.materia.nombre].filter(Boolean).join(' - ')}
-                            </Text>
-                          </View>
+                              <Text
+                                style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                ellipsizeMode="tail"
+                              >
+                                {labelBloque}
+                              </Text>
+                            </View>
+                          );
+                        }
+
+                        // ── Móvil: LongPress + PanGestureHandler ──
+                        return (
+                          <LongPressGestureHandler
+                            key={ev.id}
+                            minDurationMs={500}
+                            enabled={cardEnEdicion === null}
+                            onHandlerStateChange={(lpe: LongPressGestureHandlerStateChangeEvent) => {
+                              if (lpe.nativeEvent.state === State.ACTIVE) {
+                                // calibrar origen para calcularDestino
+                                const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
+                                const prevColsWidth = dayColWidthsRef.current
+                                  .slice(0, diaIdx)
+                                  .reduce((s, w) => s + w, 0);
+                                outerOriginRef.current = {
+                                  x: outerOriginRef.current.x,
+                                  y: outerOriginRef.current.y,
+                                };
+                                ghostOriginRef.current = {
+                                  x: outerOriginRef.current.x + TIME_COL_W + prevColsWidth + 1,
+                                  y: outerOriginRef.current.y + blockTopInGrid - vScrollOffRef.current,
+                                };
+                                gridAreaTopRef.current = outerOriginRef.current.y;
+                              }
+                            }}
+                          >
+                            <PanGestureHandler
+                              activeOffsetX={[-10, 10]}
+                              activeOffsetY={[-10, 10]}
+                              onBegan={() => {
+                                if (!ghostOriginRef.current) return;
+                                const { x: cx, y: cy } = ghostOriginRef.current;
+                                setGhostPos({
+                                  x: cx - outerOriginRef.current.x,
+                                  y: cy - outerOriginRef.current.y,
+                                  w: colW - 2,
+                                  h: height,
+                                });
+                              }}
+                              onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                if (!ghostOriginRef.current) return;
+                                setGhostPos(prev => prev ? {
+                                  x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                  y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                  w: prev.w,
+                                  h: prev.h,
+                                } : prev);
+                              }}
+                              onEnded={(e) => {
+                                setGhostPos(null);
+                                const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
+                                const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
+                                const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(
+                                  ne.absoluteX,
+                                  ghostTopY,
+                                );
+                                const duracion = horaF - horaI;
+                                persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
+                              }}
+                              onFailed={() => setGhostPos(null)}
+                              onCancelled={() => setGhostPos(null)}
+                            >
+                              <View style={{
+                                position: 'absolute', top, height,
+                                left: 1, right: 1,
+                                backgroundColor: fondoColor,
+                                borderRadius: 3,
+                                borderWidth: 1.5,
+                                borderColor: textoColor,
+                                borderStyle: 'dashed',
+                                padding: 2,
+                                overflow: 'hidden',
+                                zIndex: 1,
+                              }}>
+                                <Text
+                                  style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                  numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                  ellipsizeMode="tail"
+                                >
+                                  {labelBloque}
+                                </Text>
+                              </View>
+                            </PanGestureHandler>
+                          </LongPressGestureHandler>
                         );
                       })}
                   </View>
