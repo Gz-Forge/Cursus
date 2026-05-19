@@ -189,6 +189,8 @@ export interface Config {
   coloresEvaluacionesGrupales?: ColorBloque; // color compartido de todas las evaluaciones de grupo
   // UI state — persistido para recordar entre sesiones
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
+  estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
+  estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
 }
 
 export interface AppState {
