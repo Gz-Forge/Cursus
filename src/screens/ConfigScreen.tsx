@@ -12,7 +12,9 @@ import { generarPromptHorario } from '../utils/horarioImportExport';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
-import { TipoBloque, ColorBloque, EvaluacionSimple } from '../types';
+import { TipoBloque, ColorBloque, EvaluacionSimple, EstadoMateria } from '../types';
+import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
+import { estadoColores } from '../theme/colors';
 
 // ── Paleta de colores predeterminados (misma que HorarioScreen) ──────────────
 const COLORES_BLOQUES_DEFAULT = [
@@ -124,6 +126,9 @@ export function ConfigScreen() {
   const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
+  const [estadoExpandido, setEstadoExpandido] = useState<EstadoMateria | null>(null);
+  const { getColor, getIcono } = useEstadoEstilo();
+  const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
   // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
   // controlado revierta el texto mientras el usuario escribe (ej: borrar "12" para tipear "5")
@@ -272,6 +277,124 @@ export function ConfigScreen() {
           >
             <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
           </TouchableOpacity>
+          {/* ── ESTADOS DE MATERIA ──────────────────────── */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
+            <TouchableOpacity
+              onPress={() => actualizarConfig({
+                estadoColoresPersonalizados: undefined,
+                estadoIconosPersonalizados: undefined,
+              })}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar todos</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
+            {ORDEN_ESTADOS_CONFIG.map((estado, idx) => {
+              const color = getColor(estado);
+              const icono = getIcono(estado);
+              const expandido = estadoExpandido === estado;
+              const esUltimo = idx === ORDEN_ESTADOS_CONFIG.length - 1;
+
+              return (
+                <View key={estado}>
+                  {/* Fila header */}
+                  <TouchableOpacity
+                    onPress={() => setEstadoExpandido(expandido ? null : estado)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', padding: 14,
+                      borderBottomWidth: expandido || !esUltimo ? 1 : 0,
+                      borderBottomColor: tema.borde,
+                    }}
+                  >
+                    {/* Preview color */}
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 5,
+                      backgroundColor: color, marginRight: 10,
+                    }} />
+                    {/* Preview icono */}
+                    <Text style={{ fontSize: 18, marginRight: 10 }}>{icono}</Text>
+                    {/* Nombre estado */}
+                    <Text style={{ color: tema.texto, fontSize: 14, flex: 1 }}>
+                      {ESTADO_NOMBRES[estado]}
+                    </Text>
+                    {/* Chevron */}
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                      {expandido ? '▲' : '▼'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Panel expandido */}
+                  {expandido && (
+                    <View style={{
+                      backgroundColor: tema.fondo, padding: 14,
+                      borderBottomWidth: esUltimo ? 0 : 1,
+                      borderBottomColor: tema.borde,
+                    }}>
+                      {/* Color picker */}
+                      <ColorInput
+                        label="Color"
+                        value={config.estadoColoresPersonalizados?.[estado] ?? estadoColores[estado]}
+                        onChange={v => actualizarConfig({
+                          estadoColoresPersonalizados: {
+                            ...config.estadoColoresPersonalizados,
+                            [estado]: v,
+                          },
+                        })}
+                      />
+
+                      {/* Emoji picker */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8 }}>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>Icono</Text>
+                        <TextInput
+                          style={{
+                            flex: 1, backgroundColor: tema.superficie,
+                            color: tema.texto, padding: 8, borderRadius: 6,
+                            fontSize: 22, textAlign: 'center',
+                            borderWidth: 1, borderColor: tema.borde,
+                          }}
+                          value={config.estadoIconosPersonalizados?.[estado] ?? ICONOS_DEFAULT[estado]}
+                          onChangeText={v => {
+                            const trimmed = v.trim();
+                            if (!trimmed) return;
+                            actualizarConfig({
+                              estadoIconosPersonalizados: {
+                                ...config.estadoIconosPersonalizados,
+                                [estado]: trimmed,
+                              },
+                            });
+                          }}
+                          placeholder={ICONOS_DEFAULT[estado]}
+                          placeholderTextColor={tema.textoSecundario}
+                        />
+                      </View>
+
+                      {/* Restaurar individual */}
+                      <TouchableOpacity
+                        onPress={() => {
+                          const nuevosCols = { ...config.estadoColoresPersonalizados };
+                          const nuevosIcons = { ...config.estadoIconosPersonalizados };
+                          delete nuevosCols[estado];
+                          delete nuevosIcons[estado];
+                          actualizarConfig({
+                            estadoColoresPersonalizados: Object.keys(nuevosCols).length ? nuevosCols : undefined,
+                            estadoIconosPersonalizados: Object.keys(nuevosIcons).length ? nuevosIcons : undefined,
+                          });
+                        }}
+                        style={{
+                          alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 6,
+                          borderRadius: 8, borderWidth: 1, borderColor: tema.borde,
+                        }}
+                      >
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
           </>
           )}
 
