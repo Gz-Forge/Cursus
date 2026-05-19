@@ -476,23 +476,31 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   return (
     <>
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: tema.superficie,
-            borderTopLeftRadius: 20, borderTopRightRadius: 20,
-            padding: 24, paddingBottom: 36,
-            ...(Platform.OS === 'web'
-              ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
-              : {}),
-          }}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={onCerrar}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{
+              backgroundColor: tema.superficie,
+              borderTopLeftRadius: 20, borderTopRightRadius: 20,
+              padding: 24, paddingBottom: 36,
+              ...(Platform.OS === 'web'
+                ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
+                : {}),
+            }}
+          >
             {renderContenido()}
             {puedeVolver && (
               <TouchableOpacity onPress={onCerrar} style={{ alignItems: 'center', marginTop: 16 }}>
                 <Text style={{ color: tema.textoSecundario }}>Cerrar</Text>
               </TouchableOpacity>
             )}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Scanner: solo para receptor móvil */}

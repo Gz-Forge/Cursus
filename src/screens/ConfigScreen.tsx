@@ -186,7 +186,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'horarioMostrarEvaluaciones', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -402,12 +402,6 @@ export function ConfigScreen() {
             'mostrarNombreCompletoEnBloque',
             'Si está activo, muestra "Teórica" en vez de "T" en los bloques',
           )}
-          {toggle(
-            'Mostrar evaluaciones en el horario',
-            'horarioMostrarEvaluaciones',
-            'Muestra las evaluaciones con fecha como bloques especiales (📝) en la vista semanal',
-          )}
-
           <View style={{ marginBottom: 14 }}>
             <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 6 }}>Primer día de la semana</Text>
             <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 8, overflow: 'hidden' }}>

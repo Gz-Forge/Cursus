@@ -78,7 +78,7 @@ function FechaHoraPicker({
 
   const inicial = parsarFechaInicial(fecha);
 
-  const [expandido, setExpandido] = useState(!!fecha);
+  const [expandido, setExpandido] = useState(false);
   const [diaStr, setDiaStr] = useState(inicial.dia);
   const [mesStr, setMesStr] = useState(inicial.mes);
   const [dropdownDia, setDropdownDia] = useState(false);
@@ -86,7 +86,6 @@ function FechaHoraPicker({
   const [horaInicio, setHoraInicio] = useState<number>(hora !== undefined ? hora : 480);
   const [horaFinVal, setHoraFinVal] = useState<number>(horaFin !== undefined ? horaFin : 600);
   const [horaActiva, setHoraActiva] = useState(hora !== undefined);
-  const [horaFinActiva, setHoraFinActiva] = useState(horaFin !== undefined);
 
   const construirFechaISO = (): string | undefined => {
     const dia = parseInt(diaStr, 10);
@@ -102,13 +101,13 @@ function FechaHoraPicker({
     onActualizar({
       fecha: construirFechaISO(),
       hora: horaActiva ? horaInicio : undefined,
-      horaFin: horaFinActiva ? horaFinVal : undefined,
+      horaFin: horaActiva ? horaFinVal : undefined,
     });
   };
 
   const limpiar = () => {
     setDiaStr(''); setMesStr('');
-    setHoraActiva(false); setHoraFinActiva(false);
+    setHoraActiva(false);
     onActualizar({ fecha: undefined, hora: undefined, horaFin: undefined });
   };
 
@@ -206,37 +205,35 @@ function FechaHoraPicker({
             Año: {new Date().getFullYear()}
           </Text>
 
-          {/* ── Hora inicio / fin ── */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            <TouchableOpacity onPress={() => { setHoraActiva(v => !v); guardar(); }}>
-              <Text style={{ color: horaActiva ? tema.acento : tema.textoSecundario, fontSize: 12 }}>
-                {horaActiva ? '■' : '□'} Hora inicio
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* ── Hora ── */}
+          <TouchableOpacity
+            onPress={() => {
+              const next = !horaActiva;
+              setHoraActiva(next);
+              onActualizar({
+                fecha: construirFechaISO(),
+                hora: next ? horaInicio : undefined,
+                horaFin: next ? horaFinVal : undefined,
+              });
+            }}
+            style={{ marginBottom: horaActiva ? 8 : 6 }}
+          >
+            <Text style={{ color: horaActiva ? tema.acento : tema.textoSecundario, fontSize: 12 }}>
+              {horaActiva ? '■' : '□'} Hora en horario
+            </Text>
+          </TouchableOpacity>
           {horaActiva && (
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
               <HoraPicker
-                label="Inicio"
+                label="Hora inicio"
                 value={horaInicio}
-                onChange={v => { setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinActiva ? horaFinVal : undefined }); }}
+                onChange={v => { setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinVal }); }}
               />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <TouchableOpacity onPress={() => { setHoraFinActiva(v => !v); guardar(); }}>
-                    <Text style={{ color: horaFinActiva ? tema.acento : tema.textoSecundario, fontSize: 12 }}>
-                      {horaFinActiva ? '■' : '□'} Fin
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {horaFinActiva && (
-                  <HoraPicker
-                    label=""
-                    value={horaFinVal}
-                    onChange={v => { setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicio, horaFin: v }); }}
-                  />
-                )}
-              </View>
+              <HoraPicker
+                label="Fin"
+                value={horaFinVal}
+                onChange={v => { setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicio, horaFin: v }); }}
+              />
             </View>
           )}
 
