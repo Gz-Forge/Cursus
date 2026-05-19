@@ -115,6 +115,7 @@ export function ConfigScreen() {
   const tema = useTemaPantalla('config');
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
+  const [promptColoresExpandido, setPromptColoresExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
   const [mostrarSync, setMostrarSync] = useState(false);
@@ -722,7 +723,7 @@ export function ConfigScreen() {
             <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {promptCompletoExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
               <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
                   {generarPromptCompleto()}
@@ -736,6 +737,79 @@ export function ConfigScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          <TouchableOpacity
+            onPress={() => setPromptColoresExpandido(v => !v)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Configurar colores del horario</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                La IA te pregunta materia por materia qué colores querés usar. Al terminar devuelve un JSON que podés importar.
+              </Text>
+            </View>
+            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptColoresExpandido ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {promptColoresExpandido && (() => {
+            const labelTipo = (tipo: string) => {
+              switch (tipo) {
+                case 'teorica':  return config.labelTeorica  || 'Teórica';
+                case 'practica': return config.labelPractica || 'Práctica';
+                case 'parcial':  return 'Evaluación';
+                case 'otro':     return config.labelOtro     || 'Otro';
+                default:         return tipo;
+              }
+            };
+            const materiasConHorario = materias.filter(m => {
+              if (calcularEstadoFinal(m, config) !== 'cursando') return false;
+              return (m.bloques ?? []).length > 0 ||
+                (config.horarioMostrarEvaluaciones && m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha));
+            });
+            const materiasExport = materiasConHorario.map(m => {
+              const tiposBloque = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
+              const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
+                m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
+              if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
+              return {
+                id: m.id,
+                nombre: m.nombre,
+                bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
+                coloresActuales: config.coloresHorario?.[m.id] ?? {},
+              };
+            });
+            const coloresEvGrupales = config.coloresEvaluacionesGrupales
+              ? JSON.stringify(config.coloresEvaluacionesGrupales)
+              : 'no configurado';
+            const prompt = `Sos un asistente de diseño de colores para una app académica de horarios.
+
+Estado actual de colores de mis materias:
+${JSON.stringify(materiasExport, null, 2)}
+
+Evaluaciones grupales (color compartido): ${coloresEvGrupales}
+
+Ayudame a elegir colores para cada materia y tipo de bloque.
+Preguntame materia por materia qué colores quiero usar para fondo y texto.
+También preguntame si quiero cambiar el color de las evaluaciones grupales.
+Cuando termines, devolvé SOLO el JSON con este formato:
+{
+  "coloresHorario": { "[id_materia]": { "[tipo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
+  "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
+}`;
+            return (
+              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>{prompt}</Text>
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => Clipboard.setStringAsync(prompt)}
+                  style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
           </>
           )}
 

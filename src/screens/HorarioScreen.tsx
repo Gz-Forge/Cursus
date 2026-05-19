@@ -108,12 +108,15 @@ export function HorarioScreen() {
   const outerViewRef   = React.useRef<View>(null);
   const outerOriginRef = React.useRef({ x: 0, y: 0 });
 
-  // --- Estado de modo edición ---
+  // --- Estado de modo edición (bloques) ---
   const [cardEnEdicion, setCardEnEdicion] = useState<string | null>(null);
   const [draftBloque, setDraftBloque]     = useState<BloqueHorario | null>(null);
   const [ghostPos, setGhostPos]           = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
+  // --- Estado de drag para evaluaciones ---
+  const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
+  const evalDragDataRef = React.useRef<{ fondoColor: string; textoColor: string; labelBloque: string; height: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
@@ -1190,88 +1193,95 @@ export function HorarioScreen() {
                           );
                         }
 
-                        // ── Móvil: LongPress + PanGestureHandler ──
+                        // ── Móvil: LongPress activa drag, PanGestureHandler va DENTRO del View ──
+                        const esEnDrag = evalEnDrag === ev.id;
+                        const duracion = horaF - horaI;
                         return (
                           <LongPressGestureHandler
                             key={ev.id}
                             minDurationMs={500}
-                            enabled={cardEnEdicion === null}
+                            enabled={evalEnDrag === null && cardEnEdicion === null}
                             onHandlerStateChange={(lpe: LongPressGestureHandlerStateChangeEvent) => {
                               if (lpe.nativeEvent.state === State.ACTIVE) {
-                                // calibrar origen para calcularDestino
                                 const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
                                 const prevColsWidth = dayColWidthsRef.current
                                   .slice(0, diaIdx)
                                   .reduce((s, w) => s + w, 0);
-                                outerOriginRef.current = {
-                                  x: outerOriginRef.current.x,
-                                  y: outerOriginRef.current.y,
-                                };
                                 ghostOriginRef.current = {
                                   x: outerOriginRef.current.x + TIME_COL_W + prevColsWidth + 1,
                                   y: outerOriginRef.current.y + blockTopInGrid - vScrollOffRef.current,
                                 };
-                                gridAreaTopRef.current = outerOriginRef.current.y;
-                              }
-                            }}
-                          >
-                            <PanGestureHandler
-                              activeOffsetX={[-10, 10]}
-                              activeOffsetY={[-10, 10]}
-                              onBegan={() => {
-                                if (!ghostOriginRef.current) return;
-                                const { x: cx, y: cy } = ghostOriginRef.current;
+                                evalDragDataRef.current = { fondoColor, textoColor, labelBloque, height };
+                                setEvalEnDrag(ev.id);
                                 setGhostPos({
-                                  x: cx - outerOriginRef.current.x,
-                                  y: cy - outerOriginRef.current.y,
+                                  x: TIME_COL_W + prevColsWidth + 1,
+                                  y: blockTopInGrid - vScrollOffRef.current,
                                   w: colW - 2,
                                   h: height,
                                 });
-                              }}
-                              onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
-                                if (!ghostOriginRef.current) return;
-                                setGhostPos(prev => prev ? {
-                                  x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
-                                  y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
-                                  w: prev.w,
-                                  h: prev.h,
-                                } : prev);
-                              }}
-                              onEnded={(e) => {
-                                setGhostPos(null);
-                                const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
-                                const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
-                                const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(
-                                  ne.absoluteX,
-                                  ghostTopY,
-                                );
-                                const duracion = horaF - horaI;
-                                persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
-                              }}
-                              onFailed={() => setGhostPos(null)}
-                              onCancelled={() => setGhostPos(null)}
-                            >
-                              <View style={{
-                                position: 'absolute', top, height,
-                                left: 1, right: 1,
-                                backgroundColor: fondoColor,
-                                borderRadius: 3,
-                                borderWidth: 1.5,
-                                borderColor: textoColor,
-                                borderStyle: 'dashed',
-                                padding: 2,
-                                overflow: 'hidden',
-                                zIndex: 1,
-                              }}>
-                                <Text
-                                  style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                  numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                  ellipsizeMode="tail"
+                              }
+                            }}
+                          >
+                            <View style={{
+                              position: 'absolute', top, height,
+                              left: 1, right: 1,
+                              backgroundColor: fondoColor,
+                              borderRadius: 3,
+                              borderWidth: 1.5,
+                              borderColor: textoColor,
+                              borderStyle: 'dashed',
+                              overflow: 'hidden',
+                              zIndex: esEnDrag ? 100 : 1,
+                              opacity: esEnDrag && ghostPos ? 0.3 : 1,
+                            }}>
+                              {esEnDrag ? (
+                                <PanGestureHandler
+                                  activeOffsetX={[-5, 5]}
+                                  activeOffsetY={[-5, 5]}
+                                  onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                    if (!ghostOriginRef.current) return;
+                                    setGhostPos(prev => prev ? {
+                                      x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                      y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                      w: prev.w,
+                                      h: prev.h,
+                                    } : prev);
+                                  }}
+                                  onEnded={(e) => {
+                                    const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
+                                    const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
+                                    const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ne.absoluteX, ghostTopY);
+                                    persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
+                                    setEvalEnDrag(null);
+                                    setGhostPos(null);
+                                    ghostOriginRef.current = null;
+                                    evalDragDataRef.current = null;
+                                  }}
+                                  onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; }}
+                                  onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; }}
                                 >
-                                  {labelBloque}
-                                </Text>
-                              </View>
-                            </PanGestureHandler>
+                                  <View style={{ flex: 1, padding: 2 }}>
+                                    <Text
+                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {labelBloque}
+                                    </Text>
+                                  </View>
+                                </PanGestureHandler>
+                              ) : (
+                                <View style={{ flex: 1, padding: 2 }}>
+                                  <Text
+                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {labelBloque}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
                           </LongPressGestureHandler>
                         );
                       })}
@@ -1919,6 +1929,28 @@ export function HorarioScreen() {
           }}
         />
       )}
+
+      {/* Ghost card durante drag de evaluación */}
+      {ghostPos && evalEnDrag && !cardEnEdicion && evalDragDataRef.current && (() => {
+        const { fondoColor, textoColor, labelBloque } = evalDragDataRef.current!;
+        return (
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: ghostPos.y, left: ghostPos.x,
+              width: ghostPos.w, height: ghostPos.h,
+              zIndex: 999, opacity: 0.85,
+              backgroundColor: fondoColor,
+              borderRadius: 3,
+              borderWidth: 1.5, borderColor: textoColor, borderStyle: 'dashed',
+              padding: 2, overflow: 'hidden',
+            }}
+          >
+            <Text style={{ color: textoColor, fontSize: 8, fontWeight: '700' }}>{labelBloque}</Text>
+          </View>
+        );
+      })()}
 
       {/* Ghost card durante drag central */}
       {ghostPos && draftBloque && cardEnEdicion && (() => {

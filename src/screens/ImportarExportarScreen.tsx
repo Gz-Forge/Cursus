@@ -356,65 +356,6 @@ function PanelExportar() {
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
 
-  const generarPromptColoresParaIA = () => {
-    const labelTipo = (tipo: string) => {
-      switch (tipo) {
-        case 'teorica':  return config.labelTeorica  || 'Teórica';
-        case 'practica': return config.labelPractica || 'Práctica';
-        case 'parcial':  return 'Evaluación';
-        case 'otro':     return config.labelOtro     || 'Otro';
-        default:         return tipo;
-      }
-    };
-    const materiasConHorario = materias.filter(m => {
-      if (calcularEstadoFinal(m, config) !== 'cursando') return false;
-      const tieneBloques = (m.bloques ?? []).length > 0;
-      const tieneEvalsEnHorario = config.horarioMostrarEvaluaciones &&
-        m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
-      return tieneBloques || tieneEvalsEnHorario;
-    });
-    const materiasExport = materiasConHorario.map(m => {
-      const tiposBloque = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
-      const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
-        m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
-      if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
-      return {
-        id: m.id,
-        nombre: m.nombre,
-        bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
-        coloresActuales: config.coloresHorario?.[m.id] ?? {},
-      };
-    });
-    const coloresEvGrupales = (config as any).coloresEvaluacionesGrupales
-      ? JSON.stringify((config as any).coloresEvaluacionesGrupales)
-      : 'no configurado';
-    return `Sos un asistente de diseño de colores para una app académica de horarios.
-
-Estado actual de colores de mis materias:
-${JSON.stringify(materiasExport, null, 2)}
-
-Evaluaciones grupales (color compartido): ${coloresEvGrupales}
-
-Ayudame a elegir colores para cada materia y tipo de bloque.
-Preguntame materia por materia qué colores quiero usar para fondo y texto.
-También preguntame si quiero cambiar el color de las evaluaciones grupales.
-Cuando termines, devolvé SOLO el JSON con este formato:
-{
-  "coloresHorario": { "[id_materia]": { "[tipo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
-  "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
-}`;
-  };
-
-  const handleCopiarPromptColores = async () => {
-    try {
-      const prompt = generarPromptColoresParaIA();
-      await Clipboard.setStringAsync(prompt);
-      showAlert('¡Copiado!', 'El prompt fue copiado al portapapeles. Pegalo en tu IA favorita.');
-    } catch {
-      showAlert('Error', 'No se pudo copiar el prompt.');
-    }
-  };
-
   const togglePerfil = (id: string) => {
     setPerfilesSelec(prev =>
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -518,28 +459,6 @@ Cuando termines, devolvé SOLO el JSON con este formato:
         onCerrar={() => setMostrarQrConfig(false)}
         config={config}
       />
-
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
-        COLORES DE HORARIO (PROMPT IA)
-      </Text>
-      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Copiá el prompt con el estado actual de tus colores y pedile a la IA que te ayude a configurarlos.{'\n\n'}
-          Una vez que la IA te devuelva el JSON, importalo desde{' '}
-          <Text style={{ color: tema.acento }}>Importar → Seleccionar archivo .json</Text>.
-        </Text>
-        <TouchableOpacity
-          onPress={handleCopiarPromptColores}
-          style={{
-            backgroundColor: tema.tarjeta,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1, borderColor: tema.acento,
-          }}
-        >
-          <Text style={{ color: tema.acento, fontWeight: '700' }}>📋 Copiar prompt de colores</Text>
-        </TouchableOpacity>
-      </View>
 
     </View>
   );
