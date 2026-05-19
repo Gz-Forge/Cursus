@@ -610,22 +610,29 @@ export function HorarioScreen() {
     [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
-  // Evaluaciones filtradas a esta semana
-  const evaluacionesEstaSemana = config.horarioFiltroOcultarEvaluaciones
-    ? []
-    : todasLasEvaluaciones.filter(
-        ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]
-      );
+  // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
+  const evaluacionesEstaSemana = React.useMemo(
+    () => config.horarioFiltroOcultarEvaluaciones
+      ? []
+      : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
+  );
 
-  // Layout de superposición por día (memoizado)
+  // Layout de superposición por día — incluye bloques Y evaluaciones para que compartan columna
   const layoutPorDia = React.useMemo(() => {
     const map = new Map<string, Map<string, LayoutBloque>>();
     for (const fecha of fechasSemanaDisplay) {
       const bloquesDia = bloquesEstaSemana.filter(b => b.fecha === fecha);
-      map.set(fecha, calcularLayoutSuperposicion(bloquesDia));
+      const evalsDia   = evaluacionesEstaSemana.filter(ev => ev.fecha === fecha);
+      const combined = [
+        ...bloquesDia.map(b  => ({ id: b.id,  horaInicio: b.horaInicio, horaFin: b.horaFin })),
+        ...evalsDia.map(ev   => ({ id: ev.id, horaInicio: ev.hora!, horaFin: ev.horaFin ?? ev.hora! + 60 })),
+      ];
+      map.set(fecha, calcularLayoutSuperposicion(combined));
     }
     return map;
-  }, [bloquesEstaSemana, fechasSemanaDisplay.join(',')]);
+  }, [bloquesEstaSemana, evaluacionesEstaSemana, fechasSemanaDisplay.join(',')]);
 
   const dayColWidths = React.useMemo(() =>
     fechasSemanaDisplay.map(fecha => {
@@ -1300,6 +1307,12 @@ export function HorarioScreen() {
                         // Mantener ref de persistencia fresca para el useEffect de web
                         if (esEnDrag) persistirEvalRef.current = persistirEval;
 
+                        // Posición basada en layout (igual que bloques de horario)
+                        const lytEval    = layoutDia.get(ev.id) ?? { subCol: 0, totalSubCols: 1 };
+                        const evalSubColW = colW / lytEval.totalSubCols;
+                        const evalLeft   = 1 + lytEval.subCol * evalSubColW;
+                        const evalWidth  = evalSubColW - 2;
+
                         // ── Web: clic para editar + useEffect con listeners DOM (igual que bloques) ──
                         if (Platform.OS === 'web') {
                           const enterEditEvalWeb = () => {
@@ -1317,7 +1330,7 @@ export function HorarioScreen() {
                               ref={(el) => { if (el) cardRefs.current.set(ev.id, el as View); else cardRefs.current.delete(ev.id); }}
                               style={{
                                 position: 'absolute', top, height,
-                                left: 1, right: 1,
+                                left: evalLeft, width: evalWidth,
                                 backgroundColor: fondoColor,
                                 borderRadius: 3,
                                 borderWidth: esEnDrag ? 2 : 1.5,
@@ -1330,15 +1343,23 @@ export function HorarioScreen() {
                             >
                               {esEnDrag ? (
                                 // El useEffect de web maneja todos los pointer events
-                                <View style={{ flex: 1, padding: 2 }}>
-                                  <Text
-                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {labelBloque}
-                                  </Text>
-                                </View>
+                                <>
+                                  <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderTopWidth: 4, borderTopColor: textoColor }}>
+                                    <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
+                                  </View>
+                                  <View style={{ flex: 1, padding: 2 }}>
+                                    <Text
+                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {labelBloque}
+                                    </Text>
+                                  </View>
+                                  <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderBottomColor: textoColor }}>
+                                    <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
+                                  </View>
+                                </>
                               ) : (
                                 <TouchableOpacity
                                   activeOpacity={0.85}
@@ -1392,7 +1413,7 @@ export function HorarioScreen() {
                               ref={(el) => { if (el) cardRefs.current.set(ev.id, el as View); else cardRefs.current.delete(ev.id); }}
                               style={{
                                 position: 'absolute', top, height,
-                                left: 1, right: 1,
+                                left: evalLeft, width: evalWidth,
                                 backgroundColor: fondoColor,
                                 borderRadius: 3,
                                 borderWidth: esEnDrag ? 2 : 1.5,
