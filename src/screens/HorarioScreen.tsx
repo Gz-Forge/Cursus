@@ -1203,32 +1203,39 @@ export function HorarioScreen() {
                             enabled={evalEnDrag === null && cardEnEdicion === null}
                             onHandlerStateChange={(lpe: LongPressGestureHandlerStateChangeEvent) => {
                               if (lpe.nativeEvent.state === State.ACTIVE) {
-                                const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
-                                const prevColsWidth = dayColWidthsRef.current
-                                  .slice(0, diaIdx)
-                                  .reduce((s, w) => s + w, 0);
-                                // Guardar origen — ghost se muestra en onBegan del Pan (igual que bloques)
-                                ghostOriginRef.current = {
-                                  x: outerOriginRef.current.x + TIME_COL_W + prevColsWidth + 1,
-                                  y: outerOriginRef.current.y + blockTopInGrid - vScrollOffRef.current,
-                                };
-                                evalDragDataRef.current = { fondoColor, textoColor, labelBloque, height };
-                                setEvalEnDrag(ev.id);
+                                // Usar measureInWindow igual que los bloques para obtener
+                                // coordenadas absolutas de pantalla (evita cálculo incorrecto de y)
+                                cardRefs.current.get(ev.id)?.measureInWindow((cx, cy) => {
+                                  ghostOriginRef.current = { x: cx, y: cy };
+                                  const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
+                                  const prevColsWidth = dayColWidthsRef.current
+                                    .slice(0, diaIdx)
+                                    .reduce((s, w) => s + w, 0);
+                                  gridAreaTopRef.current = cy - blockTopInGrid + vScrollOffRef.current;
+                                  outerOriginRef.current = {
+                                    x: cx - (TIME_COL_W + prevColsWidth + 1) + hScrollOffRef.current,
+                                    y: outerOriginRef.current.y,
+                                  };
+                                  evalDragDataRef.current = { fondoColor, textoColor, labelBloque, height };
+                                  setEvalEnDrag(ev.id);
+                                });
                               }
                             }}
                           >
-                            <View style={{
-                              position: 'absolute', top, height,
-                              left: 1, right: 1,
-                              backgroundColor: fondoColor,
-                              borderRadius: 3,
-                              borderWidth: esEnDrag ? 2 : 1.5,
-                              borderColor: textoColor,
-                              borderStyle: 'dashed',
-                              overflow: 'hidden',
-                              zIndex: esEnDrag ? 100 : 1,
-                              opacity: esEnDrag && ghostPos ? 0.3 : 1,
-                            }}>
+                            <View
+                              ref={(el) => { if (el) cardRefs.current.set(ev.id, el as View); else cardRefs.current.delete(ev.id); }}
+                              style={{
+                                position: 'absolute', top, height,
+                                left: 1, right: 1,
+                                backgroundColor: fondoColor,
+                                borderRadius: 3,
+                                borderWidth: esEnDrag ? 2 : 1.5,
+                                borderColor: textoColor,
+                                borderStyle: 'dashed',
+                                overflow: 'hidden',
+                                zIndex: esEnDrag ? 100 : 1,
+                                opacity: esEnDrag && ghostPos ? 0.3 : 1,
+                              }}>
                               {esEnDrag ? (
                                 <PanGestureHandler
                                   activeOffsetX={[-10, 10]}
