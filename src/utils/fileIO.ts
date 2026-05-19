@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as web from './fileIOWeb';
+import { isTauri } from './platform';
 
 async function exportarArchivoNativo(nombre: string, contenido: string): Promise<void> {
   const FileSystem = await import('expo-file-system/legacy');
@@ -26,6 +27,30 @@ async function importarArchivoNativo(): Promise<string | null> {
   return FileSystem.readAsStringAsync(asset.uri);
 }
 
-export const fileIO = Platform.OS === 'web'
-  ? web
-  : { exportarArchivo: exportarArchivoNativo, importarArchivo: importarArchivoNativo };
+async function exportarArchivoTauri(nombre: string, contenido: string): Promise<void> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+  const ext = nombre.includes('.') ? nombre.split('.').pop()! : 'json';
+  const ruta = await save({
+    defaultPath: nombre,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (ruta) await writeTextFile(ruta, contenido);
+}
+
+async function importarArchivoTauri(): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const { readTextFile } = await import('@tauri-apps/plugin-fs');
+  const ruta = await open({
+    multiple: false,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (!ruta || typeof ruta !== 'string') return null;
+  return readTextFile(ruta);
+}
+
+export const fileIO = isTauri()
+  ? { exportarArchivo: exportarArchivoTauri, importarArchivo: importarArchivoTauri }
+  : Platform.OS === 'web'
+    ? web
+    : { exportarArchivo: exportarArchivoNativo, importarArchivo: importarArchivoNativo };

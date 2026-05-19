@@ -5,13 +5,13 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   type DimensionValue,
 } from 'react-native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import { MAX_PERFILES, MAX_NOMBRE } from '../utils/perfiles';
 
 interface Props {
@@ -23,6 +23,9 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
   const { perfiles, perfilActivoId, cambiarPerfil, crearPerfil, renombrarPerfil, eliminarPerfil } =
     useStore();
   const tema = useTema();
+  const { showConfirm } = useAlert();
+
+  const isWeb = Platform.OS === 'web';
 
   const [renombrandoId, setRenombrandoId] = useState<string | null>(null);
   const [nombreEdicion, setNombreEdicion] = useState('');
@@ -41,18 +44,12 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
     setNombreEdicion('');
   };
 
-  const handleEliminar = (id: string, nombre: string) => {
-    Alert.alert(
+  const handleEliminar = (id: string, _nombre: string) => {
+    showConfirm(
       'Eliminar perfil',
-      `¿Eliminar "${nombre}"? Se perderán todas sus materias y configuración.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => eliminarPerfil(id),
-        },
-      ],
+      `¿Eliminar "${_nombre}"? Se perderán todas sus materias y configuración.`,
+      () => eliminarPerfil(id),
+      { labelConfirmar: 'Eliminar', destructivo: true },
     );
   };
 
@@ -68,8 +65,6 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
     setCreando(false);
     setNombreNuevo('');
   };
-
-  const isWeb = Platform.OS === 'web';
 
   return (
     <Modal
@@ -155,9 +150,12 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                         <TouchableOpacity
                           style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
                           onPress={() => handleCambiar(perfil.id)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: perfilActivoId === perfil.id }}
+                          accessibilityLabel={perfil.nombre}
                         >
                           <Text style={{ fontSize: 16, marginRight: 8 }}>
-                            {perfilActivoId === perfil.id ? '✅' : '   '}
+                            {perfilActivoId === perfil.id ? '✅' : '⬜'}
                           </Text>
                           <Text
                             style={{

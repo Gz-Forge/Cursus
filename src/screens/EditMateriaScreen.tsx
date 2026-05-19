@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Alert, Platform, Modal } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
@@ -17,9 +18,11 @@ import {
 } from '../utils/horarioImportExport';
 import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
+import { useAlert } from '../contexts/AlertContext';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 // ── Helpers de formato ──────────────────────────────────────────────
 function fmtHora(mins: number): string {
@@ -33,14 +36,6 @@ function fmtFechaBloque(iso: string): string {
 }
 
 // ── Parser individual (formulario manual) ───────────────────────────
-function parsearHora(str: string): number | null {
-  const m = str.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = parseInt(m[1], 10), min = parseInt(m[2], 10);
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
-}
-
 function parsearFecha(str: string): string | null {
   const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!m) return null;
@@ -55,17 +50,50 @@ function autoFormatFechaBloque(prev: string, next: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
-function autoFormatHora(prev: string, next: string): string {
-  const digits = next.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+// ── Selector de hora con botones ▲/▼ y minutos :00/:30 ──────────────
+function HoraPicker({ value, onChange, label }: {
+  value: number; onChange: (v: number) => void; label: string;
+}) {
+  const tema = useTema();
+  const h = Math.floor(value / 60);
+  const m = value % 60 === 30 ? 30 : 0;
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>{label}</Text>
+      <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 10, alignItems: 'center' }}>
+        <TouchableOpacity onPress={() => onChange(((h + 1) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
+          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
+        </TouchableOpacity>
+        <Text style={{ color: tema.texto, fontSize: 26, fontWeight: '700', letterSpacing: 1, minWidth: 64, textAlign: 'center' }}>
+          {h.toString().padStart(2, '0')}:{m === 0 ? '00' : '30'}
+        </Text>
+        <TouchableOpacity onPress={() => onChange(((h - 1 + 24) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
+          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+          {([0, 30] as const).map(min => (
+            <TouchableOpacity
+              key={min}
+              onPress={() => onChange(h * 60 + min)}
+              style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: m === min ? tema.acento : tema.tarjeta, alignItems: 'center' }}
+            >
+              <Text style={{ color: m === min ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+                :{min === 0 ? '00' : '30'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export function EditMateriaScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
-  const { materias, config, guardarMateria, eliminarMateria } = useStore();
+  const { materias, config, guardarMateria, eliminarMateria, actualizarConfig } = useStore();
   const tema = useTema();
+  const { showAlert, showConfirm } = useAlert();
 
   const materiaOriginal = materias.find(m => m.id === route.params?.materiaId);
   const [form, setForm] = useState<Materia>(materiaOriginal ?? {
@@ -80,8 +108,12 @@ export function EditMateriaScreen() {
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
-    fechaStr: string; horaInicioStr: string; horaFinStr: string; tipo: TipoBloque;
-  }>({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' });
+    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string;
+  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+  const [dropdownDia, setDropdownDia] = useState(false);
+  const [dropdownMes, setDropdownMes] = useState(false);
+  const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
+  const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
@@ -99,8 +131,8 @@ export function EditMateriaScreen() {
   // ── Asistencia ──────────────────────────────────────────────────────
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [faltaNueva, setFaltaNueva] = useState<{
-    fechaStr: string; tipo: RegistroFalta['tipo']; nota: string;
-  }>({ fechaStr: '', tipo: 'teorica', nota: '' });
+    fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
+  }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
 
   // ── Nota manual: estado de string para soportar decimales al tipear ──
   const [notaManualStr, setNotaManualStr] = useState<string>(() => {
@@ -122,7 +154,7 @@ export function EditMateriaScreen() {
     const num = parseFloat(normalized);
     if (!isNaN(num)) {
       const pct = form.tipoNotaManual === 'numero' ? (num / config.notaMaxima) * 100 : num;
-      setForm(f => ({ ...f, notaManual: pct }));
+      setForm(f => ({ ...f, notaManual: Math.max(0, Math.min(100, pct)) }));
     } else if (normalized === '' || normalized === '.') {
       setForm(f => ({ ...f, notaManual: null }));
     }
@@ -170,47 +202,59 @@ export function EditMateriaScreen() {
 
   const guardar = () => { guardarMateria(form); navigation.goBack(); };
 
-  const handleEliminar = () => {
-    Alert.alert(
-      'Eliminar materia',
-      `¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => { eliminarMateria(form.id); navigation.goBack(); },
-        },
-      ]
-    );
-  };
+  const handleEliminar = () => setShowConfirmEliminar(true);
 
   const confirmarBloque = () => {
-    const fecha  = parsearFecha(bloqueNuevo.fechaStr);
-    const inicio = parsearHora(bloqueNuevo.horaInicioStr);
-    const fin    = parsearHora(bloqueNuevo.horaFinStr);
-    if (!fecha) {
-      Alert.alert('Fecha inválida', 'Usá el formato DD/MM/YYYY.');
+    const anio = new Date().getFullYear();
+    const dia = parseInt(bloqueNuevo.dia, 10);
+    const mes = parseInt(bloqueNuevo.mes, 10);
+
+    if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
+      showAlert('Día inválido', 'Ingresá un día entre 1 y 31.');
       return;
     }
-    if (inicio === null || fin === null || fin <= inicio) {
-      Alert.alert('Horario inválido', 'Usá formato HH:MM y verificá que el fin sea posterior al inicio.');
+    if (!bloqueNuevo.mes || isNaN(mes) || mes < 1 || mes > 12) {
+      showAlert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
       return;
     }
-    const nuevo: BloqueHorario = {
-      id: Date.now().toString(),
-      fecha,
-      horaInicio: inicio,
-      horaFin: fin,
+    const dateObj = new Date(anio, mes - 1, dia);
+    if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
+      showAlert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
+      return;
+    }
+    if (bloqueNuevo.horaFin <= bloqueNuevo.horaInicio) {
+      showAlert('Horario inválido', 'El fin debe ser posterior al inicio.');
+      return;
+    }
+    const diaStr = dia.toString().padStart(2, '0');
+    const mesStr = mes.toString().padStart(2, '0');
+    const bloqueActualizado: BloqueHorario = {
+      id: bloqueEditandoId ?? `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      fecha: `${anio}-${mesStr}-${diaStr}`,
+      horaInicio: bloqueNuevo.horaInicio,
+      horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
+      ...(bloqueNuevo.salon.trim() && { salon: bloqueNuevo.salon.trim() }),
     };
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), nuevo] }));
+
+    if (bloqueEditandoId) {
+      setForm(f => ({
+        ...f,
+        bloques: (f.bloques ?? []).map(x => x.id === bloqueEditandoId ? bloqueActualizado : x),
+      }));
+    } else {
+      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), bloqueActualizado] }));
+    }
+
     setMostrarFormBloque(false);
-    setBloqueNuevo({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' });
+    setBloqueEditandoId(null);
+    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+    setDropdownDia(false);
+    setDropdownMes(false);
   };
 
   const agregarEvaluacion = (tipo: 'simple' | 'grupo') => {
-    const id = Date.now().toString();
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const nueva: Evaluacion = tipo === 'simple'
       ? { id, tipo: 'simple', nombre: '', pesoEnMateria: 0, tipoNota: 'numero', nota: null, notaMaxima: 10 }
       : { id, tipo: 'grupo', nombre: '', pesoEnMateria: 0, subEvaluaciones: [] };
@@ -219,7 +263,7 @@ export function EditMateriaScreen() {
 
   const importarDesdeCSV = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -229,13 +273,13 @@ export function EditMateriaScreen() {
       setFilasParseadas(parsearCSV(texto));
       setModoImport('csv');
     } catch (e: any) {
-      Alert.alert('Error al abrir CSV', e.message);
+      showAlert('Error al abrir CSV', e.message);
     }
   };
 
   const importarDesdeJSON = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -243,15 +287,15 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
       setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      Alert.alert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
     } catch (e: any) {
-      Alert.alert('Error al importar JSON', e.message);
+      showAlert('Error al importar JSON', e.message);
     }
   };
 
   const importarDesdeICS = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
+      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
       return;
     }
     try {
@@ -259,20 +303,24 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const eventos = extraerEventosICS(texto);
       if (eventos.length === 0) {
-        Alert.alert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
+        showAlert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
         return;
       }
       setEventosICS(eventos);
       setModoImport('ics');
     } catch (e: any) {
-      Alert.alert('Error al importar ICS', e.message);
+      showAlert('Error al importar ICS', e.message);
     }
   };
 
   const confirmarICS = () => {
     const semanas = parseInt(semanasICS, 10);
     if (isNaN(semanas) || semanas < 1) {
-      Alert.alert('Semanas inválidas', 'Ingresá un número mayor a 0.');
+      showAlert('Semanas inválidas', 'Ingresá un número mayor a 0.');
+      return;
+    }
+    if (semanas > 52) {
+      showAlert('Semanas inválidas', 'El máximo permitido es 52 semanas.');
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
@@ -289,20 +337,20 @@ export function EditMateriaScreen() {
         'application/json',
       );
     } catch (e: any) {
-      Alert.alert('Error al exportar', e.message);
+      showAlert('Error al exportar', e.message);
     }
   };
 
   const copiarAlPortapapeles = async (texto: string, etiqueta = 'Copiado') => {
     await Clipboard.setStringAsync(texto);
-    Alert.alert(etiqueta, 'Contenido copiado al portapapeles.');
+    showAlert(etiqueta, 'Contenido copiado al portapapeles.');
   };
 
   const descargarEjemploCSV = async () => {
     try {
       await compartirArchivo('ejemplo_horario.csv', generarEjemploCSV(), 'text/csv');
     } catch (e: any) {
-      Alert.alert('Error al descargar ejemplo', e.message);
+      showAlert('Error al descargar ejemplo', e.message);
     }
   };
 
@@ -314,13 +362,13 @@ export function EditMateriaScreen() {
         'application/json',
       );
     } catch (e: any) {
-      Alert.alert('Error al exportar', e.message);
+      showAlert('Error al exportar', e.message);
     }
   };
 
   const importarEvaluaciones = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('No disponible', 'Importá desde la app móvil.');
+      showAlert('No disponible', 'Importá desde la app móvil.');
       return;
     }
     try {
@@ -328,9 +376,20 @@ export function EditMateriaScreen() {
       if (!texto) return;
       const parsed = JSON.parse(texto);
       if (!Array.isArray(parsed)) {
-        Alert.alert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
+        showAlert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
         return;
       }
+
+      const esEvalValida = (ev: unknown): ev is Evaluacion => {
+        if (!ev || typeof ev !== 'object') return false;
+        const e = ev as Record<string, unknown>;
+        if (e.tipo !== 'simple' && e.tipo !== 'grupo') return false;
+        if (typeof e.nombre !== 'string' || !e.nombre.trim()) return false;
+        if (typeof e.pesoEnMateria !== 'number' || !isFinite(e.pesoEnMateria as number)) return false;
+        return true;
+      };
+
+      const MAX_EVALS_IMPORT = 50;
 
       if (esFormatoMultiMateriaEval(parsed)) {
         // Multi-materia format: [{materia, evaluaciones}]
@@ -343,7 +402,7 @@ export function EditMateriaScreen() {
             String(m.numero) === String(entrada.materia)
           );
           if (!match) return;
-          const incomingEvals = Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : [];
+          const incomingEvals = (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
           const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
           // Keep local form in sync if this is the currently open materia
@@ -352,34 +411,32 @@ export function EditMateriaScreen() {
           }
           procesadas++;
         });
-        Alert.alert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
+        showAlert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
       } else {
         // Flat single-materia format: array of evaluaciones for current materia
-        const evaluaciones = parsed as Evaluacion[];
-        Alert.alert(
+        const evaluaciones = (parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
+        if (evaluaciones.length === 0) {
+          showAlert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
+          return;
+        }
+        showConfirm(
           'Importar evaluaciones',
           `Se encontraron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-          [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
-            { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
-          ]
+          () => setForm(f => ({ ...f, evaluaciones })),
+          { labelConfirmar: 'Reemplazar', destructivo: true }
         );
       }
     } catch (e: any) {
-      Alert.alert('Error al importar', e.message);
+      showAlert('Error al importar', e.message);
     }
   };
 
   const handleEvaluacionesDetectadas = (evaluaciones: Evaluacion[]) => {
-    Alert.alert(
+    showConfirm(
       'Evaluaciones recibidas por QR',
       `Se recibieron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Agregar', onPress: () => setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...evaluaciones] })) },
-        { text: 'Reemplazar', style: 'destructive', onPress: () => setForm(f => ({ ...f, evaluaciones })) },
-      ]
+      () => setForm(f => ({ ...f, evaluaciones })),
+      { labelConfirmar: 'Reemplazar', destructivo: true }
     );
   };
 
@@ -422,28 +479,29 @@ export function EditMateriaScreen() {
       faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
     }
 
-    Alert.alert(
+    showAlert(
       'No cumple los requisitos',
       `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`,
-      [{ text: 'Entendido' }]
+      'Entendido'
     );
   };
 
   const confirmarFalta = () => {
     const fecha = parsearFecha(faltaNueva.fechaStr);
     if (!fecha) {
-      Alert.alert('Fecha inválida', 'Usá el formato DD/MM/AAAA.');
+      showAlert('Fecha inválida', 'Usá el formato DD/MM/AAAA.');
       return;
     }
     const nueva: RegistroFalta = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       fecha,
       tipo: faltaNueva.tipo,
+      ...(faltaNueva.justificada ? { justificada: true } : {}),
       ...(faltaNueva.nota.trim() ? { nota: faltaNueva.nota.trim() } : {}),
     };
     setForm(f => ({ ...f, faltas: [...(f.faltas ?? []), nueva] }));
     setMostrarFormFalta(false);
-    setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' });
+    setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
   };
 
   const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false) => (
@@ -482,10 +540,10 @@ export function EditMateriaScreen() {
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
         {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })))}
-        {campo('Semestre', String(form.semestre), v => setForm(f => ({ ...f, semestre: Number(v) })), true)}
-        {campo('Créditos que da', String(form.creditosQueDA), v => setForm(f => ({ ...f, creditosQueDA: Number(v) })), true)}
-        {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => setForm(f => ({ ...f, creditosNecesarios: Number(v) })), true)}
-        {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => setForm(f => ({ ...f, oportunidadesExamen: Number(v) })), true)}
+        {campo('Semestre', String(form.semestre), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, semestre: Math.max(1, n) })); }, true)}
+        {campo('Créditos que da', String(form.creditosQueDA), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }, true)}
+        {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }, true)}
+        {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }, true)}
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>TIPO DE FORMACIÓN</Text>
         {form.tipoFormacion ? (
@@ -519,6 +577,19 @@ export function EditMateriaScreen() {
                     </TouchableOpacity>
                   ))
                 }
+                {!config.tiposFormacion.some(t => t.toLowerCase() === busquedaTipo.trim().toLowerCase()) && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const t = busquedaTipo.trim();
+                      setForm(f => ({ ...f, tipoFormacion: t }));
+                      actualizarConfig({ tiposFormacion: [...config.tiposFormacion, t] });
+                      setBusquedaTipo('');
+                    }}
+                    style={{ padding: 10 }}
+                  >
+                    <Text style={{ color: tema.acento }}>Usar: "{busquedaTipo.trim()}"</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -698,10 +769,33 @@ export function EditMateriaScreen() {
                   {fmtFechaBloque(b.fecha)}  {fmtHora(b.horaInicio)}–{fmtHora(b.horaFin)}
                 </Text>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                  {tiposBloque.find(t => t.key === b.tipo)?.label}
+                  {tiposBloque.find(t => t.key === b.tipo)?.label}{b.salon ? ` · ${b.salon}` : ''}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                onPress={() => {
+                  const [, mesStr, diaStr] = b.fecha.split('-');
+                  setBloqueNuevo({
+                    dia: String(parseInt(diaStr, 10)),
+                    mes: String(parseInt(mesStr, 10)),
+                    horaInicio: b.horaInicio,
+                    horaFin: b.horaFin,
+                    tipo: b.tipo,
+                    salon: b.salon ?? '',
+                  });
+                  setBloqueEditandoId(b.id);
+                  setMostrarFormBloque(true);
+                  setDropdownDia(false);
+                  setDropdownMes(false);
+                }}
+              >
+                <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}
+              >
                 <Text style={{ color: '#F44336' }}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -711,37 +805,100 @@ export function EditMateriaScreen() {
         {/* ── Formulario individual ── */}
         {mostrarFormBloque && (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fecha (DD/MM/AAAA)</Text>
-            <TextInput
-              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 10 }}
-              value={bloqueNuevo.fechaStr}
-              onChangeText={v => setBloqueNuevo(b => ({ ...b, fechaStr: autoFormatFechaBloque(b.fechaStr, v) }))}
-              placeholder="15/03/2026"
-              placeholderTextColor={tema.textoSecundario}
-              keyboardType="numbers-and-punctuation"
-            />
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13, marginBottom: 10 }}>
+              {bloqueEditandoId ? 'Editar bloque' : 'Nuevo bloque'}
+            </Text>
+
+            {/* ── Fecha: día + mes (año automático) ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 2 }}>
+
+              {/* Día */}
               <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Inicio (HH:MM)</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Día</Text>
                 <TextInput
-                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
-                  value={bloqueNuevo.horaInicioStr}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, horaInicioStr: autoFormatHora(b.horaInicioStr, v) }))}
-                  placeholder="08:00" placeholderTextColor={tema.textoSecundario}
-                  keyboardType="numbers-and-punctuation"
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
+                  value={bloqueNuevo.dia}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, dia: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
+                  placeholder="DD"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="number-pad"
+                  maxLength={2}
                 />
+                {dropdownDia && (
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 150, borderWidth: 1, borderColor: tema.borde }}>
+                    <ScrollView nestedScrollEnabled>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                        <TouchableOpacity
+                          key={d}
+                          onPress={() => { setBloqueNuevo(b => ({ ...b, dia: String(d) })); setDropdownDia(false); }}
+                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
+                        >
+                          <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fin (HH:MM)</Text>
+
+              {/* Mes */}
+              <View style={{ flex: 2 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Mes</Text>
                 <TextInput
                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
-                  value={bloqueNuevo.horaFinStr}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, horaFinStr: autoFormatHora(b.horaFinStr, v) }))}
-                  placeholder="10:00" placeholderTextColor={tema.textoSecundario}
-                  keyboardType="numbers-and-punctuation"
+                  value={bloqueNuevo.mes}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
+                  placeholder="MM"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="number-pad"
+                  maxLength={2}
                 />
+                {bloqueNuevo.mes && !isNaN(parseInt(bloqueNuevo.mes, 10)) &&
+                  parseInt(bloqueNuevo.mes, 10) >= 1 && parseInt(bloqueNuevo.mes, 10) <= 12 && (
+                  <Text style={{ color: tema.acento, fontSize: 10, marginTop: 2 }}>
+                    {MESES[parseInt(bloqueNuevo.mes, 10) - 1]}
+                  </Text>
+                )}
+                {dropdownMes && (
+                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 180, borderWidth: 1, borderColor: tema.borde }}>
+                    <ScrollView nestedScrollEnabled>
+                      {MESES.map((nombre, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          onPress={() => { setBloqueNuevo(b => ({ ...b, mes: String(i + 1) })); setDropdownMes(false); }}
+                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
+                        >
+                          <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 10, marginBottom: 12, textAlign: 'right' }}>
+              Año: {new Date().getFullYear()}
+            </Text>
+
+            {/* ── Hora inicio / fin ── */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <HoraPicker
+                label="Inicio"
+                value={bloqueNuevo.horaInicio}
+                onChange={v => setBloqueNuevo(b => ({ ...b, horaInicio: v }))}
+              />
+              <HoraPicker
+                label="Fin"
+                value={bloqueNuevo.horaFin}
+                onChange={v => setBloqueNuevo(b => ({ ...b, horaFin: v }))}
+              />
+            </View>
+
+            {/* ── Tipo ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Tipo</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               {tiposBloque.map(({ key, label }) => (
@@ -752,15 +909,32 @@ export function EditMateriaScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* ── Salón ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Salón (opcional)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
+              value={bloqueNuevo.salon}
+              onChangeText={v => setBloqueNuevo(b => ({ ...b, salon: v }))}
+              placeholder="Ej: Aula 3, Lab 201..."
+              placeholderTextColor={tema.textoSecundario}
+            />
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => { setMostrarFormBloque(false); setBloqueNuevo({ fechaStr: '', horaInicioStr: '', horaFinStr: '', tipo: 'teorica' }); }}
+                onPress={() => {
+                  setMostrarFormBloque(false);
+                  setBloqueEditandoId(null);
+                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+                  setDropdownDia(false);
+                  setDropdownMes(false);
+                }}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmarBloque}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Agregar</Text>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>{bloqueEditandoId ? 'Guardar' : 'Agregar'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -952,7 +1126,7 @@ export function EditMateriaScreen() {
                     onPress={async () => {
                       try {
                         await compartirArchivo('ejemplo_horario.json', generarEjemploJSONMateria(), 'application/json');
-                      } catch (e: any) { Alert.alert('Error', e.message); }
+                      } catch (e: any) { showAlert('Error', e.message); }
                     }}
                     style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                     <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>⬇ Descargar .json</Text>
@@ -1139,7 +1313,7 @@ export function EditMateriaScreen() {
             { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
           ] as const
         ).map(({ label, tipo, max }) => {
-          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo).length;
+          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length;
           if (max === undefined && cantidad === 0) return null;
           const pct = max ? Math.min(cantidad / max, 1) : 0;
           const colorBarra = max === undefined
@@ -1181,7 +1355,6 @@ export function EditMateriaScreen() {
                 [
                   { key: 'teorica' as const, label: config.labelTeorica || 'Teórica' },
                   { key: 'practica' as const, label: config.labelPractica || 'Práctica' },
-                  { key: 'otro' as const, label: config.labelOtro || 'Otro' },
                 ] as const
               ).map(({ key, label }) => (
                 <TouchableOpacity
@@ -1202,6 +1375,15 @@ export function EditMateriaScreen() {
               ))}
             </View>
 
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Justificada</Text>
+              <Switch
+                value={faltaNueva.justificada}
+                onValueChange={v => setFaltaNueva(f => ({ ...f, justificada: v }))}
+                trackColor={{ true: tema.acento }}
+              />
+            </View>
+
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Nota (opcional)</Text>
             <TextInput
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
@@ -1213,7 +1395,7 @@ export function EditMateriaScreen() {
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '' }); }}
+                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false }); }}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}
               >
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
@@ -1249,9 +1431,7 @@ export function EditMateriaScreen() {
               .map(falta => {
                 const tipoLabel = falta.tipo === 'teorica'
                   ? (config.labelTeorica || 'Teórica')
-                  : falta.tipo === 'practica'
-                    ? (config.labelPractica || 'Práctica')
-                    : (config.labelOtro || 'Otro');
+                  : (config.labelPractica || 'Práctica');
                 return (
                   <View
                     key={falta.id}
@@ -1265,6 +1445,7 @@ export function EditMateriaScreen() {
                       <Text style={{ color: tema.texto, fontSize: 13 }}>
                         {fmtFechaBloque(falta.fecha)}
                         <Text style={{ color: tema.acento }}> · {tipoLabel}</Text>
+                        {falta.justificada ? <Text style={{ color: '#4CAF50' }}> · Justificada</Text> : null}
                       </Text>
                       {falta.nota ? (
                         <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
@@ -1322,7 +1503,7 @@ export function EditMateriaScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
           justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 16, padding: 24,
-            width: '100%', alignItems: 'center' }}>
+            width: '100%', maxWidth: 420, alignItems: 'center' }}>
             <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
               Compartir horario QR
             </Text>
@@ -1345,6 +1526,16 @@ export function EditMateriaScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={showConfirmEliminar}
+        titulo="Eliminar materia"
+        mensaje={`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`}
+        labelConfirmar="Eliminar"
+        destructivo
+        onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id); navigation.goBack(); }}
+        onCancelar={() => setShowConfirmEliminar(false)}
+      />
     </SafeAreaView>
   );
 }

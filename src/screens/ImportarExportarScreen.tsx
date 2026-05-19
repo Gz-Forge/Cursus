@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform,
-  Alert, ActivityIndicator, Modal,
+  ActivityIndicator, Modal,
 } from 'react-native';
+import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
@@ -13,8 +14,9 @@ import { construirPayload } from '../utils/exportPayload';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
-import { Materia, Perfil, Config } from '../types';
-import type { MateriaJson, ModoImport, ConfigJsonResult } from '../utils/importExport';
+import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
+import type { MateriaJson, ModoImport } from '../utils/importExport';
+import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -66,6 +68,7 @@ export function ImportarExportarScreen() {
 
 function PanelImportar() {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -81,7 +84,7 @@ function PanelImportar() {
     try {
       contenido = await fileIO.importarArchivo();
     } catch {
-      Alert.alert('Error', 'No se pudo abrir el archivo.');
+      showAlert('Error', 'No se pudo abrir el archivo.');
       setCargando(false);
       return;
     }
@@ -92,7 +95,26 @@ function PanelImportar() {
     try {
       datos = JSON.parse(contenido);
     } catch {
-      Alert.alert('Error', 'El archivo no es un JSON válido.');
+      showAlert('Error', 'El archivo no es un JSON válido.');
+      return;
+    }
+
+    // Detectar JSON de colores (generado por prompt IA)
+    if (
+      typeof datos === 'object' && datos !== null &&
+      !Array.isArray(datos) &&
+      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales)
+    ) {
+      const d = datos as any;
+      const updates: Record<string, unknown> = {};
+      if (d.coloresHorario && typeof d.coloresHorario === 'object') {
+        updates.coloresHorario = { ...(config.coloresHorario ?? {}), ...d.coloresHorario };
+      }
+      if (d.coloresEvaluacionesGrupales && typeof d.coloresEvaluacionesGrupales === 'object') {
+        updates.coloresEvaluacionesGrupales = d.coloresEvaluacionesGrupales;
+      }
+      actualizarConfig(updates as Partial<typeof config>);
+      showAlert('Colores importados', 'Los colores se aplicaron correctamente.');
       return;
     }
 
@@ -119,7 +141,7 @@ function PanelImportar() {
         const tiposNuevos = extraerTiposNuevos((datos as any).materias, config.tiposFormacion);
         setPendingImport({ json: (datos as any).materias, tiposNuevos, configAplicados });
       } else {
-        Alert.alert('Configuración aplicada', `✅ ${configAplicados} campo(s) aplicado(s).`);
+        showAlert('Configuración aplicada', `✅ ${configAplicados} campo(s) aplicado(s).`);
       }
       return;
     }
@@ -140,21 +162,52 @@ function PanelImportar() {
       (datos as any).version === 1 &&
       Array.isArray((datos as any).perfiles)
     ) {
-      Alert.alert(
+      showAlert(
         'Importar datos completos',
         `El archivo contiene ${(datos as any).perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
       );
       return;
     }
 
-    Alert.alert(
+    // Detectar formato configuración JSON (cursus_config)
+    if (
+      typeof datos === 'object' && datos !== null && !Array.isArray(datos) &&
+      (datos as any).cursus_config === 1
+    ) {
+      try {
+        const { aplicarConfigJson } = await import('../utils/importExport');
+        const resultado = aplicarConfigJson(datos, actualizarConfig);
+        if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
+          showAlert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
+          return;
+        }
+        const resumen = [
+          `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
+          resultado.ignorados.length > 0
+            ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos:\n${resultado.ignorados.map((x: any) => `• ${x.campo}: ${x.motivo}`).join('\n')}`
+            : null,
+        ].filter(Boolean).join('\n\n');
+        showAlert('Configuración importada', resumen);
+      } catch {
+        showAlert('Error', 'No se pudo aplicar la configuración.');
+      }
+      return;
+    }
+
+    showAlert(
       'Formato no reconocido',
-      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla',
+      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Configuración → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla\n• Configuración: generada con "Generar configuración" en Prompts para IA\n• Colores: generados con el prompt de colores de horario',
     );
   };
 
+  const MAX_MATERIAS_IMPORT = 500;
+
   const doImport = async (modo: ModoImport) => {
     if (!pendingImport) return;
+    if (pendingImport.json.length > MAX_MATERIAS_IMPORT) {
+      showAlert('Archivo demasiado grande', `El máximo es ${MAX_MATERIAS_IMPORT} materias por importación.`);
+      return;
+    }
     setCargando(true);
     try {
       const { mergeImportar } = await import('../utils/importExport');
@@ -170,60 +223,12 @@ function PanelImportar() {
       }
       reemplazarMaterias(merged);
       setPendingImport(null);
-      Alert.alert('Importación completa', `Se procesaron ${merged.length} materias.`);
+      showAlert('Importación completa', `Se procesaron ${merged.length} materias.`);
     } catch {
-      Alert.alert('Error', 'No se pudo completar la importación.');
+      showAlert('Error', 'No se pudo completar la importación.');
     } finally {
       setCargando(false);
     }
-  };
-
-  const handleImportarConfig = async () => {
-    setCargando(true);
-    let contenido: string | null = null;
-    try {
-      contenido = await fileIO.importarArchivo();
-    } catch {
-      Alert.alert('Error', 'No se pudo abrir el archivo.');
-      setCargando(false);
-      return;
-    }
-    setCargando(false);
-    if (!contenido) return;
-
-    let datos: unknown;
-    try {
-      datos = JSON.parse(contenido);
-    } catch {
-      Alert.alert('Error', 'El archivo no es un JSON válido.');
-      return;
-    }
-
-    let resultado: ConfigJsonResult;
-    try {
-      const { aplicarConfigJson } = await import('../utils/importExport');
-      resultado = aplicarConfigJson(datos, actualizarConfig);
-    } catch {
-      Alert.alert(
-        'Formato no reconocido',
-        'El archivo no parece ser un JSON de configuración de Cursus.\n\nAsegurate de generarlo con el prompt "Generar configuración" en Configuración → Prompts para IA.',
-      );
-      return;
-    }
-
-    if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
-      Alert.alert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
-      return;
-    }
-
-    const resumen = [
-      `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`,
-      resultado.ignorados.length > 0
-        ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos:\n${resultado.ignorados.map(x => `• ${x.campo}: ${x.motivo}`).join('\n')}`
-        : null,
-    ].filter(Boolean).join('\n\n');
-
-    Alert.alert('Configuración importada', resumen);
   };
 
   return (
@@ -337,60 +342,19 @@ function PanelImportar() {
         </>
       )}
 
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 16 }}>
-        CONFIGURACIÓN DESDE JSON
-      </Text>
-      <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Importá un JSON generado con el prompt{' '}
-          <Text style={{ color: tema.texto }}>"Generar configuración"</Text>
-          {' '}(Configuración → Prompts para IA) para configurar la app de una vez.{'\n\n'}
-          Solo se actualizan los campos presentes en el JSON; el resto queda como está.
-        </Text>
-        <TouchableOpacity
-          onPress={handleImportarConfig}
-          disabled={cargando}
-          style={{
-            backgroundColor: tema.tarjeta,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: tema.acento,
-          }}
-        >
-          {cargando
-            ? <ActivityIndicator color={tema.acento} />
-            : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Importar configuración JSON</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
     </View>
   );
 }
 
 function PanelExportar() {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const { materias, perfiles, perfilActivoId, config } = useStore();
   const [inclNotas, setInclNotas] = useState(false);
   const [inclEvaluaciones, setInclEvaluaciones] = useState(false);
   const [inclHorarios, setInclHorarios] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
-  const [cargandoConfig, setCargandoConfig] = useState(false);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
-
-  const handleExportarConfig = async () => {
-    setCargandoConfig(true);
-    try {
-      const { configAJson } = await import('../utils/importExport');
-      const contenido = JSON.stringify(configAJson(config), null, 2);
-      await fileIO.exportarArchivo('cursus-config.json', contenido);
-    } catch {
-      Alert.alert('Error', 'No se pudo exportar la configuración.');
-    } finally {
-      setCargandoConfig(false);
-    }
-  };
 
   const togglePerfil = (id: string) => {
     setPerfilesSelec(prev =>
@@ -427,6 +391,11 @@ function PanelExportar() {
         <Checkbox label="Notas" value={inclNotas} onChange={setInclNotas} />
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
+        {(inclNotas || inclEvaluaciones) && (
+          <Text style={{ color: '#FF9800', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
+            ⚠️ El archivo exportado contendrá datos académicos personales (notas y/o evaluaciones). Compartilo solo con personas de confianza.
+          </Text>
+        )}
       </View>
 
       <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
@@ -470,40 +439,19 @@ function PanelExportar() {
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 12, lineHeight: 20 }}>
-          Exporta la configuración actual (umbrales, horario, tarjetas, etc.) como un archivo JSON independiente.{'\n\n'}
-          Podés importarlo en otro dispositivo desde{' '}
-          <Text style={{ color: tema.acento }}>Importar → Configuración desde JSON</Text>.
+          Compartí la configuración actual (umbrales, horario, tarjetas, etc.) por QR para aplicarla en otro dispositivo con la app Cursus.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={handleExportarConfig}
-            disabled={cargandoConfig}
-            style={{
-              flex: 1,
-              backgroundColor: tema.tarjeta,
-              padding: 14, borderRadius: 10,
-              alignItems: 'center',
-              borderWidth: 1, borderColor: tema.acento,
-            }}
-          >
-            {cargandoConfig
-              ? <ActivityIndicator color={tema.acento} />
-              : <Text style={{ color: tema.acento, fontWeight: '700' }}>⚙️ Exportar .json</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setMostrarQrConfig(true)}
-            style={{
-              flex: 1,
-              backgroundColor: tema.tarjeta,
-              padding: 14, borderRadius: 10,
-              alignItems: 'center',
-              borderWidth: 1, borderColor: tema.acento,
-            }}
-          >
-            <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => setMostrarQrConfig(true)}
+          style={{
+            backgroundColor: tema.tarjeta,
+            padding: 14, borderRadius: 10,
+            alignItems: 'center',
+            borderWidth: 1, borderColor: tema.acento,
+          }}
+        >
+          <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
+        </TouchableOpacity>
       </View>
 
       <QrConfigModal
@@ -511,6 +459,7 @@ function PanelExportar() {
         onCerrar={() => setMostrarQrConfig(false)}
         config={config}
       />
+
     </View>
   );
 }
@@ -531,7 +480,7 @@ function QrConfigModal({ visible, onCerrar, config }: { visible: boolean; onCerr
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCerrar}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <View style={{ backgroundColor: tema.superficie ?? tema.tarjeta, borderRadius: 16, padding: 24, width: '100%', alignItems: 'center' }}>
+        <View style={{ backgroundColor: tema.superficie ?? tema.tarjeta, borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, alignItems: 'center' }}>
           <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
             Compartir configuración
           </Text>
@@ -566,6 +515,7 @@ function PanelMetodos({
   inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec, materiasActivas,
 }: PanelMetodosProps) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const [cargando, setCargando] = useState(false);
   const [mostrarQrModal, setMostrarQrModal] = useState(false);
   const [mostrarOpcionesQr, setMostrarOpcionesQr] = useState(false);
@@ -574,7 +524,7 @@ function PanelMetodos({
 
   const handleDescargarJson = async () => {
     if (sinPerfiles) {
-      Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
     setCargando(true);
@@ -585,7 +535,7 @@ function PanelMetodos({
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
     } catch (e) {
-      Alert.alert('Error', 'No se pudo generar el archivo.');
+      showAlert('Error', 'No se pudo generar el archivo.');
     } finally {
       setCargando(false);
     }
@@ -593,7 +543,7 @@ function PanelMetodos({
 
   const handleCopiarJson = async () => {
     if (sinPerfiles) {
-      Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
     setCargando(true);
@@ -603,9 +553,9 @@ function PanelMetodos({
       });
       const contenido = JSON.stringify(payload, null, 2);
       await Clipboard.setStringAsync(contenido);
-      Alert.alert('Copiado', 'El JSON fue copiado al portapapeles.');
+      showAlert('Copiado', 'El JSON fue copiado al portapapeles.');
     } catch {
-      Alert.alert('Error', 'No se pudo copiar el contenido.');
+      showAlert('Error', 'No se pudo copiar el contenido.');
     } finally {
       setCargando(false);
     }
@@ -613,7 +563,7 @@ function PanelMetodos({
 
   const handleQrPantalla = () => {
     if (sinPerfiles) {
-      Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
     setMostrarQrModal(true);
@@ -621,7 +571,7 @@ function PanelMetodos({
 
   const handleDescargarQrs = async (formato: 'png' | 'pdf' | 'zip') => {
     if (sinPerfiles) {
-      Alert.alert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
     setCargando(true);
@@ -640,7 +590,7 @@ function PanelMetodos({
 
       setMostrarOpcionesQr(false);
     } catch (e) {
-      Alert.alert('Error', 'No se pudo generar los QRs.');
+      showAlert('Error', 'No se pudo generar los QRs.');
     } finally {
       setCargando(false);
     }

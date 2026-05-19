@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  Alert, Platform, Image, ImageBackground,
+  Platform, Image, ImageBackground,
 } from 'react-native';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { temaOscuro } from '../theme/colors';
+import { useAlert } from '../contexts/AlertContext';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -45,16 +47,17 @@ function FondoEditor({
   valor, onChange, label,
 }: { valor: FondoPantalla | undefined; onChange: (v: FondoPantalla | undefined) => void; label: string }) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const tipo = valor?.tipo ?? 'color';
   const colorActual = tipo === 'color' ? (valor?.valor ?? tema.fondo) : tema.fondo;
 
   const elegirImagen = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Web', 'En la versión web ingresá una URL de imagen directamente.');
+      showAlert('Web', 'En la versión web ingresá una URL de imagen directamente.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permiso denegado', 'Necesitamos acceso a la galería.'); return; }
+    if (!perm.granted) { showAlert('Permiso denegado', 'Necesitamos acceso a la galería.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
@@ -433,7 +436,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Resumen */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 10,
         borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 8 }}>
-        {[{ valor: '45', label: 'créditos' }, { valor: '3', label: 'exoneradas' }, { valor: '5', label: 'disp.' }].map(s => (
+        {[{ valor: '45', label: 'Créditos' }, { valor: '3', label: 'Exoneradas' }, { valor: '5', label: 'Disponibles' }].map(s => (
           <View key={s.label} style={{ alignItems: 'center' }}>
             <Text style={{ color: t.texto, fontSize: 22, fontWeight: '700' }}>{s.valor}</Text>
             <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{s.label}</Text>
@@ -1005,6 +1008,7 @@ export function TemaPersonalizadoScreen() {
   const [pantallaEditando, setPantallaEditando] = useState<PantallaKey>('carrera');
   const [cambiosSinGuardar, setCambiosSinGuardar] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   const actualizarDraft = (parcial: Partial<TemaPersonalizado>) => {
     setDraft(prev => ({ ...prev, ...parcial }));
@@ -1019,15 +1023,8 @@ export function TemaPersonalizadoScreen() {
     setTimeout(() => setGuardadoOk(false), 2500);
   };
 
-  const resetear = () => {
-    Alert.alert('Resetear tema', '¿Volver al tema oscuro por defecto?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Resetear', style: 'destructive',
-        onPress: () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); },
-      },
-    ]);
-  };
+  const resetear = () => setShowConfirmReset(true);
+  const doResetear = () => { setDraft({ ...temaOscuro }); setCambiosSinGuardar(true); setGuardadoOk(false); };
 
   const fondoDePreview = (): FondoPantalla | undefined => {
     switch (paginaPreview) {
@@ -1259,6 +1256,15 @@ export function TemaPersonalizadoScreen() {
         </View>
       )}
 
+      <ConfirmModal
+        visible={showConfirmReset}
+        titulo="Resetear tema"
+        mensaje="¿Volver al tema oscuro por defecto?"
+        labelConfirmar="Resetear"
+        destructivo
+        onConfirmar={() => { setShowConfirmReset(false); doResetear(); }}
+        onCancelar={() => setShowConfirmReset(false)}
+      />
     </SafeAreaView>
   );
 }

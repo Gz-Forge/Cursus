@@ -19,6 +19,7 @@ export interface EvaluacionSimple {
   fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
   hora?: number;           // minutos desde 00:00, ej: 480 = 08:00
   horaFin?: number;        // minutos desde 00:00, duración opcional
+  salon?: string;          // salón donde ocurre (opcional)
 }
 
 export interface SubEvaluacion {
@@ -30,6 +31,7 @@ export interface SubEvaluacion {
   fecha?: string;          // 'YYYY-MM-DD' — si está, aparece en el horario
   hora?: number;           // minutos desde 00:00
   horaFin?: number;        // minutos desde 00:00
+  salon?: string;          // salón donde ocurre (opcional)
 }
 
 export interface GrupoEvaluacion {
@@ -47,7 +49,8 @@ export type TipoBloque = 'teorica' | 'practica' | 'parcial' | 'otro';
 export interface RegistroFalta {
   id: string;
   fecha: string;                          // 'YYYY-MM-DD'
-  tipo: 'teorica' | 'practica' | 'otro';
+  tipo: 'teorica' | 'practica';
+  justificada?: boolean;                  // si true, no cuenta en el cálculo de faltas
   nota?: string;                          // comentario libre opcional
 }
 
@@ -62,6 +65,7 @@ export interface BloqueHorario {
   horaInicio: number;   // minutos desde las 00:00 (ej: 480 = 8:00)
   horaFin: number;
   tipo: TipoBloque;
+  salon?: string;       // salón donde ocurre (opcional)
 }
 
 export interface Materia {
@@ -154,8 +158,9 @@ export interface Config {
   labelOtro: string;      // nombre completo editable, default 'Otro'
   mostrarNombreCompletoEnBloque: boolean; // si true, muestra label en vez de abrev en el horario
   modoExamen: 'manual' | 'automatico';
-  fechasLimiteExamen: string[];   // ISO: 'YYYY-MM-DD'
-  fechasEjecutadas: string[];     // fechas ya procesadas
+  fechasLimiteExamen: string[];   // ISO: 'YYYY-MM-DD' (ciclo=false) o 'DD-MM' (ciclo=true)
+  fechasEjecutadas: string[];     // fechas ya procesadas, siempre 'YYYY-MM-DD'
+  examenRepetirCiclo?: boolean;   // si true, fechasLimiteExamen almacena 'DD-MM' y se repite cada año
   // Tarjeta config
   tarjetaCreditosBadge: 'da' | 'necesita' | 'ambos';
   tarjetaBadgeOrden: 'da_primero' | 'necesita_primero';
@@ -176,8 +181,17 @@ export interface Config {
   horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
   // Métricas personalizables
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
+  metricasOrden?: string[];            // orden de las métricas (array de IDs); ausente = orden por defecto
+  notasObtenidasRedondeo?: 'abajo' | 'arriba'; // modo de redondeo para métrica "Notas obtenidas"
+  notasObtenidasModo?: 'exacta' | 'rangos';    // agrupar notas exactas o en rangos
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
+  // Horario — evaluaciones grupales
+  coloresEvaluacionesGrupales?: ColorBloque; // color compartido de todas las evaluaciones de grupo
+  // UI state — persistido para recordar entre sesiones
+  semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
+  estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
+  estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
 }
 
 export interface AppState {

@@ -61,9 +61,16 @@ export async function migrarSiNecesario(): Promise<void> {
   if (metaRaw) return; // ya migrado, nada que hacer
 
   const legacyRaw = await storage.getItem(KEY_LEGACY);
-  const estado: AppState = legacyRaw
-    ? JSON.parse(legacyRaw)
-    : { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
+  let estadoLegacy: AppState | null = null;
+  if (legacyRaw) {
+    try {
+      estadoLegacy = JSON.parse(legacyRaw);
+    } catch {
+      // Datos legacy corruptos: ignorar y arrancar con estado vacío
+      estadoLegacy = null;
+    }
+  }
+  const estado: AppState = estadoLegacy ?? { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
 
   const meta: PerfilesMeta = {
     activoId: 'p1',
@@ -80,8 +87,20 @@ export async function migrarSiNecesario(): Promise<void> {
 
 export async function cargarMeta(): Promise<PerfilesMeta> {
   const raw = await storage.getItem(KEY_META);
-  if (!raw) throw new Error('PerfilesMeta no encontrada');
-  return JSON.parse(raw) as PerfilesMeta;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as PerfilesMeta;
+    } catch {
+      if (__DEV__) console.warn('[perfiles] cargarMeta: meta corrupta en storage — restaurando perfil inicial');
+    }
+  }
+  // Meta ausente o corrupta: crear meta mínima sin tocar el estado de perfiles existente
+  const meta: PerfilesMeta = {
+    activoId: 'p1',
+    perfiles: [{ id: 'p1', nombre: 'Perfil 1' }],
+  };
+  await guardarMeta(meta);
+  return meta;
 }
 
 export async function guardarMeta(meta: PerfilesMeta): Promise<void> {
@@ -91,7 +110,12 @@ export async function guardarMeta(meta: PerfilesMeta): Promise<void> {
 export async function cargarPerfilEstado(id: string): Promise<AppState> {
   const raw = await storage.getItem(keyPerfil(id));
   if (!raw) return { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
-  return JSON.parse(raw) as AppState;
+  try {
+    return JSON.parse(raw) as AppState;
+  } catch {
+    if (__DEV__) console.warn('[perfiles] cargarPerfilEstado: estado corrupto para', id, '— restaurando vacío');
+    return { materias: [], config: { ...CONFIG_DEFAULT_PARCIAL } };
+  }
 }
 
 export async function guardarPerfilEstado(id: string, estado: AppState): Promise<void> {

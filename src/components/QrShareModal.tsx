@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
+import { useAlert } from '../contexts/AlertContext';
 import { materiasAJson } from '../utils/importExport';
 import { exportarCarrera } from '../utils/importExportNative';
 import { encodeCarrera, splitEnChunks, ChunkQR } from '../utils/qrPayload';
@@ -15,6 +16,7 @@ interface Props {
 
 export function QrShareModal({ visible, materias, onCerrar }: Props) {
   const tema = useTema();
+  const { showAlert } = useAlert();
   const [paginaActual, setPaginaActual] = useState(0);
   const [chunks, setChunks] = useState<ChunkQR[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -28,10 +30,12 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
     const id = setTimeout(() => {
       try {
         setChunks(splitEnChunks(encodeCarrera(materiasAJson(materias))));
-      } catch {
-        setChunks([]);
-      } finally {
         setCargando(false);
+      } catch (e) {
+        if (__DEV__) console.warn('[QrShareModal] Error al generar QR:', e);
+        setChunks([]);
+        setCargando(false);
+        showAlert('Error al generar QR', 'No se pudo generar el código QR. Intentá exportar como .json.');
       }
     }, 50);
     return () => clearTimeout(id);
@@ -43,7 +47,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCerrar}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 24, width: '100%', alignItems: 'center' }}>
+        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 24, width: '100%', maxWidth: 420, alignItems: 'center' }}>
 
           <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>
             Compartir carrera
@@ -88,7 +92,8 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                     onPress={() => setPaginaActual(p => Math.max(0, p - 1))}
                     disabled={paginaActual === 0}
                     style={{
-                      flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+                      flex: 1, paddingVertical: 10, ...(Platform.OS === 'web' ? { paddingHorizontal: 12 } : {}),
+                      borderRadius: 8, alignItems: 'center',
                       backgroundColor: paginaActual === 0 ? tema.borde : tema.tarjeta,
                     }}
                   >
@@ -98,7 +103,8 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                     onPress={() => setPaginaActual(p => Math.min(chunks.length - 1, p + 1))}
                     disabled={paginaActual === chunks.length - 1}
                     style={{
-                      flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+                      flex: 1, paddingVertical: 10, ...(Platform.OS === 'web' ? { paddingHorizontal: 12, minWidth: 120 } : {}),
+                      borderRadius: 8, alignItems: 'center',
                       backgroundColor: paginaActual === chunks.length - 1 ? tema.borde : tema.tarjeta,
                     }}
                   >

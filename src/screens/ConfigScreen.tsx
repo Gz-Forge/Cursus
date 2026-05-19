@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, Platform, Animated, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
+import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto, generarPromptConfig } from '../utils/importExport';
 import { useNavigation } from '@react-navigation/native';
@@ -11,7 +12,9 @@ import { generarPromptHorario } from '../utils/horarioImportExport';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
-import { TipoBloque, ColorBloque, EvaluacionSimple } from '../types';
+import { TipoBloque, ColorBloque, EvaluacionSimple, EstadoMateria } from '../types';
+import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
+import { estadoColores } from '../theme/colors';
 
 // ── Paleta de colores predeterminados (misma que HorarioScreen) ──────────────
 const COLORES_BLOQUES_DEFAULT = [
@@ -19,23 +22,52 @@ const COLORES_BLOQUES_DEFAULT = [
   '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
 ];
 
-// ── Color picker simple: preview box + hex input ────────────────────────────
+// ── Paleta completa para el color picker ────────────────────────────────────
+const PALETA_COLOR_PICKER = [
+  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
+  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
+  '#F44336', '#3F51B5', '#FFEB3B', '#795548', '#9E9E9E',
+  '#ffffff', '#000000',
+];
+
+// ── Color picker: cuadrado tocable + paleta + hex input ─────────────────────
 function ColorInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
   const tema = useTema();
+  const [mostrarPaleta, setMostrarPaleta] = useState(false);
   const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-      <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.borde }} />
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
-      <TextInput
-        style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
-        value={value}
-        onChangeText={onChange}
-        placeholder="#RRGGBB"
-        placeholderTextColor={tema.textoSecundario}
-        maxLength={7}
-        autoCapitalize="characters"
-      />
+    <View style={{ marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => setMostrarPaleta(v => !v)}
+          style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.acento }}
+        />
+        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
+        <TextInput
+          style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
+          value={value}
+          onChangeText={onChange}
+          placeholder="#RRGGBB"
+          placeholderTextColor={tema.textoSecundario}
+          maxLength={7}
+          autoCapitalize="characters"
+        />
+      </View>
+      {mostrarPaleta && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, padding: 8, backgroundColor: tema.fondo, borderRadius: 8 }}>
+          {PALETA_COLOR_PICKER.map(c => (
+            <TouchableOpacity
+              key={c}
+              onPress={() => { onChange(c); setMostrarPaleta(false); }}
+              style={{
+                width: 32, height: 32, borderRadius: 6, backgroundColor: c,
+                borderWidth: c.toLowerCase() === value.toLowerCase() ? 2.5 : 1,
+                borderColor: c.toLowerCase() === value.toLowerCase() ? tema.acento : tema.borde,
+              }}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -45,7 +77,7 @@ type Tab = 'notas' | 'horario' | 'app' | 'datos';
 function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) => void; tema: any }) {
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: 'notas',   icon: '📊', label: 'Notas'   },
-    { id: 'horario', icon: '🗓', label: 'Horario' },
+    { id: 'horario', icon: '📅', label: 'Horario' },
     { id: 'app',     icon: '🎨', label: 'App'     },
     { id: 'datos',   icon: '📦', label: 'Datos'   },
   ];
@@ -79,12 +111,16 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
 }
 
 export function ConfigScreen() {
-  const { config, actualizarConfig, materias } = useStore();
+  const { config, actualizarConfig, materias, guardarMateria } = useStore();
+  const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
   const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
+  const [promptColoresExpandido, setPromptColoresExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
+  const [editandoTipo, setEditandoTipo] = useState<string | null>(null);
+  const [textoEdicion, setTextoEdicion] = useState('');
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
   const [mostrarSync, setMostrarSync] = useState(false);
   const [promptEvalExpandido, setPromptEvalExpandido] = useState(false);
@@ -92,7 +128,16 @@ export function ConfigScreen() {
   const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
+  const [estadoExpandido, setEstadoExpandido] = useState<EstadoMateria | null>(null);
+  const { getColor, getIcono } = useEstadoEstilo();
+  const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
+  // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
+  // controlado revierta el texto mientras el usuario escribe (ej: borrar "12" para tipear "5")
+  const [notaMaxStr, setNotaMaxStr] = useState(() => String(config.notaMaxima));
+  const [oportStr, setOportStr] = useState(() => String(config.oportunidadesExamenDefault));
+  React.useEffect(() => { setNotaMaxStr(String(config.notaMaxima)); }, [config.notaMaxima]);
+  React.useEffect(() => { setOportStr(String(config.oportunidadesExamenDefault)); }, [config.oportunidadesExamenDefault]);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
@@ -109,19 +154,27 @@ export function ConfigScreen() {
     return tieneBloques || tieneEvalsEnHorario;
   });
 
-  const campo = (label: string, key: keyof typeof config, esNumero = false) => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-      <TextInput
-        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, ...(esNumero ? { width: 80 } : {}) }}
-        value={String(config[key])}
-        keyboardType={esNumero ? 'numeric' : 'default'}
-        onChangeText={v => actualizarConfig({ [key]: esNumero ? Number(v) : v } as any)}
-      />
-    </View>
-  );
+  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault') => {
+    const str = key === 'notaMaxima' ? notaMaxStr : oportStr;
+    const setStr = key === 'notaMaxima' ? setNotaMaxStr : setOportStr;
+    return (
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
+        <TextInput
+          style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
+          value={str}
+          keyboardType="numeric"
+          onChangeText={v => {
+            setStr(v);
+            const n = Number(v);
+            if (!isNaN(n) && n >= 1) actualizarConfig({ [key]: n });
+          }}
+        />
+      </View>
+    );
+  };
 
-  const campoUmbral = (label: string, key: keyof typeof config) => {
+  const campoUmbral = (label: string, key: 'umbralExoneracion' | 'umbralAprobacion' | 'umbralPorExamen' | 'umbralExamenExoneracion') => {
     const val = config[key] as number;
     const equiv = ((val / 100) * config.notaMaxima).toFixed(1);
     return (
@@ -132,7 +185,7 @@ export function ConfigScreen() {
             style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
             value={String(val)}
             keyboardType="numeric"
-            onChangeText={v => actualizarConfig({ [key]: Number(v) } as any)}
+            onChangeText={v => { const n = Number(v); if (!isNaN(n)) actualizarConfig({ [key]: Math.max(0, Math.min(100, n)) }); }}
           />
           <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>→ {equiv} / {config.notaMaxima}</Text>
         </View>
@@ -140,7 +193,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'horarioMostrarEvaluaciones', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -226,14 +279,132 @@ export function ConfigScreen() {
           >
             <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
           </TouchableOpacity>
+          {/* ── ESTADOS DE MATERIA ──────────────────────── */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
+            <TouchableOpacity
+              onPress={() => actualizarConfig({
+                estadoColoresPersonalizados: undefined,
+                estadoIconosPersonalizados: undefined,
+              })}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar todos</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
+            {ORDEN_ESTADOS_CONFIG.map((estado, idx) => {
+              const color = getColor(estado);
+              const icono = getIcono(estado);
+              const expandido = estadoExpandido === estado;
+              const esUltimo = idx === ORDEN_ESTADOS_CONFIG.length - 1;
+
+              return (
+                <View key={estado}>
+                  {/* Fila header */}
+                  <TouchableOpacity
+                    onPress={() => setEstadoExpandido(expandido ? null : estado)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', padding: 14,
+                      borderBottomWidth: expandido || !esUltimo ? 1 : 0,
+                      borderBottomColor: tema.borde,
+                    }}
+                  >
+                    {/* Preview color */}
+                    <View style={{
+                      width: 22, height: 22, borderRadius: 5,
+                      backgroundColor: color, marginRight: 10,
+                    }} />
+                    {/* Preview icono */}
+                    <Text style={{ fontSize: 18, marginRight: 10 }}>{icono}</Text>
+                    {/* Nombre estado */}
+                    <Text style={{ color: tema.texto, fontSize: 14, flex: 1 }}>
+                      {ESTADO_NOMBRES[estado]}
+                    </Text>
+                    {/* Chevron */}
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                      {expandido ? '▲' : '▼'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Panel expandido */}
+                  {expandido && (
+                    <View style={{
+                      backgroundColor: tema.fondo, padding: 14,
+                      borderBottomWidth: esUltimo ? 0 : 1,
+                      borderBottomColor: tema.borde,
+                    }}>
+                      {/* Color picker */}
+                      <ColorInput
+                        label="Color"
+                        value={config.estadoColoresPersonalizados?.[estado] ?? estadoColores[estado]}
+                        onChange={v => actualizarConfig({
+                          estadoColoresPersonalizados: {
+                            ...config.estadoColoresPersonalizados,
+                            [estado]: v,
+                          },
+                        })}
+                      />
+
+                      {/* Emoji picker */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8 }}>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>Icono</Text>
+                        <TextInput
+                          style={{
+                            flex: 1, backgroundColor: tema.superficie,
+                            color: tema.texto, padding: 8, borderRadius: 6,
+                            fontSize: 22, textAlign: 'center',
+                            borderWidth: 1, borderColor: tema.borde,
+                          }}
+                          value={config.estadoIconosPersonalizados?.[estado] ?? ICONOS_DEFAULT[estado]}
+                          onChangeText={v => {
+                            const trimmed = v.trim();
+                            if (!trimmed) return;
+                            actualizarConfig({
+                              estadoIconosPersonalizados: {
+                                ...config.estadoIconosPersonalizados,
+                                [estado]: trimmed,
+                              },
+                            });
+                          }}
+                          placeholder={ICONOS_DEFAULT[estado]}
+                          placeholderTextColor={tema.textoSecundario}
+                        />
+                      </View>
+
+                      {/* Restaurar individual */}
+                      <TouchableOpacity
+                        onPress={() => {
+                          const nuevosCols = { ...config.estadoColoresPersonalizados };
+                          const nuevosIcons = { ...config.estadoIconosPersonalizados };
+                          delete nuevosCols[estado];
+                          delete nuevosIcons[estado];
+                          actualizarConfig({
+                            estadoColoresPersonalizados: Object.keys(nuevosCols).length ? nuevosCols : undefined,
+                            estadoIconosPersonalizados: Object.keys(nuevosIcons).length ? nuevosIcons : undefined,
+                          });
+                        }}
+                        style={{
+                          alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 6,
+                          borderRadius: 8, borderWidth: 1, borderColor: tema.borde,
+                        }}
+                      >
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
           </>
           )}
 
           {tabActiva === 'notas' && (
           <>
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
-          {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima', true)}
-          {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault', true)}
+          {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}
+          {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}
 
           <TouchableOpacity
             onPress={() => setMostrarPeriodo(true)}
@@ -247,9 +418,9 @@ export function ConfigScreen() {
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
           {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
-          {campoUmbral('Aprobación ≥', 'umbralAprobacion')}
+          {config.usarEstadoAprobado && campoUmbral('Aprobación ≥', 'umbralAprobacion')}
           {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
-          {campoUmbral('Nota mínima examen ≥', 'umbralExamenExoneracion')}
+          {campoUmbral('Nota mínima de salvar examen ≥', 'umbralExamenExoneracion')}
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
@@ -261,14 +432,67 @@ export function ConfigScreen() {
             {config.tiposFormacion.length === 0 && (
               <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 8 }}>Sin tipos definidos</Text>
             )}
-            {config.tiposFormacion.map((tipo, i) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
-                <TouchableOpacity onPress={() => actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) })}>
-                  <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+            {config.tiposFormacion.map((tipo, i) => {
+              const estaEditando = editandoTipo === tipo;
+
+              const confirmarEdicion = () => {
+                const nuevo = textoEdicion.trim();
+                if (!nuevo || nuevo === tipo) { setEditandoTipo(null); return; }
+                if (config.tiposFormacion.some((t, j) => j !== i && normalizarTipo(t) === normalizarTipo(nuevo))) {
+                  setEditandoTipo(null);
+                  return;
+                }
+                actualizarConfig({ tiposFormacion: config.tiposFormacion.map((t, j) => j === i ? nuevo : t) });
+                materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
+                  guardarMateria({ ...m, tipoFormacion: nuevo })
+                );
+                setEditandoTipo(null);
+              };
+
+              return (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  {estaEditando ? (
+                    <TextInput
+                      autoFocus
+                      style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, marginRight: 8, borderWidth: 1, borderColor: tema.acento }}
+                      value={textoEdicion}
+                      onChangeText={setTextoEdicion}
+                      onBlur={confirmarEdicion}
+                      onSubmitEditing={confirmarEdicion}
+                      returnKeyType="done"
+                    />
+                  ) : (
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => { setEditandoTipo(tipo); setTextoEdicion(tipo); }}>
+                      <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => {
+                    if (estaEditando) { setEditandoTipo(null); return; }
+                    const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
+                    const eliminar = () => {
+                      actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) });
+                      if (usadas > 0) {
+                        materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
+                          guardarMateria({ ...m, tipoFormacion: undefined })
+                        );
+                      }
+                    };
+                    if (usadas > 0) {
+                      showConfirm(
+                        'Eliminar tipo de formación',
+                        `"${tipo}" está siendo usado por ${usadas} materia${usadas !== 1 ? 's' : ''}. Al eliminar, esas materias quedarán sin tipo de formación asignado.`,
+                        eliminar,
+                        { labelConfirmar: 'Eliminar', destructivo: true },
+                      );
+                    } else {
+                      eliminar();
+                    }
+                  }}>
+                    <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
               <TextInput
                 placeholder="Nuevo tipo..."
@@ -336,12 +560,6 @@ export function ConfigScreen() {
             'mostrarNombreCompletoEnBloque',
             'Si está activo, muestra "Teórica" en vez de "T" en los bloques',
           )}
-          {toggle(
-            'Mostrar evaluaciones en el horario',
-            'horarioMostrarEvaluaciones',
-            'Muestra las evaluaciones con fecha como bloques especiales (📝) en la vista semanal',
-          )}
-
           <View style={{ marginBottom: 14 }}>
             <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 6 }}>Primer día de la semana</Text>
             <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 8, overflow: 'hidden' }}>
@@ -454,8 +672,10 @@ export function ConfigScreen() {
                           );
                         })}
 
-                        {/* Color para Evaluaciones en el horario */}
-                        {config.horarioMostrarEvaluaciones && (() => {
+                        {/* Color para Evaluaciones en el horario (solo si la materia las tiene con fecha) */}
+                        {config.horarioMostrarEvaluaciones &&
+                          m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) &&
+                          (() => {
                           const evalColor: ColorBloque = coloresMateria['parcial'] ?? { fondo: '#FF9800', texto: '#ffffff' };
                           const actualizarColorEval = (campo: 'fondo' | 'texto', valor: string) => {
                             actualizarConfig({
@@ -640,6 +860,79 @@ export function ConfigScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          <TouchableOpacity
+            onPress={() => setPromptColoresExpandido(v => !v)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Configurar colores del horario</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                La IA te pregunta materia por materia qué colores querés usar. Al terminar devuelve un JSON que podés importar.
+              </Text>
+            </View>
+            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptColoresExpandido ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {promptColoresExpandido && (() => {
+            const labelTipo = (tipo: string) => {
+              switch (tipo) {
+                case 'teorica':  return config.labelTeorica  || 'Teórica';
+                case 'practica': return config.labelPractica || 'Práctica';
+                case 'parcial':  return 'Evaluación';
+                case 'otro':     return config.labelOtro     || 'Otro';
+                default:         return tipo;
+              }
+            };
+            const materiasConHorario = materias.filter(m => {
+              if (calcularEstadoFinal(m, config) !== 'cursando') return false;
+              return (m.bloques ?? []).length > 0 ||
+                (config.horarioMostrarEvaluaciones && m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha));
+            });
+            const materiasExport = materiasConHorario.map(m => {
+              const tiposBloque = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
+              const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
+                m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
+              if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
+              return {
+                id: m.id,
+                nombre: m.nombre,
+                bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
+                coloresActuales: config.coloresHorario?.[m.id] ?? {},
+              };
+            });
+            const coloresEvGrupales = config.coloresEvaluacionesGrupales
+              ? JSON.stringify(config.coloresEvaluacionesGrupales)
+              : 'no configurado';
+            const prompt = `Sos un asistente de diseño de colores para una app académica de horarios.
+
+Estado actual de colores de mis materias:
+${JSON.stringify(materiasExport, null, 2)}
+
+Evaluaciones grupales (color compartido): ${coloresEvGrupales}
+
+Ayudame a elegir colores para cada materia y tipo de bloque.
+Preguntame materia por materia qué colores quiero usar para fondo y texto.
+También preguntame si quiero cambiar el color de las evaluaciones grupales.
+Cuando termines, devolvé SOLO el JSON con este formato:
+{
+  "coloresHorario": { "[id_materia]": { "[tipo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
+  "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
+}`;
+            return (
+              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8, marginTop: -4 }}>
+                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>{prompt}</Text>
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => Clipboard.setStringAsync(prompt)}
+                  style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
 
           <TouchableOpacity
             onPress={() => setPromptCompletoExpandido(v => !v)}

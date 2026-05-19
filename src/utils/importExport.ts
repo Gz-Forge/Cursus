@@ -51,6 +51,8 @@ export function normalizarTipo(t: string): string {
     .replace(/\s+/g, '');
 }
 
+const MAX_TIPOS_FORMACION = 50;
+
 export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): string[] {
   const normExistentes = new Set(existentes.map(normalizarTipo));
   const nuevos: string[] = [];
@@ -58,6 +60,7 @@ export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): 
 
   datos.forEach(d => {
     if (!d.tipo_formacion) return;
+    if (existentes.length + nuevos.length >= MAX_TIPOS_FORMACION) return;
     const norm = normalizarTipo(d.tipo_formacion);
     if (!normExistentes.has(norm) && !normNuevos.has(norm)) {
       nuevos.push(d.tipo_formacion);
@@ -94,24 +97,43 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
         }))
       : [];
 
+    const MAX_SUBEVALS_IMPORT = 50;
+    const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
     const evaluaciones: Evaluacion[] = Array.isArray(d.evaluaciones)
-      ? d.evaluaciones.map((ev, i) => ({
-          ...ev,
-          id: (ev as any).id ?? `importada_${d.numero}_ev${i}`,
-        })) as Evaluacion[]
+      ? d.evaluaciones.map((ev, i) => {
+          const e = ev as any;
+          const base = {
+            ...e,
+            id: e.id ?? `importada_${d.numero}_ev${i}`,
+            pesoEnMateria: Math.min(100, Math.max(0, typeof e.pesoEnMateria === 'number' && isFinite(e.pesoEnMateria) ? e.pesoEnMateria : 0)),
+            notaMaxima: typeof e.notaMaxima === 'number' && e.notaMaxima > 0 ? e.notaMaxima : 10,
+          };
+          if (e.tipo === 'grupo' && Array.isArray(e.subEvaluaciones)) {
+            base.subEvaluaciones = e.subEvaluaciones.slice(0, MAX_SUBEVALS_IMPORT).map((sub: any, si: number) => ({
+              ...sub,
+              id: sub.id ?? `importada_${d.numero}_ev${i}_s${si}`,
+              notaMaxima: typeof sub.notaMaxima === 'number' && sub.notaMaxima > 0 ? sub.notaMaxima : 10,
+              fecha: typeof sub.fecha === 'string' && ISO_DATE_RE.test(sub.fecha) ? sub.fecha : undefined,
+            }));
+          }
+          if (typeof base.fecha === 'string' && !ISO_DATE_RE.test(base.fecha)) {
+            base.fecha = undefined;
+          }
+          return base;
+        }) as Evaluacion[]
       : [];
 
     return {
       id: `importada_${d.numero}`,
       numero: d.numero!,
-      nombre: d.nombre,
+      nombre: d.nombre.trim(),
       semestre: d.semestre,
       creditosQueDA: d.creditos_da ?? 0,
       creditosNecesarios: d.creditos_necesarios ?? 0,
-      previasNecesarias: (d.previas ?? [])
+      previasNecesarias: [],
+      esPreviaDe: (d.previas ?? [])
         .map(nombre => nombreANumero.get(nombre.trim()))
         .filter((n): n is number => n !== undefined),
-      esPreviaDe: [],
       cursando: false,
       usarNotaManual: false,
       notaManual: null,
@@ -123,12 +145,12 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
     };
   });
 
-  // Derivar esPreviaDe invirtiendo previasNecesarias
+  // Derivar previasNecesarias invirtiendo esPreviaDe
   materias.forEach(m => {
-    m.previasNecesarias.forEach(numReq => {
-      const req = materias.find(x => x.numero === numReq);
-      if (req && !req.esPreviaDe.includes(m.numero)) {
-        req.esPreviaDe.push(m.numero);
+    m.esPreviaDe.forEach(numDes => {
+      const dest = materias.find(x => x.numero === numDes);
+      if (dest && !dest.previasNecesarias.includes(m.numero)) {
+        dest.previasNecesarias.push(m.numero);
       }
     });
   });
@@ -246,6 +268,7 @@ Reglas para "bloques":
 - "fecha": formato ISO YYYY-MM-DD
 - "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)
 - "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)
+- "salon" (opcional, string): aula o salón donde se dicta la clase
 
 Reglas para "evaluaciones":
 - "tipo": "simple" para una evaluación, "grupo" para agrupar varias.
@@ -260,18 +283,46 @@ SECCIÓN "config" (objeto)
 ════════════════════════════
 
 Campos disponibles (preguntá de a uno por los que no puedas determinar):
+
+NOTAS Y UMBRALES:
 - notaMaxima (número): nota máxima. Ej: 12, 10, 100.
 - umbralExoneracion (0–100): % mínimo para exonerar.
 - umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si existe).
 - umbralPorExamen (0–100): % mínimo para tener derecho a examen.
-- umbralExamenExoneracion (0–100): % mínimo en el examen para aprobar.
+- umbralExamenExoneracion (0–100): % mínimo EN EL EXAMEN para aprobar/salvar.
 - usarEstadoAprobado (true/false): ¿existe el estado "Aprobado" separado de "Exonerado"?
 - aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
 - oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
-- tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
+
+PERÍODOS DE EXAMEN:
 - modoExamen ("manual" o "automatico").
-- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos de examen (solo si automatico).
-- horarioPrimerDia ("lunes" o "domingo").
+- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos (solo si automatico).
+
+TIPOS DE FORMACIÓN:
+- tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
+
+ETIQUETAS DE TIPOS DE BLOQUE (para el horario):
+- labelTeorica (string) y abrevTeorica (string, máx 3 chars): nombre y abreviatura para clases teóricas.
+- labelPractica (string) y abrevPractica (string, máx 3 chars): para clases prácticas.
+- labelParcial (string) y abrevParcial (string, máx 3 chars): para parciales/exámenes.
+- labelOtro (string) y abrevOtro (string, máx 3 chars): para otros tipos.
+
+HORARIO:
+- horarioPrimerDia ("lunes" o "domingo"): primer día de la semana.
+- mostrarNombreCompletoEnBloque (true/false): mostrar nombre completo o abreviatura en bloques.
+- horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha como bloques en el horario.
+
+TARJETAS DE MATERIAS:
+- tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.
+- tarjetaBadgeOrden ("da_primero" o "necesita_primero"): orden de badges si son ambos.
+- tarjetaMostrarNota (true/false): mostrar nota en tarjeta.
+- tarjetaNota ("numero" o "porcentaje"): formato de la nota.
+- tarjetaPrevias ("todas", "faltantes" o "ninguna"): qué previas mostrar.
+- tarjetaPreviasFormato ("numero_nombre" o "nombre"): formato de previas.
+- tarjetaAvisoPrevias (true/false): mostrar aviso de previas incumplidas.
+- tarjetaTipoFormacion (true/false): mostrar tipo de formación.
+- tarjetaCreditosExtendida ("da", "necesita" o "ambos"): créditos en vista expandida.
+- tarjetaMostrarToggleCursando (true/false): botón para marcar como Cursando.
 
 ════════════════════════════
 EJEMPLO COMPLETO
@@ -321,13 +372,17 @@ export function esFormatoMultiMateriaEval(parsed: unknown[]): boolean {
 
 export type ModoImport = 'solo_nuevas' | 'actualizar' | 'reemplazar';
 
-function deriveEsPreviaDe(materias: Materia[]): Materia[] {
-  const result = materias.map(m => ({ ...m, esPreviaDe: [] as number[] }));
+/**
+ * Given a list of Materias where esPreviaDe is populated,
+ * recomputes previasNecesarias for the whole list by inverting esPreviaDe.
+ */
+function deriveRelaciones(materias: Materia[]): Materia[] {
+  const result = materias.map(m => ({ ...m, previasNecesarias: [] as number[] }));
   result.forEach(m => {
-    m.previasNecesarias.forEach(numReq => {
-      const req = result.find(x => x.numero === numReq);
-      if (req && !req.esPreviaDe.includes(m.numero)) {
-        req.esPreviaDe.push(m.numero);
+    m.esPreviaDe.forEach(numDes => {
+      const dest = result.find(x => x.numero === numDes);
+      if (dest && !dest.previasNecesarias.includes(m.numero)) {
+        dest.previasNecesarias.push(m.numero);
       }
     });
   });
@@ -341,12 +396,33 @@ function deriveEsPreviaDe(materias: Materia[]): Materia[] {
  *                   preserves evaluaciones, bloques, faltas, cursando, notas
  * - 'reemplazar':   discards existing, returns fresh list from jsonData
  */
+function validarItemsMateriaJson(datos: MateriaJson[]): void {
+  datos.forEach((d, i) => {
+    if (typeof d.nombre !== 'string' || !d.nombre.trim()) {
+      throw new Error(`Materia ${i + 1}: el campo "nombre" es obligatorio y debe ser texto.`);
+    }
+    if (typeof d.semestre !== 'number' || !isFinite(d.semestre) || d.semestre < 1) {
+      throw new Error(`Materia "${d.nombre}": "semestre" debe ser un número mayor a 0.`);
+    }
+    if (d.creditos_da !== undefined && (typeof d.creditos_da !== 'number' || !isFinite(d.creditos_da) || d.creditos_da < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_da" debe ser un número >= 0.`);
+    }
+    if (d.creditos_necesarios !== undefined && (typeof d.creditos_necesarios !== 'number' || !isFinite(d.creditos_necesarios) || d.creditos_necesarios < 0)) {
+      throw new Error(`Materia "${d.nombre}": "creditos_necesarios" debe ser un número >= 0.`);
+    }
+    if (d.previas !== undefined && (!Array.isArray(d.previas) || !d.previas.every(p => typeof p === 'string'))) {
+      throw new Error(`Materia "${d.nombre}": "previas" debe ser un array de nombres.`);
+    }
+  });
+}
+
 export function mergeImportar(
   existentes: Materia[],
   jsonData: MateriaJson[],
   modo: ModoImport,
   oportunidades: number,
 ): Materia[] {
+  validarItemsMateriaJson(jsonData);
   if (modo === 'reemplazar') {
     return jsonAMaterias(jsonData, oportunidades);
   }
@@ -365,7 +441,7 @@ export function mergeImportar(
     const nuevas = jsonAMaterias(renumbered, oportunidades);
     const combined = [...existentes, ...nuevas];
     combined.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
-    return deriveEsPreviaDe(combined);
+    return deriveRelaciones(combined);
   }
 
   // modo 'actualizar'
@@ -392,7 +468,7 @@ export function mergeImportar(
       creditosQueDA: d.creditos_da ?? existing.creditosQueDA,
       creditosNecesarios: d.creditos_necesarios ?? existing.creditosNecesarios,
       tipoFormacion: d.tipo_formacion ?? existing.tipoFormacion,
-      previasNecesarias: resolvePrevias(d.previas),
+      esPreviaDe: resolvePrevias(d.previas),
     };
   });
 
@@ -406,7 +482,7 @@ export function mergeImportar(
   ];
 
   resultado.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
-  return deriveEsPreviaDe(resultado);
+  return deriveRelaciones(resultado);
 }
 
 export function materiasAJson(materias: Materia[]): MateriaJson[] {
@@ -414,7 +490,7 @@ export function materiasAJson(materias: Materia[]): MateriaJson[] {
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));
 
   return materias.map(m => {
-    const previas = m.previasNecesarias
+    const previas = m.esPreviaDe
       .map(num => numeroANombre.get(num))
       .filter((n): n is string => n !== undefined);
 

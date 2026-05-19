@@ -1,48 +1,76 @@
 // Cursus/src/components/PeriodoExamenModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Alert } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Switch } from 'react-native';
 import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
+import { useAlert } from '../contexts/AlertContext';
 
 interface Props {
   visible: boolean;
   onCerrar: () => void;
 }
 
-function esFechaValida(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s);
+/** Valida 'DD-MM-AAAA' (ciclo=false) o 'DD-MM' (ciclo=true) */
+function esFechaValida(s: string, ciclo: boolean): boolean {
+  if (ciclo) {
+    if (!/^\d{2}-\d{2}$/.test(s)) return false;
+    const [dd, mm] = s.split('-').map(Number);
+    return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+  }
+  if (!/^\d{2}-\d{2}-\d{4}$/.test(s)) return false;
+  const [dd, mm, yyyy] = s.split('-').map(Number);
+  const d = new Date(`${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`);
   return !isNaN(d.getTime());
 }
 
-function autoFormatISO(prev: string, next: string): string {
-  const digits = next.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+/** Autoformatea mientras el usuario escribe: DD → DD-MM → DD-MM-AAAA (ciclo=false) o DD → DD-MM (ciclo=true) */
+function autoFormatDMY(prev: string, next: string, ciclo: boolean): string {
+  const digits = next.replace(/\D/g, '').slice(0, ciclo ? 4 : 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  if (ciclo) return `${digits.slice(0, 2)}-${digits.slice(2, 4)}`;
+  if (digits.length <= 6) return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+/** Convierte 'DD-MM-AAAA' → 'YYYY-MM-DD' para almacenamiento */
+function fechaAISO(s: string): string {
+  const [dd, mm, yyyy] = s.split('-');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Convierte 'YYYY-MM-DD' → 'DD-MM-AAAA' para display */
+function fechaADisplay(s: string): string {
+  const [yyyy, mm, dd] = s.split('-');
+  return `${dd}-${mm}-${yyyy}`;
 }
 
 export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   const tema = useTema();
   const { config, actualizarConfig } = useStore();
+  const { showAlert, showConfirm } = useAlert();
   const [nuevaFecha, setNuevaFecha] = useState('');
 
   const modo = config.modoExamen;
   const fechas = config.fechasLimiteExamen;
+  const ciclo = config.examenRepetirCiclo ?? false;
 
   const setModo = (m: 'manual' | 'automatico') => actualizarConfig({ modoExamen: m });
 
   const agregarFecha = () => {
     const f = nuevaFecha.trim();
-    if (!esFechaValida(f)) {
-      Alert.alert('Fecha inválida', 'Usá el formato AAAA-MM-DD (ej: 2026-07-15).');
+    if (!esFechaValida(f, ciclo)) {
+      showAlert('Fecha inválida', ciclo
+        ? 'Usá el formato DD-MM (ej: 15-07).'
+        : 'Usá el formato DD-MM-AAAA (ej: 15-07-2026).');
       return;
     }
-    if (fechas.includes(f)) {
-      Alert.alert('Fecha duplicada', 'Esa fecha límite ya está en la lista.');
+    const aGuardar = ciclo ? f : fechaAISO(f);
+    if (fechas.includes(aGuardar)) {
+      showAlert('Fecha duplicada', 'Esa fecha límite ya está en la lista.');
       return;
     }
-    actualizarConfig({ fechasLimiteExamen: [...fechas, f].sort() });
+    actualizarConfig({ fechasLimiteExamen: [...fechas, aGuardar].sort() });
     setNuevaFecha('');
   };
 
@@ -88,6 +116,37 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
             </Text>
           </View>
 
+          {/* Switch Repetir ciclo */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, marginBottom: 14 }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Repetir ciclo</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                {ciclo ? 'Ingresá solo DD-MM. Se repite cada año automáticamente.' : 'Ingresá la fecha completa con año.'}
+              </Text>
+            </View>
+            <Switch
+              value={ciclo}
+              onValueChange={v => {
+                if (fechas.length === 0) {
+                  actualizarConfig({ examenRepetirCiclo: v, fechasLimiteExamen: [], fechasEjecutadas: [] });
+                  setNuevaFecha('');
+                  return;
+                }
+                showConfirm(
+                  'Cambiar modo',
+                  'Al cambiar el modo se borrarán todas las fechas configuradas. ¿Continuar?',
+                  () => {
+                    actualizarConfig({ examenRepetirCiclo: v, fechasLimiteExamen: [], fechasEjecutadas: [] });
+                    setNuevaFecha('');
+                  },
+                  { labelConfirmar: 'Cambiar', destructivo: true },
+                );
+              }}
+              trackColor={{ true: tema.acento }}
+            />
+          </View>
+
           <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
             Fechas límite de período ({fechas.length})
           </Text>
@@ -99,11 +158,15 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
           )}
 
           {fechas.map(f => {
-            const yaEjecutada = config.fechasEjecutadas.includes(f);
+            const year = new Date().toISOString().slice(0, 4);
+            const yaEjecutada = ciclo
+              ? config.fechasEjecutadas.includes(`${year}-${f.slice(3, 5)}-${f.slice(0, 2)}`)
+              : config.fechasEjecutadas.includes(f);
+            const displayF = ciclo ? f : fechaADisplay(f);
             return (
               <View key={f} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
                 <Text style={{ flex: 1, color: yaEjecutada ? tema.textoSecundario : tema.texto, fontSize: 15 }}>
-                  {f}{yaEjecutada ? '  ✓' : ''}
+                  {displayF}{yaEjecutada ? '  ✓' : ''}
                 </Text>
                 {!yaEjecutada && (
                   <TouchableOpacity onPress={() => eliminarFecha(f)} style={{ padding: 4 }}>
@@ -118,11 +181,11 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
             <TextInput
               value={nuevaFecha}
-              onChangeText={v => setNuevaFecha(autoFormatISO(nuevaFecha, v))}
-              placeholder="AAAA-MM-DD"
+              onChangeText={v => setNuevaFecha(autoFormatDMY(nuevaFecha, v, ciclo))}
+              placeholder={ciclo ? 'DD-MM' : 'DD-MM-AAAA'}
               placeholderTextColor={tema.textoSecundario}
               style={{ flex: 1, backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 14 }}
-              maxLength={10}
+              maxLength={ciclo ? 5 : 10}
               keyboardType="numbers-and-punctuation"
             />
             <TouchableOpacity

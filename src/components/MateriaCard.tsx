@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
-import { estadoColores } from '../theme/colors';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 
-const ICONOS: Record<EstadoMateria, string> = {
-  aprobado: '✅', exonerado: '⭐', cursando: '🔵', por_cursar: '⬜', reprobado: '🟠', recursar: '🔴',
-};
 
 function badgeCreditos(materia: Materia, config: Config): string {
   const badge = config.tarjetaCreditosBadge ?? 'da';
@@ -49,19 +46,24 @@ interface Props {
 export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
+  const { getColor, getIcono } = useEstadoEstilo();
 
   const notaPct = obtenerNotaFinal(materia);
   const estado = calcularEstadoFinal(materia, config);
-  const icono = ICONOS[estado];
-  const color = estadoColores[estado];
+  const icono = getIcono(estado);
+  const color = getColor(estado);
 
   const previasObj = materia.previasNecesarias.map(num => {
     const m = todasLasMaterias.find(x => x.numero === num);
-    const ok = m ? (calcularEstadoFinal(m, config) === 'aprobado' || calcularEstadoFinal(m, config) === 'exonerado') : false;
+    const ok = m ? (
+      calcularEstadoFinal(m, config) === 'exonerado' ||
+      (config.aprobadoHabilitaPrevias && calcularEstadoFinal(m, config) === 'aprobado')
+    ) : false;
     return { num, nombre: m?.nombre ?? `Materia ${num}`, ok };
   });
 
   const previasPendientes = previasObj.filter(p => !p.ok);
+  const previasAMostrar = previasParaMostrar(previasObj, config);
 
   const creditosAcum = creditosAcumulados(todasLasMaterias, config);
   const creditosFaltantes = materia.creditosNecesarios > 0
@@ -104,7 +106,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
       </View>
 
       {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
-        <Text style={s.advertencia}>⚠️ Faltan previas: {previasPendientes.map(p => p.num).join(', ')}</Text>
+        <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
       )}
 
       {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
@@ -145,10 +147,10 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
             );
           })()}
 
-          {(config.tarjetaPrevias ?? 'todas') !== 'ninguna' && materia.previasNecesarias.length > 0 && (
+          {(config.tarjetaPrevias ?? 'todas') !== 'ninguna' && previasAMostrar.length > 0 && (
             <>
               <Text style={[s.label, { marginTop: 6 }]}>Previas:</Text>
-              {previasParaMostrar(previasObj, config).map(p => (
+              {previasAMostrar.map(p => (
                 <Text key={p.num} style={s.valor}>
                   {p.ok ? '✅' : '❌'} {(config.tarjetaPreviasFormato ?? 'numero_nombre') === 'numero_nombre'
                     ? `${p.num} · ${p.nombre}`
@@ -160,11 +162,14 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
             {(mostrarToggleCursando ?? true) && onToggleCursando && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+                onStartShouldSetResponder={() => true}
+              >
                 <Switch
                   value={materia.cursando ?? false}
                   onValueChange={onToggleCursando}
-                  trackColor={{ true: estadoColores.cursando }}
+                  trackColor={{ true: getColor('cursando') }}
                 />
                 <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
                   {materia.cursando ? 'Cursando' : 'No cursando'}

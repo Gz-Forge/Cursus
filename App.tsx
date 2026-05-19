@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useStore } from './src/store/useStore';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider } from './src/theme/ThemeContext';
+import { AlertProvider } from './src/contexts/AlertContext';
 import { isTauri } from './src/utils/platform';
 
 export default function App() {
@@ -27,7 +28,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <RootNavigator />
+          <AlertProvider>
+            <RootNavigator />
+          </AlertProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

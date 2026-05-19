@@ -3,8 +3,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { BloqueHorario, Config, Materia, TipoBloque } from '../types';
+import { isTauri } from './platform';
 
 // ── Helpers internos ──────────────────────────────────────────────────
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function normTxt(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -125,6 +130,9 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     throw new Error(`Bloque ${idx} incompleto — requiere fecha (string), horaInicio y horaFin (number)`);
   }
   const bloque = b as Record<string, unknown>;
+  if ((bloque.horaFin as number) <= (bloque.horaInicio as number)) {
+    throw new Error(`Bloque ${idx}: horaFin (${bloque.horaFin}) debe ser posterior a horaInicio (${bloque.horaInicio})`);
+  }
   return {
     id: typeof bloque.id === 'string' ? bloque.id : `${Date.now()}_${idx}`,
     fecha: bloque.fecha as string,
@@ -133,6 +141,7 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
     tipo: (['teorica', 'practica', 'parcial', 'otro'] as const).includes(bloque.tipo as TipoBloque)
       ? (bloque.tipo as TipoBloque)
       : 'otro',
+    ...(typeof bloque.salon === 'string' && bloque.salon.trim() && { salon: bloque.salon.trim() }),
   };
 }
 
@@ -205,7 +214,7 @@ export function extraerEventosICS(texto: string): EventoICS[] {
   const bloques = texto.split('BEGIN:VEVENT').slice(1);
   for (const bloque of bloques) {
     const getVal = (key: string): string | null => {
-      const m = bloque.match(new RegExp(`${key}(?:;[^:]*)?:([^\\r\\n]+)`));
+      const m = bloque.match(new RegExp(`${escapeRegExp(key)}(?:;[^:]*)?:([^\\r\\n]+)`));
       return m ? m[1].trim() : null;
     };
     const dtstartRaw = getVal('DTSTART');
@@ -284,7 +293,7 @@ export function generarEjemploJSONMateria(): string {
   return JSON.stringify({
     nombre: 'Cálculo I',
     bloques: [
-      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica' },
+      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
       { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
     ],
   }, null, 2);
@@ -302,7 +311,8 @@ export function generarPromptHorario(config: Config): string {
           "fecha": "YYYY-MM-DD",
           "horaInicio": 480,
           "horaFin": 600,
-          "tipo": "teorica"
+          "tipo": "teorica",
+          "salon": "Aula 3"
         }
       ]
     }
@@ -316,6 +326,7 @@ Reglas:
   - "teorica"  → para clases de tipo ${config.labelTeorica}
   - "practica" → para clases de tipo ${config.labelPractica}
   - "otro"     → para cualquier otro tipo (${config.labelOtro})
+- "salon" (opcional): nombre del salón o aula donde ocurre la clase (ej: "Aula 3", "Lab 201"). Omitilo si no está disponible.
 - No uses "parcial" como tipo de bloque; los exámenes y evaluaciones se registran aparte desde la sección Evaluaciones.
 
 Pasame solamente el .json para descargar, sin explicaciones adicionales.`;
@@ -327,7 +338,7 @@ export function generarEjemploJSON(): string {
       {
         nombre: 'Cálculo I',
         bloques: [
-          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica' },
+          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
           { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
         ],
       },
@@ -343,16 +354,53 @@ export function generarEjemploJSON(): string {
 
 // ── I/O de archivos ───────────────────────────────────────────────────
 
+async function leerArchivoTauri(tipos: string[]): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const { readTextFile } = await import('@tauri-apps/plugin-fs');
+  const extensions: string[] = [];
+  if (tipos.some(t => t.includes('json'))) extensions.push('json');
+  if (tipos.some(t => t.includes('csv') || t.includes('plain'))) extensions.push('csv', 'txt');
+  if (tipos.some(t => t.includes('calendar'))) extensions.push('ics');
+  if (tipos.includes('*/*') || extensions.length === 0) extensions.push('json', 'csv', 'txt', 'ics');
+  const ruta = await open({ multiple: false, filters: [{ name: 'Archivo', extensions }] });
+  if (!ruta || typeof ruta !== 'string') return null;
+  return readTextFile(ruta);
+}
+
+async function compartirArchivoTauri(nombre: string, contenido: string): Promise<void> {
+  const { save } = await import('@tauri-apps/plugin-dialog');
+  const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+  const ext = nombre.includes('.') ? nombre.split('.').pop()! : 'json';
+  const ruta = await save({
+    defaultPath: nombre,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+  });
+  if (ruta) await writeTextFile(ruta, contenido);
+}
+
+const MAX_ARCHIVO_CHARS = 5 * 1024 * 1024; // 5 MB en caracteres
+
 export async function leerArchivo(tipos: string[]): Promise<string | null> {
+  if (isTauri()) return leerArchivoTauri(tipos);
   const resultado = await DocumentPicker.getDocumentAsync({ type: tipos });
   if (resultado.canceled) return null;
   if (!resultado.assets || resultado.assets.length === 0) return null;
   const uri = resultado.assets[0].uri;
+  let texto: string;
   if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    return response.text();
+    try {
+      const response = await fetch(uri);
+      texto = await response.text();
+    } catch (e) {
+      throw new Error('No se pudo leer el archivo seleccionado.');
+    }
+  } else {
+    texto = await FileSystem.readAsStringAsync(uri);
   }
-  return FileSystem.readAsStringAsync(uri);
+  if (texto.length > MAX_ARCHIVO_CHARS) {
+    throw new Error('El archivo es demasiado grande (máximo 5 MB).');
+  }
+  return texto;
 }
 
 export async function compartirArchivo(
@@ -360,6 +408,7 @@ export async function compartirArchivo(
   contenido: string,
   mimeType: string,
 ): Promise<void> {
+  if (isTauri()) return compartirArchivoTauri(nombre, contenido);
   if (Platform.OS === 'web') {
     const blob = new Blob([contenido], { type: mimeType });
     const url = URL.createObjectURL(blob);

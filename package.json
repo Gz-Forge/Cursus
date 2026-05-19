@@ -11,6 +11,8 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.15.9",
     "@react-navigation/native": "^7.2.2",
@@ -80,7 +82,17 @@
                 "strict": true
               }
             }
-          ]
+          ],
+          "^.+\\.js$": "babel-jest"
+        },
+        "transformIgnorePatterns": [
+          "node_modules/(?!(@noble)/)"
+        ],
+        "moduleNameMapper": {
+          "^react-native$": "<rootDir>/src/__mocks__/react-native.ts",
+          "^expo-file-system(/.*)?$": "<rootDir>/src/__mocks__/expo-file-system.ts",
+          "^expo-sharing$": "<rootDir>/src/__mocks__/expo-sharing.ts",
+          "^expo-document-picker$": "<rootDir>/src/__mocks__/expo-document-picker.ts"
         }
       }
     ]
