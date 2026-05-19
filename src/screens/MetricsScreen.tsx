@@ -10,7 +10,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, creditosAcumulados, calcularEstadoFinal } from '../utils/calculos';
-import { EstadoMateria } from '../types';
+import { EstadoMateria, Materia } from '../types';
 
 const PALETA_TIPOS = ['#7C4DFF','#00BCD4','#4CAF50','#FF9800','#F44336','#FFD700','#2196F3','#E91E63','#009688','#FF5722'];
 
@@ -28,7 +28,6 @@ const METRICAS_GENERAL = [
 ];
 const METRICAS_GRAFICOS = [
   { id: 'promedio_semestre',   label: 'Promedio por semestre' },
-  { id: 'distribucion_rangos', label: 'Distribución por rango' },
   { id: 'mapa_carrera',        label: 'Mapa de carrera' },
   { id: 'notas_obtenidas',     label: 'Notas obtenidas' },
   { id: 'tipos_formacion',     label: 'Tipos de formación' },
@@ -65,11 +64,12 @@ function yAxisNota(max: number): { maxValue: number; noOfSections: number } {
 export function MetricsScreen() {
   const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('metricas');
-  const { getColor, getLabel } = useEstadoEstilo();
+  const { getColor, getLabel, getIcono } = useEstadoEstilo();
   const { width, height } = useWindowDimensions();
   const [semestreTorta, setSemestreTorta] = useState<number | null>(null);
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
   const [modalPersonalizar, setModalPersonalizar] = useState(false);
+  const [materiaMapaSeleccionada, setMateriaMapaSeleccionada] = useState<Materia | null>(null);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -219,26 +219,7 @@ export function MetricsScreen() {
   }).filter(Boolean) as { value: number; label: string }[];
   const { maxValue: lineMax, noOfSections: lineSections } = yAxisNota(config.notaMaxima);
 
-  // ── Gráfico 2: Distribución por rango ────────────────────────────────────
-  const conteoRangos = { recursar: 0, reprobado: 0, aprobado: 0, exonerado: 0 };
-  materiasConNota.forEach(m => {
-    const n = obtenerNotaFinal(m)!;
-    if (n >= config.umbralExoneracion)      conteoRangos.exonerado++;
-    else if (n >= config.umbralAprobacion)  conteoRangos.aprobado++;
-    else if (n >= config.umbralPorExamen)   conteoRangos.reprobado++;
-    else                                    conteoRangos.recursar++;
-  });
-  const barrasRangos = [
-    { value: conteoRangos.recursar,  label: 'Recursar',  frontColor: getColor('recursar') },
-    { value: conteoRangos.reprobado, label: 'Reprobado', frontColor: getColor('reprobado') },
-    { value: conteoRangos.aprobado,  label: 'Aprobado',  frontColor: getColor('aprobado') },
-    { value: conteoRangos.exonerado, label: 'Exonerado', frontColor: getColor('exonerado') },
-  ].filter(b => b.value > 0);
-  const maxRangos = barrasRangos.length > 0 ? Math.max(...barrasRangos.map(b => b.value)) : 1;
-  const { maxValue: rangosMax, noOfSections: rangosSections } = yAxis(maxRangos);
-  const barWidthRangos = Math.min(56, Math.max(20, (chartWidth - 40) / Math.max(barrasRangos.length, 1) - 10));
-
-  // ── Gráfico 3: Notas obtenidas (barras) ───────────────────────────────────
+  // ── Gráfico 2: Notas obtenidas (barras) ───────────────────────────────────
   // Función de redondeo según config
   const fnRedondeo = notasRedondeo === 'abajo'
     ? Math.floor
@@ -859,46 +840,6 @@ export function MetricsScreen() {
                   </View>
                 );
 
-                if (m.id === 'distribucion_rangos') return (
-                  <View key="distribucion_rangos" style={col}>
-                    {seccion('DISTRIBUCIÓN POR RANGO DE NOTA')}
-                    <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
-                      {barrasRangos.length > 0 ? (
-                        <>
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {ejeY('Materias')}
-                            <View style={{ overflow: 'hidden', flex: 1 }}>
-                              <BarChart
-                                data={barrasRangos}
-                                barWidth={barWidthRangos}
-                                height={150}
-                                width={chartWidth}
-                                maxValue={rangosMax}
-                                noOfSections={rangosSections}
-                                yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                                xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 10 }}
-                                hideRules
-                                barBorderRadius={4}
-                              />
-                            </View>
-                          </View>
-                          {ejeX('Rango de nota')}
-                          <View style={{ marginTop: 8, gap: 2 }}>
-                            <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>
-                              Recursar {'<'} {((config.umbralPorExamen / 100) * config.notaMaxima).toFixed(1)}  ·
-                              Reprobado {'<'} {((config.umbralAprobacion / 100) * config.notaMaxima).toFixed(1)}  ·
-                              {config.usarEstadoAprobado
-                                ? ` Aprobado < ${((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}  ·`
-                                : ''}
-                              {' '}Exonerado ≥ {((config.umbralExoneracion / 100) * config.notaMaxima).toFixed(1)}
-                            </Text>
-                          </View>
-                        </>
-                      ) : sinDatos('Sin notas registradas aún')}
-                    </View>
-                  </View>
-                );
-
                 if (m.id === 'mapa_carrera') return (
                   <View key="mapa_carrera" style={col}>
                     {seccion('MAPA DE LA CARRERA')}
@@ -910,8 +851,9 @@ export function MetricsScreen() {
                               <Text style={{ color: tema.textoSecundario, fontSize: 10, width: 22 }}>{sem}°</Text>
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, flex: 1 }}>
                                 {materias.filter(mat => mat.semestre === sem).map(mat => (
-                                  <View
+                                  <TouchableOpacity
                                     key={mat.id}
+                                    onPress={() => setMateriaMapaSeleccionada(mat)}
                                     style={{
                                       width: 18, height: 18, borderRadius: 3,
                                       backgroundColor: getColor(calcularEstadoFinal(mat, config)),
@@ -1051,6 +993,48 @@ export function MetricsScreen() {
       )}
       {innerContent}
       {renderModalPersonalizar()}
+      <Modal
+        visible={materiaMapaSeleccionada !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMateriaMapaSeleccionada(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => setMateriaMapaSeleccionada(null)}
+        >
+          {materiaMapaSeleccionada !== null && (() => {
+            const mat = materiaMapaSeleccionada;
+            const estadoMat = calcularEstadoFinal(mat, config);
+            return (
+              <View
+                style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 24, width: '100%', maxWidth: 320, alignItems: 'center' }}
+                onStartShouldSetResponder={() => true}
+              >
+                <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: getColor(estadoMat), marginBottom: 8 }} />
+                <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>
+                  {getIcono(estadoMat)} {getLabel(estadoMat)}
+                </Text>
+                {mat.numero !== undefined && (
+                  <Text style={{ color: tema.texto, fontSize: 28, fontWeight: '800', marginBottom: 4 }}>
+                    {mat.numero}
+                  </Text>
+                )}
+                <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>
+                  {mat.nombre}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setMateriaMapaSeleccionada(null)}
+                  style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
