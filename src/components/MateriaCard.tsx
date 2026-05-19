@@ -55,11 +55,15 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
 
   const previasObj = materia.previasNecesarias.map(num => {
     const m = todasLasMaterias.find(x => x.numero === num);
-    const ok = m ? (calcularEstadoFinal(m, config) === 'aprobado' || calcularEstadoFinal(m, config) === 'exonerado') : false;
+    const ok = m ? (
+      calcularEstadoFinal(m, config) === 'exonerado' ||
+      (config.aprobadoHabilitaPrevias && calcularEstadoFinal(m, config) === 'aprobado')
+    ) : false;
     return { num, nombre: m?.nombre ?? `Materia ${num}`, ok };
   });
 
   const previasPendientes = previasObj.filter(p => !p.ok);
+  const previasAMostrar = previasParaMostrar(previasObj, config);
 
   const creditosAcum = creditosAcumulados(todasLasMaterias, config);
   const creditosFaltantes = materia.creditosNecesarios > 0
@@ -102,7 +106,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
       </View>
 
       {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
-        <Text style={s.advertencia}>⚠️ Faltan previas: {previasPendientes.map(p => p.num).join(', ')}</Text>
+        <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
       )}
 
       {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
@@ -143,10 +147,10 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
             );
           })()}
 
-          {(config.tarjetaPrevias ?? 'todas') !== 'ninguna' && materia.previasNecesarias.length > 0 && (
+          {(config.tarjetaPrevias ?? 'todas') !== 'ninguna' && previasAMostrar.length > 0 && (
             <>
               <Text style={[s.label, { marginTop: 6 }]}>Previas:</Text>
-              {previasParaMostrar(previasObj, config).map(p => (
+              {previasAMostrar.map(p => (
                 <Text key={p.num} style={s.valor}>
                   {p.ok ? '✅' : '❌'} {(config.tarjetaPreviasFormato ?? 'numero_nombre') === 'numero_nombre'
                     ? `${p.num} · ${p.nombre}`

@@ -418,7 +418,7 @@ export function ConfigScreen() {
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
           {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
-          {campoUmbral('Aprobación ≥', 'umbralAprobacion')}
+          {config.usarEstadoAprobado && campoUmbral('Aprobación ≥', 'umbralAprobacion')}
           {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
           {campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
@@ -862,35 +862,6 @@ export function ConfigScreen() {
           )}
 
           <TouchableOpacity
-            onPress={() => setPromptCompletoExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera un único JSON con todo incluido.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptCompletoExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCompleto()}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCompleto())}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
             onPress={() => setPromptColoresExpandido(v => !v)}
             style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
@@ -949,7 +920,7 @@ Cuando termines, devolvé SOLO el JSON con este formato:
   "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
 }`;
             return (
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8, marginTop: -4 }}>
                 <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                   <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>{prompt}</Text>
                 </ScrollView>
@@ -962,6 +933,35 @@ Cuando termines, devolvé SOLO el JSON con este formato:
               </View>
             );
           })()}
+
+          <TouchableOpacity
+            onPress={() => setPromptCompletoExpandido(v => !v)}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera un único JSON con todo incluido.
+              </Text>
+            </View>
+            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {promptCompletoExpandido && (
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
+                  {generarPromptCompleto()}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => Clipboard.setStringAsync(generarPromptCompleto())}
+                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           </>
           )}
 
