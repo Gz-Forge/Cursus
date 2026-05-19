@@ -116,7 +116,12 @@ export function HorarioScreen() {
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
   // --- Estado de drag para evaluaciones ---
   const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
-  const evalDragDataRef = React.useRef<{ fondoColor: string; textoColor: string; labelBloque: string; height: number } | null>(null);
+  const evalDragDataRef = React.useRef<{
+    fondoColor: string; textoColor: string; labelBloque: string; height: number;
+    horaI: number; duracion: number; tieneHoraFin: boolean;
+  } | null>(null);
+  // Ref a la función persistirEval del render actual (para usarla en el useEffect de web)
+  const persistirEvalRef = React.useRef<((fecha: string, hora: number, horaFin: number | undefined) => void) | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
@@ -295,6 +300,106 @@ export function HorarioScreen() {
       document.removeEventListener('pointerdown', handleOutsidePointerDown, { capture: true });
     };
   }, [cardEnEdicion]);
+
+  // Web: drag de evaluaciones — mismo patrón que bloques (sin resize)
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (evalEnDrag === null) return;
+
+    const evalEl = cardRefs.current.get(evalEnDrag) as unknown as HTMLElement | null;
+    if (!evalEl) return;
+
+    const handleEvalPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = evalEl.getBoundingClientRect();
+
+      // Recalibrar outerOriginRef y gridAreaTopRef sincrónicamente
+      const outerEl = outerViewRef.current as unknown as HTMLElement | null;
+      if (outerEl) {
+        const outerRect = outerEl.getBoundingClientRect();
+        outerOriginRef.current = { x: outerRect.left, y: outerRect.top };
+      }
+      ghostOriginRef.current = { x: rect.left, y: rect.top };
+      const horaI = evalDragDataRef.current?.horaI ?? 0;
+      const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
+      gridAreaTopRef.current = rect.top - blockTopInGrid + vScrollOffRef.current;
+
+      webDragStartRef.current = { x: e.clientX, y: e.clientY };
+      webDragModeRef.current  = 'drag';
+
+      setGhostPos({
+        x: rect.left - outerOriginRef.current.x,
+        y: rect.top  - outerOriginRef.current.y,
+        w: rect.width,
+        h: rect.height,
+      });
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (webDragModeRef.current !== 'drag' || !webDragStartRef.current) return;
+      e.preventDefault();
+      const start  = webDragStartRef.current;
+      const origin = ghostOriginRef.current;
+      if (!origin) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      setGhostPos(prev => prev ? {
+        x: origin.x - outerOriginRef.current.x + dx,
+        y: origin.y - outerOriginRef.current.y + dy,
+        w: prev.w, h: prev.h,
+      } : prev);
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const mode      = webDragModeRef.current;
+      const dragStart = webDragStartRef.current;
+      const origin    = ghostOriginRef.current;
+      webDragModeRef.current  = null;
+      webDragStartRef.current = null;
+
+      if (mode === 'drag' && origin && dragStart) {
+        const dy = e.clientY - dragStart.y;
+        const ghostTopY = origin.y + dy;
+        const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(e.clientX, ghostTopY);
+        const data = evalDragDataRef.current;
+        if (data && persistirEvalRef.current) {
+          const nuevaHoraFin = data.tieneHoraFin ? nuevoInicio + data.duracion : undefined;
+          persistirEvalRef.current(destFecha, nuevoInicio, nuevaHoraFin);
+        }
+      }
+      setGhostPos(null);
+      setEvalEnDrag(null);
+      ghostOriginRef.current  = null;
+      evalDragDataRef.current = null;
+      persistirEvalRef.current = null;
+    };
+
+    const handleOutsidePointerDown = (e: PointerEvent) => {
+      if (!evalEl.contains(e.target as Node)) {
+        webDragModeRef.current  = null;
+        webDragStartRef.current = null;
+        setEvalEnDrag(null);
+        setGhostPos(null);
+        ghostOriginRef.current  = null;
+        evalDragDataRef.current = null;
+        persistirEvalRef.current = null;
+      }
+    };
+
+    evalEl.addEventListener('pointerdown', handleEvalPointerDown);
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointerdown', handleOutsidePointerDown, { capture: true });
+
+    return () => {
+      evalEl.removeEventListener('pointerdown', handleEvalPointerDown);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, { capture: true });
+    };
+  }, [evalEnDrag]);
 
   const cerrarModal = () => {
     setModalExport(false);
@@ -844,7 +949,7 @@ export function HorarioScreen() {
                         // ── Web: clic para editar + eventos nativos del DOM para drag/resize ──
                         if (Platform.OS === 'web') {
                           const enterEditWeb = () => {
-                            if (cardEnEdicion !== null) return;
+                            if (cardEnEdicion !== null || evalEnDrag !== null) return;
                             setCardEnEdicion(b.id);
                             setDraftBloque({ ...b });
                             // NO measureInWindow: el useEffect calibra sincrónicamente
@@ -1141,61 +1246,72 @@ export function HorarioScreen() {
                           }
                         };
 
-                        // ── Web: drag nativo con pointerdown ──
+                        // Compartido web + móvil
+                        const duracion  = horaF - horaI;
+                        const esEnDrag  = evalEnDrag === ev.id;
+
+                        // Mantener ref de persistencia fresca para el useEffect de web
+                        if (esEnDrag) persistirEvalRef.current = persistirEval;
+
+                        // ── Web: clic para editar + useEffect con listeners DOM (igual que bloques) ──
                         if (Platform.OS === 'web') {
+                          const enterEditEvalWeb = () => {
+                            if (cardEnEdicion !== null || evalEnDrag !== null) return;
+                            evalDragDataRef.current = {
+                              fondoColor, textoColor, labelBloque, height,
+                              horaI, duracion, tieneHoraFin: ev.horaFin !== undefined,
+                            };
+                            persistirEvalRef.current = persistirEval;
+                            setEvalEnDrag(ev.id);
+                          };
                           return (
                             <View
                               key={ev.id}
+                              ref={(el) => { if (el) cardRefs.current.set(ev.id, el as View); else cardRefs.current.delete(ev.id); }}
                               style={{
                                 position: 'absolute', top, height,
                                 left: 1, right: 1,
                                 backgroundColor: fondoColor,
                                 borderRadius: 3,
-                                borderWidth: 1.5,
+                                borderWidth: esEnDrag ? 2 : 1.5,
                                 borderColor: textoColor,
                                 borderStyle: 'dashed',
-                                padding: 2,
                                 overflow: 'hidden',
-                                zIndex: 1,
-                                cursor: 'grab' as any,
-                              }}
-                              // @ts-ignore — web only
-                              onPointerDown={(e: any) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const startY = e.clientY;
-                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                const duracion = horaF - horaI;
-
-                                const handleMove = (me: PointerEvent) => {
-                                  me.preventDefault();
-                                };
-                                const handleUp = (ue: PointerEvent) => {
-                                  document.removeEventListener('pointermove', handleMove);
-                                  document.removeEventListener('pointerup', handleUp);
-                                  const dy = ue.clientY - startY;
-                                  const ghostTopY = rect.top + dy;
-                                  const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ue.clientX, ghostTopY);
-                                  persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
-                                };
-                                document.addEventListener('pointermove', handleMove, { passive: false });
-                                document.addEventListener('pointerup', handleUp);
+                                zIndex: esEnDrag ? 100 : 1,
+                                opacity: esEnDrag && ghostPos ? 0.3 : 1,
                               }}
                             >
-                              <Text
-                                style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                ellipsizeMode="tail"
-                              >
-                                {labelBloque}
-                              </Text>
+                              {esEnDrag ? (
+                                // El useEffect de web maneja todos los pointer events
+                                <View style={{ flex: 1, padding: 2 }}>
+                                  <Text
+                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {labelBloque}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  activeOpacity={0.85}
+                                  onPress={enterEditEvalWeb}
+                                  style={{ flex: 1, padding: 2 }}
+                                >
+                                  <Text
+                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {labelBloque}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
                             </View>
                           );
                         }
 
                         // ── Móvil: LongPress activa drag, PanGestureHandler va DENTRO del View ──
-                        const esEnDrag = evalEnDrag === ev.id;
-                        const duracion = horaF - horaI;
                         return (
                           <LongPressGestureHandler
                             key={ev.id}
@@ -1203,32 +1319,42 @@ export function HorarioScreen() {
                             enabled={evalEnDrag === null && cardEnEdicion === null}
                             onHandlerStateChange={(lpe: LongPressGestureHandlerStateChangeEvent) => {
                               if (lpe.nativeEvent.state === State.ACTIVE) {
-                                const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
-                                const prevColsWidth = dayColWidthsRef.current
-                                  .slice(0, diaIdx)
-                                  .reduce((s, w) => s + w, 0);
-                                // Guardar origen — ghost se muestra en onBegan del Pan (igual que bloques)
-                                ghostOriginRef.current = {
-                                  x: outerOriginRef.current.x + TIME_COL_W + prevColsWidth + 1,
-                                  y: outerOriginRef.current.y + blockTopInGrid - vScrollOffRef.current,
-                                };
-                                evalDragDataRef.current = { fondoColor, textoColor, labelBloque, height };
-                                setEvalEnDrag(ev.id);
+                                // Usar measureInWindow igual que los bloques para obtener
+                                // coordenadas absolutas de pantalla (evita cálculo incorrecto de y)
+                                cardRefs.current.get(ev.id)?.measureInWindow((cx, cy) => {
+                                  ghostOriginRef.current = { x: cx, y: cy };
+                                  const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
+                                  const prevColsWidth = dayColWidthsRef.current
+                                    .slice(0, diaIdx)
+                                    .reduce((s, w) => s + w, 0);
+                                  gridAreaTopRef.current = cy - blockTopInGrid + vScrollOffRef.current;
+                                  outerOriginRef.current = {
+                                    x: cx - (TIME_COL_W + prevColsWidth + 1) + hScrollOffRef.current,
+                                    y: outerOriginRef.current.y,
+                                  };
+                                  evalDragDataRef.current = {
+                                    fondoColor, textoColor, labelBloque, height,
+                                    horaI, duracion, tieneHoraFin: ev.horaFin !== undefined,
+                                  };
+                                  setEvalEnDrag(ev.id);
+                                });
                               }
                             }}
                           >
-                            <View style={{
-                              position: 'absolute', top, height,
-                              left: 1, right: 1,
-                              backgroundColor: fondoColor,
-                              borderRadius: 3,
-                              borderWidth: esEnDrag ? 2 : 1.5,
-                              borderColor: textoColor,
-                              borderStyle: 'dashed',
-                              overflow: 'hidden',
-                              zIndex: esEnDrag ? 100 : 1,
-                              opacity: esEnDrag && ghostPos ? 0.3 : 1,
-                            }}>
+                            <View
+                              ref={(el) => { if (el) cardRefs.current.set(ev.id, el as View); else cardRefs.current.delete(ev.id); }}
+                              style={{
+                                position: 'absolute', top, height,
+                                left: 1, right: 1,
+                                backgroundColor: fondoColor,
+                                borderRadius: 3,
+                                borderWidth: esEnDrag ? 2 : 1.5,
+                                borderColor: textoColor,
+                                borderStyle: 'dashed',
+                                overflow: 'hidden',
+                                zIndex: esEnDrag ? 100 : 1,
+                                opacity: esEnDrag && ghostPos ? 0.3 : 1,
+                              }}>
                               {esEnDrag ? (
                                 <PanGestureHandler
                                   activeOffsetX={[-10, 10]}
@@ -1258,11 +1384,12 @@ export function HorarioScreen() {
                                     persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
                                     setEvalEnDrag(null);
                                     setGhostPos(null);
-                                    ghostOriginRef.current = null;
-                                    evalDragDataRef.current = null;
+                                    ghostOriginRef.current   = null;
+                                    evalDragDataRef.current  = null;
+                                    persistirEvalRef.current = null;
                                   }}
-                                  onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; }}
-                                  onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; }}
+                                  onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
+                                  onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
                                 >
                                   <View style={{ flex: 1, padding: 2 }}>
                                     <Text
@@ -1916,7 +2043,7 @@ export function HorarioScreen() {
       )}
       {innerContent}
 
-      {/* Overlay tap-fuera: cancela modo edición — solo móvil.
+      {/* Overlay tap-fuera: cancela modo edición bloques — solo móvil.
           En web el useEffect (pointerdown capture en document) maneja el clic fuera.
           El overlay con zIndex:50 bloquea los pointerdown del bloque en edición en web. */}
       {cardEnEdicion !== null && Platform.OS !== 'web' && (
@@ -1926,6 +2053,24 @@ export function HorarioScreen() {
             setCardEnEdicion(null);
             setDraftBloque(null);
             setGhostPos(null);
+          }}
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 50,
+          }}
+        />
+      )}
+
+      {/* Overlay tap-fuera: cancela modo drag de evaluaciones — solo móvil */}
+      {evalEnDrag !== null && Platform.OS !== 'web' && (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            setEvalEnDrag(null);
+            setGhostPos(null);
+            ghostOriginRef.current  = null;
+            evalDragDataRef.current = null;
+            persistirEvalRef.current = null;
           }}
           style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
