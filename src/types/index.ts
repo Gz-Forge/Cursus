@@ -158,8 +158,9 @@ export interface Config {
   labelOtro: string;      // nombre completo editable, default 'Otro'
   mostrarNombreCompletoEnBloque: boolean; // si true, muestra label en vez de abrev en el horario
   modoExamen: 'manual' | 'automatico';
-  fechasLimiteExamen: string[];   // ISO: 'YYYY-MM-DD'
-  fechasEjecutadas: string[];     // fechas ya procesadas
+  fechasLimiteExamen: string[];   // ISO: 'YYYY-MM-DD' (ciclo=false) o 'DD-MM' (ciclo=true)
+  fechasEjecutadas: string[];     // fechas ya procesadas, siempre 'YYYY-MM-DD'
+  examenRepetirCiclo?: boolean;   // si true, fechasLimiteExamen almacena 'DD-MM' y se repite cada año
   // Tarjeta config
   tarjetaCreditosBadge: 'da' | 'necesita' | 'ambos';
   tarjetaBadgeOrden: 'da_primero' | 'necesita_primero';
@@ -189,6 +190,8 @@ export interface Config {
   coloresEvaluacionesGrupales?: ColorBloque; // color compartido de todas las evaluaciones de grupo
   // UI state — persistido para recordar entre sesiones
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
+  estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
+  estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
 }
 
 export interface AppState {

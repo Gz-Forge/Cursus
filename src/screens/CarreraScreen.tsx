@@ -18,16 +18,12 @@ import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
 import { EstadoMateria, Materia } from '../types';
 import { useAlert } from '../contexts/AlertContext';
-import { estadoColores, temaOscuro } from '../theme/colors';
+import { temaOscuro } from '../theme/colors';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
 const VISTA_LABELS: Record<Vista, string> = {
   carrera: 'Carrera', semestre: 'Semestre', busqueda: 'Búsqueda',
-};
-const ESTADO_LABELS: Record<EstadoMateria, string> = {
-  aprobado: '✅ Aprobadas', exonerado: '⭐ Exoneradas',
-  cursando: '🔵 Cursando', por_cursar: '⬜ Por cursar',
-  reprobado: '🟠 Reprobadas', recursar: '🔴 Recursar',
 };
 
 export function CarreraScreen() {
@@ -45,6 +41,7 @@ export function CarreraScreen() {
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [modoBusqueda, setModoBusqueda] = useState<'nombre' | 'es_previa_de' | 'sus_previas'>('nombre');
   const [materiaPinned, setMateriaPinned] = useState<typeof materias[0] | null>(null);
+  const { getColor, getLabel } = useEstadoEstilo();
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
@@ -146,9 +143,14 @@ export function CarreraScreen() {
   useEffect(() => {
     if (config.modoExamen !== 'automatico') return;
     const hoy = new Date().toISOString().slice(0, 10);
-    const pendientes = config.fechasLimiteExamen.filter(
-      f => f <= hoy && !config.fechasEjecutadas.includes(f)
-    );
+    const year = hoy.slice(0, 4);
+    const ciclo = config.examenRepetirCiclo ?? false;
+    const toISO = (f: string) => ciclo
+      ? `${year}-${f.slice(3, 5)}-${f.slice(0, 2)}`
+      : f;
+    const pendientes = config.fechasLimiteExamen
+      .filter(f => { const iso = toISO(f); return iso <= hoy && !config.fechasEjecutadas.includes(iso); })
+      .map(f => toISO(f));
     if (pendientes.length === 0) return;
     const sinOportunidades = decrementarPeriodoExamen();
     actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });
@@ -574,16 +576,16 @@ export function CarreraScreen() {
                       </TouchableOpacity>
                       {(() => {
                         const estadosPresentes = new Set(materias.map(m => calcularEstadoFinal(m, config)));
-                        return (Object.keys(ESTADO_LABELS) as EstadoMateria[]).filter(e => {
+                        return (['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'] as EstadoMateria[]).filter(e => {
                           if (e === 'aprobado' && !config.usarEstadoAprobado) return false;
                           return estadosPresentes.has(e);
                         }).map(e => (
                           <TouchableOpacity
                             key={e}
                             onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
-                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? estadoColores[e] : tema.tarjeta }}
+                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? getColor(e) : tema.tarjeta }}
                           >
-                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{ESTADO_LABELS[e]}</Text>
+                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{getLabel(e)}</Text>
                           </TouchableOpacity>
                         ));
                       })()}
