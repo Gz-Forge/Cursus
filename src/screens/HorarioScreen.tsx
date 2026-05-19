@@ -1441,13 +1441,10 @@ export function HorarioScreen() {
                                       const draft = draftEvalRef.current;
                                       if (draft && draft.id === ev.id) persistirEval(ev.fecha!, draft.horaI, draft.horaF);
                                       setDraftEval(null);
-                                      setEvalEnDrag(null);
-                                      ghostOriginRef.current  = null;
-                                      evalDragDataRef.current = null;
-                                      resizeStartRef.current  = null;
+                                      resizeStartRef.current = null;
                                     }}
-                                    onFailed={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
-                                    onCancelled={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                    onFailed={() => { setDraftEval(null); resizeStartRef.current = null; }}
+                                    onCancelled={() => { setDraftEval(null); resizeStartRef.current = null; }}
                                   >
                                     <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderTopWidth: 4, borderTopColor: textoColor }}>
                                       <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
@@ -1517,13 +1514,10 @@ export function HorarioScreen() {
                                       const draft = draftEvalRef.current;
                                       if (draft && draft.id === ev.id) persistirEval(ev.fecha!, draft.horaI, draft.horaF);
                                       setDraftEval(null);
-                                      setEvalEnDrag(null);
-                                      ghostOriginRef.current  = null;
-                                      evalDragDataRef.current = null;
-                                      resizeStartRef.current  = null;
+                                      resizeStartRef.current = null;
                                     }}
-                                    onFailed={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
-                                    onCancelled={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                    onFailed={() => { setDraftEval(null); resizeStartRef.current = null; }}
+                                    onCancelled={() => { setDraftEval(null); resizeStartRef.current = null; }}
                                   >
                                     <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderBottomColor: textoColor }}>
                                       <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
