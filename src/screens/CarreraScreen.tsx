@@ -143,9 +143,14 @@ export function CarreraScreen() {
   useEffect(() => {
     if (config.modoExamen !== 'automatico') return;
     const hoy = new Date().toISOString().slice(0, 10);
-    const pendientes = config.fechasLimiteExamen.filter(
-      f => f <= hoy && !config.fechasEjecutadas.includes(f)
-    );
+    const year = hoy.slice(0, 4);
+    const ciclo = config.examenRepetirCiclo ?? false;
+    const toISO = (f: string) => ciclo
+      ? `${year}-${f.slice(3, 5)}-${f.slice(0, 2)}`
+      : f;
+    const pendientes = config.fechasLimiteExamen
+      .filter(f => { const iso = toISO(f); return iso <= hoy && !config.fechasEjecutadas.includes(iso); })
+      .map(f => toISO(f));
     if (pendientes.length === 0) return;
     const sinOportunidades = decrementarPeriodoExamen();
     actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });
