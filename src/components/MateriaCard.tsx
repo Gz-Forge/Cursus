@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
-import { estadoColores } from '../theme/colors';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 
-const ICONOS: Record<EstadoMateria, string> = {
-  aprobado: '✅', exonerado: '⭐', cursando: '🔵', por_cursar: '⬜', reprobado: '🟠', recursar: '🔴',
-};
 
 function badgeCreditos(materia: Materia, config: Config): string {
   const badge = config.tarjetaCreditosBadge ?? 'da';
@@ -49,11 +46,12 @@ interface Props {
 export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
+  const { getColor, getIcono } = useEstadoEstilo();
 
   const notaPct = obtenerNotaFinal(materia);
   const estado = calcularEstadoFinal(materia, config);
-  const icono = ICONOS[estado];
-  const color = estadoColores[estado];
+  const icono = getIcono(estado);
+  const color = getColor(estado);
 
   const previasObj = materia.previasNecesarias.map(num => {
     const m = todasLasMaterias.find(x => x.numero === num);
@@ -167,7 +165,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
                 <Switch
                   value={materia.cursando ?? false}
                   onValueChange={onToggleCursando}
-                  trackColor={{ true: estadoColores.cursando }}
+                  trackColor={{ true: getColor('cursando') }}
                 />
                 <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
                   {materia.cursando ? 'Cursando' : 'No cursando'}
