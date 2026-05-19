@@ -268,6 +268,7 @@ Reglas para "bloques":
 - "fecha": formato ISO YYYY-MM-DD
 - "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)
 - "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)
+- "salon" (opcional, string): aula o salón donde se dicta la clase
 
 Reglas para "evaluaciones":
 - "tipo": "simple" para una evaluación, "grupo" para agrupar varias.
@@ -282,18 +283,46 @@ SECCIÓN "config" (objeto)
 ════════════════════════════
 
 Campos disponibles (preguntá de a uno por los que no puedas determinar):
+
+NOTAS Y UMBRALES:
 - notaMaxima (número): nota máxima. Ej: 12, 10, 100.
 - umbralExoneracion (0–100): % mínimo para exonerar.
 - umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si existe).
 - umbralPorExamen (0–100): % mínimo para tener derecho a examen.
-- umbralExamenExoneracion (0–100): % mínimo en el examen para aprobar.
+- umbralExamenExoneracion (0–100): % mínimo EN EL EXAMEN para aprobar/salvar.
 - usarEstadoAprobado (true/false): ¿existe el estado "Aprobado" separado de "Exonerado"?
 - aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
 - oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
-- tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
+
+PERÍODOS DE EXAMEN:
 - modoExamen ("manual" o "automatico").
-- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos de examen (solo si automatico).
-- horarioPrimerDia ("lunes" o "domingo").
+- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos (solo si automatico).
+
+TIPOS DE FORMACIÓN:
+- tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
+
+ETIQUETAS DE TIPOS DE BLOQUE (para el horario):
+- labelTeorica (string) y abrevTeorica (string, máx 3 chars): nombre y abreviatura para clases teóricas.
+- labelPractica (string) y abrevPractica (string, máx 3 chars): para clases prácticas.
+- labelParcial (string) y abrevParcial (string, máx 3 chars): para parciales/exámenes.
+- labelOtro (string) y abrevOtro (string, máx 3 chars): para otros tipos.
+
+HORARIO:
+- horarioPrimerDia ("lunes" o "domingo"): primer día de la semana.
+- mostrarNombreCompletoEnBloque (true/false): mostrar nombre completo o abreviatura en bloques.
+- horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha como bloques en el horario.
+
+TARJETAS DE MATERIAS:
+- tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.
+- tarjetaBadgeOrden ("da_primero" o "necesita_primero"): orden de badges si son ambos.
+- tarjetaMostrarNota (true/false): mostrar nota en tarjeta.
+- tarjetaNota ("numero" o "porcentaje"): formato de la nota.
+- tarjetaPrevias ("todas", "faltantes" o "ninguna"): qué previas mostrar.
+- tarjetaPreviasFormato ("numero_nombre" o "nombre"): formato de previas.
+- tarjetaAvisoPrevias (true/false): mostrar aviso de previas incumplidas.
+- tarjetaTipoFormacion (true/false): mostrar tipo de formación.
+- tarjetaCreditosExtendida ("da", "necesita" o "ambos"): créditos en vista expandida.
+- tarjetaMostrarToggleCursando (true/false): botón para marcar como Cursando.
 
 ════════════════════════════
 EJEMPLO COMPLETO
