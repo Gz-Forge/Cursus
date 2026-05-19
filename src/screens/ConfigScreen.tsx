@@ -119,6 +119,8 @@ export function ConfigScreen() {
   const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
   const [promptColoresExpandido, setPromptColoresExpandido] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState('');
+  const [editandoTipo, setEditandoTipo] = useState<string | null>(null);
+  const [textoEdicion, setTextoEdicion] = useState('');
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
   const [mostrarSync, setMostrarSync] = useState(false);
   const [promptEvalExpandido, setPromptEvalExpandido] = useState(false);
@@ -430,34 +432,67 @@ export function ConfigScreen() {
             {config.tiposFormacion.length === 0 && (
               <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 8 }}>Sin tipos definidos</Text>
             )}
-            {config.tiposFormacion.map((tipo, i) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
-                <TouchableOpacity onPress={() => {
-                  const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
-                  const eliminar = () => {
-                    actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) });
+            {config.tiposFormacion.map((tipo, i) => {
+              const estaEditando = editandoTipo === tipo;
+
+              const confirmarEdicion = () => {
+                const nuevo = textoEdicion.trim();
+                if (!nuevo || nuevo === tipo) { setEditandoTipo(null); return; }
+                if (config.tiposFormacion.some((t, j) => j !== i && normalizarTipo(t) === normalizarTipo(nuevo))) {
+                  setEditandoTipo(null);
+                  return;
+                }
+                actualizarConfig({ tiposFormacion: config.tiposFormacion.map((t, j) => j === i ? nuevo : t) });
+                materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
+                  guardarMateria({ ...m, tipoFormacion: nuevo })
+                );
+                setEditandoTipo(null);
+              };
+
+              return (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  {estaEditando ? (
+                    <TextInput
+                      autoFocus
+                      style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, marginRight: 8, borderWidth: 1, borderColor: tema.acento }}
+                      value={textoEdicion}
+                      onChangeText={setTextoEdicion}
+                      onBlur={confirmarEdicion}
+                      onSubmitEditing={confirmarEdicion}
+                      returnKeyType="done"
+                    />
+                  ) : (
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => { setEditandoTipo(tipo); setTextoEdicion(tipo); }}>
+                      <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => {
+                    if (estaEditando) { setEditandoTipo(null); return; }
+                    const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
+                    const eliminar = () => {
+                      actualizarConfig({ tiposFormacion: config.tiposFormacion.filter((_, j) => j !== i) });
+                      if (usadas > 0) {
+                        materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
+                          guardarMateria({ ...m, tipoFormacion: undefined })
+                        );
+                      }
+                    };
                     if (usadas > 0) {
-                      materias.filter(m => m.tipoFormacion === tipo).forEach(m =>
-                        guardarMateria({ ...m, tipoFormacion: undefined })
+                      showConfirm(
+                        'Eliminar tipo de formación',
+                        `"${tipo}" está siendo usado por ${usadas} materia${usadas !== 1 ? 's' : ''}. Al eliminar, esas materias quedarán sin tipo de formación asignado.`,
+                        eliminar,
+                        { labelConfirmar: 'Eliminar', destructivo: true },
                       );
+                    } else {
+                      eliminar();
                     }
-                  };
-                  if (usadas > 0) {
-                    showConfirm(
-                      'Eliminar tipo de formación',
-                      `"${tipo}" está siendo usado por ${usadas} materia${usadas !== 1 ? 's' : ''}. Al eliminar, esas materias quedarán sin tipo de formación asignado.`,
-                      eliminar,
-                      { labelConfirmar: 'Eliminar', destructivo: true },
-                    );
-                  } else {
-                    eliminar();
-                  }
-                }}>
-                  <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+                  }}>
+                    <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
               <TextInput
                 placeholder="Nuevo tipo..."
