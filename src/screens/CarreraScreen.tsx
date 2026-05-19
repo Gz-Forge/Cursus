@@ -346,7 +346,7 @@ export function CarreraScreen() {
                 <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700' }}>{semestreActual}° Semestre</Text>
-              <TouchableOpacity onPress={() => setSemestreActual(s => s + 1)}>
+              <TouchableOpacity onPress={() => setSemestreActual(s => Math.min(s + 1, semestres.length > 0 ? semestres[semestres.length - 1] : s))}>
                 <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
               </TouchableOpacity>
             </View>

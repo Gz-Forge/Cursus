@@ -118,10 +118,13 @@ export function HorarioScreen() {
   const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
   const evalDragDataRef = React.useRef<{
     fondoColor: string; textoColor: string; labelBloque: string; height: number;
-    horaI: number; duracion: number; tieneHoraFin: boolean;
+    horaI: number; duracion: number; tieneHoraFin: boolean; fecha: string;
   } | null>(null);
   // Ref a la función persistirEval del render actual (para usarla en el useEffect de web)
   const persistirEvalRef = React.useRef<((fecha: string, hora: number, horaFin: number | undefined) => void) | null>(null);
+  // Draft para resize de evaluaciones (live feedback durante el arrastre)
+  const [draftEval, setDraftEval] = useState<{ id: string; horaI: number; horaF: number } | null>(null);
+  const draftEvalRef = React.useRef<{ id: string; horaI: number; horaF: number } | null>(null);
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
@@ -137,6 +140,7 @@ export function HorarioScreen() {
   const horaFinRef              = React.useRef(HORA_DEF_FIN);
 
   React.useEffect(() => { draftBloqueRef.current = draftBloque; }, [draftBloque]);
+  React.useEffect(() => { draftEvalRef.current = draftEval; }, [draftEval]);
 
   // Escape para salir del modo edición en escritorio
   React.useEffect(() => {
@@ -301,7 +305,7 @@ export function HorarioScreen() {
     };
   }, [cardEnEdicion]);
 
-  // Web: drag de evaluaciones — mismo patrón que bloques (sin resize)
+  // Web: drag y resize de evaluaciones — mismo patrón que bloques
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (evalEnDrag === null) return;
@@ -309,11 +313,14 @@ export function HorarioScreen() {
     const evalEl = cardRefs.current.get(evalEnDrag) as unknown as HTMLElement | null;
     if (!evalEl) return;
 
+    const HANDLE_H = 16;
+
     const handleEvalPointerDown = (e: PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
       const rect = evalEl.getBoundingClientRect();
+      const relY = e.clientY - rect.top;
 
       // Recalibrar outerOriginRef y gridAreaTopRef sincrónicamente
       const outerEl = outerViewRef.current as unknown as HTMLElement | null;
@@ -327,29 +334,58 @@ export function HorarioScreen() {
       gridAreaTopRef.current = rect.top - blockTopInGrid + vScrollOffRef.current;
 
       webDragStartRef.current = { x: e.clientX, y: e.clientY };
-      webDragModeRef.current  = 'drag';
 
-      setGhostPos({
-        x: rect.left - outerOriginRef.current.x,
-        y: rect.top  - outerOriginRef.current.y,
-        w: rect.width,
-        h: rect.height,
-      });
+      if (relY < HANDLE_H) {
+        const data = evalDragDataRef.current;
+        if (data) resizeStartRef.current = { horaInicio: data.horaI, horaFin: data.horaI + data.duracion };
+        webDragModeRef.current = 'resize-top';
+      } else if (relY > rect.height - HANDLE_H) {
+        const data = evalDragDataRef.current;
+        if (data) resizeStartRef.current = { horaInicio: data.horaI, horaFin: data.horaI + data.duracion };
+        webDragModeRef.current = 'resize-bottom';
+      } else {
+        webDragModeRef.current = 'drag';
+        setGhostPos({
+          x: rect.left - outerOriginRef.current.x,
+          y: rect.top  - outerOriginRef.current.y,
+          w: rect.width,
+          h: rect.height,
+        });
+      }
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      if (webDragModeRef.current !== 'drag' || !webDragStartRef.current) return;
+      const mode = webDragModeRef.current;
+      if (!mode || !webDragStartRef.current) return;
       e.preventDefault();
-      const start  = webDragStartRef.current;
-      const origin = ghostOriginRef.current;
-      if (!origin) return;
-      const dx = e.clientX - start.x;
-      const dy = e.clientY - start.y;
-      setGhostPos(prev => prev ? {
-        x: origin.x - outerOriginRef.current.x + dx,
-        y: origin.y - outerOriginRef.current.y + dy,
-        w: prev.w, h: prev.h,
-      } : prev);
+
+      if (mode === 'resize-top') {
+        if (!resizeStartRef.current) return;
+        const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
+        const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+        const maxInicio   = resizeStartRef.current.horaFin - 30;
+        const clampedInicio = Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio));
+        setDraftEval({ id: evalEnDrag, horaI: clampedInicio, horaF: resizeStartRef.current.horaFin });
+      } else if (mode === 'resize-bottom') {
+        if (!resizeStartRef.current) return;
+        const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
+        const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+        const minFin   = resizeStartRef.current.horaInicio + 30;
+        const clampedFin = Math.min(horaFinRef.current, Math.max(nuevaFin, minFin));
+        setDraftEval({ id: evalEnDrag, horaI: resizeStartRef.current.horaInicio, horaF: clampedFin });
+      } else {
+        // drag
+        const start  = webDragStartRef.current;
+        const origin = ghostOriginRef.current;
+        if (!origin) return;
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        setGhostPos(prev => prev ? {
+          x: origin.x - outerOriginRef.current.x + dx,
+          y: origin.y - outerOriginRef.current.y + dy,
+          w: prev.w, h: prev.h,
+        } : prev);
+      }
     };
 
     const handlePointerUp = (e: PointerEvent) => {
@@ -368,6 +404,14 @@ export function HorarioScreen() {
           const nuevaHoraFin = data.tieneHoraFin ? nuevoInicio + data.duracion : undefined;
           persistirEvalRef.current(destFecha, nuevoInicio, nuevaHoraFin);
         }
+      } else if ((mode === 'resize-top' || mode === 'resize-bottom') && persistirEvalRef.current) {
+        const draft = draftEvalRef.current;
+        const data  = evalDragDataRef.current;
+        if (draft && data?.fecha) {
+          persistirEvalRef.current(data.fecha, draft.horaI, draft.horaF);
+        }
+        setDraftEval(null);
+        resizeStartRef.current = null;
       }
       setGhostPos(null);
       setEvalEnDrag(null);
@@ -381,10 +425,12 @@ export function HorarioScreen() {
         webDragModeRef.current  = null;
         webDragStartRef.current = null;
         setEvalEnDrag(null);
+        setDraftEval(null);
         setGhostPos(null);
         ghostOriginRef.current  = null;
         evalDragDataRef.current = null;
         persistirEvalRef.current = null;
+        resizeStartRef.current  = null;
       }
     };
 
@@ -1186,8 +1232,9 @@ export function HorarioScreen() {
                     {evaluacionesEstaSemana
                       .filter(ev => ev.fecha === fecha)
                       .map(ev => {
-                        const horaI  = ev.hora!;
-                        const horaF  = ev.horaFin ?? horaI + 60;
+                        const efectivoDraft = draftEval?.id === ev.id ? draftEval : null;
+                        const horaI  = efectivoDraft?.horaI ?? ev.hora!;
+                        const horaF  = efectivoDraft?.horaF ?? ev.horaFin ?? ev.hora! + 60;
                         const top    = (horaI - horaInicio) * PX_POR_MIN;
                         const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
 
@@ -1259,7 +1306,7 @@ export function HorarioScreen() {
                             if (cardEnEdicion !== null || evalEnDrag !== null) return;
                             evalDragDataRef.current = {
                               fondoColor, textoColor, labelBloque, height,
-                              horaI, duracion, tieneHoraFin: ev.horaFin !== undefined,
+                              horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
                             };
                             persistirEvalRef.current = persistirEval;
                             setEvalEnDrag(ev.id);
@@ -1334,7 +1381,7 @@ export function HorarioScreen() {
                                   };
                                   evalDragDataRef.current = {
                                     fondoColor, textoColor, labelBloque, height,
-                                    horaI, duracion, tieneHoraFin: ev.horaFin !== undefined,
+                                    horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
                                   };
                                   setEvalEnDrag(ev.id);
                                 });
@@ -1356,51 +1403,112 @@ export function HorarioScreen() {
                                 opacity: esEnDrag && ghostPos ? 0.3 : 1,
                               }}>
                               {esEnDrag ? (
-                                <PanGestureHandler
-                                  activeOffsetX={[-10, 10]}
-                                  activeOffsetY={[-10, 10]}
-                                  onBegan={() => {
-                                    if (!ghostOriginRef.current) return;
-                                    setGhostPos({
-                                      x: ghostOriginRef.current.x - outerOriginRef.current.x,
-                                      y: ghostOriginRef.current.y - outerOriginRef.current.y,
-                                      w: colW - 2,
-                                      h: height,
-                                    });
-                                  }}
-                                  onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
-                                    if (!ghostOriginRef.current) return;
-                                    setGhostPos(prev => prev ? {
-                                      x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
-                                      y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
-                                      w: prev.w,
-                                      h: prev.h,
-                                    } : prev);
-                                  }}
-                                  onEnded={(e) => {
-                                    const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
-                                    const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
-                                    const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ne.absoluteX, ghostTopY);
-                                    persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
-                                    setEvalEnDrag(null);
-                                    setGhostPos(null);
-                                    ghostOriginRef.current   = null;
-                                    evalDragDataRef.current  = null;
-                                    persistirEvalRef.current = null;
-                                  }}
-                                  onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
-                                  onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
-                                >
-                                  <View style={{ flex: 1, padding: 2 }}>
-                                    <Text
-                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {labelBloque}
-                                    </Text>
-                                  </View>
-                                </PanGestureHandler>
+                                <>
+                                  {/* Handle superior — resize horaI */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: horaI, horaFin: horaF };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio   = resizeStartRef.current.horaFin - 30;
+                                      setDraftEval({ id: ev.id, horaI: Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio)), horaF: resizeStartRef.current.horaFin });
+                                    }}
+                                    onEnded={() => {
+                                      const draft = draftEvalRef.current;
+                                      if (draft && draft.id === ev.id) persistirEval(ev.fecha!, draft.horaI, draft.horaF);
+                                      setDraftEval(null);
+                                      setEvalEnDrag(null);
+                                      ghostOriginRef.current  = null;
+                                      evalDragDataRef.current = null;
+                                      resizeStartRef.current  = null;
+                                    }}
+                                    onFailed={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                    onCancelled={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                  >
+                                    <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderTopWidth: 4, borderTopColor: textoColor }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+
+                                  {/* Zona central — drag para mover */}
+                                  <PanGestureHandler
+                                    activeOffsetX={[-10, 10]}
+                                    activeOffsetY={[-10, 10]}
+                                    onBegan={() => {
+                                      if (!ghostOriginRef.current) return;
+                                      setGhostPos({
+                                        x: ghostOriginRef.current.x - outerOriginRef.current.x,
+                                        y: ghostOriginRef.current.y - outerOriginRef.current.y,
+                                        w: colW - 2,
+                                        h: height,
+                                      });
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!ghostOriginRef.current) return;
+                                      setGhostPos(prev => prev ? {
+                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                        w: prev.w,
+                                        h: prev.h,
+                                      } : prev);
+                                    }}
+                                    onEnded={(e) => {
+                                      const ne = e.nativeEvent as unknown as PanGestureHandlerEventPayload;
+                                      const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
+                                      const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ne.absoluteX, ghostTopY);
+                                      persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
+                                      setEvalEnDrag(null);
+                                      setGhostPos(null);
+                                      ghostOriginRef.current   = null;
+                                      evalDragDataRef.current  = null;
+                                      persistirEvalRef.current = null;
+                                    }}
+                                    onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
+                                    onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
+                                  >
+                                    <View style={{ flex: 1, padding: 2 }}>
+                                      <Text
+                                        style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                        numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                        ellipsizeMode="tail"
+                                      >
+                                        {labelBloque}
+                                      </Text>
+                                    </View>
+                                  </PanGestureHandler>
+
+                                  {/* Handle inferior — resize horaF */}
+                                  <PanGestureHandler
+                                    onBegan={() => {
+                                      resizeStartRef.current = { horaInicio: horaI, horaFin: horaF };
+                                    }}
+                                    onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
+                                      if (!resizeStartRef.current) return;
+                                      const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
+                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin   = resizeStartRef.current.horaInicio + 30;
+                                      setDraftEval({ id: ev.id, horaI: resizeStartRef.current.horaInicio, horaF: Math.min(horaFinRef.current, Math.max(nuevaFin, minFin)) });
+                                    }}
+                                    onEnded={() => {
+                                      const draft = draftEvalRef.current;
+                                      if (draft && draft.id === ev.id) persistirEval(ev.fecha!, draft.horaI, draft.horaF);
+                                      setDraftEval(null);
+                                      setEvalEnDrag(null);
+                                      ghostOriginRef.current  = null;
+                                      evalDragDataRef.current = null;
+                                      resizeStartRef.current  = null;
+                                    }}
+                                    onFailed={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                    onCancelled={() => { setDraftEval(null); setEvalEnDrag(null); ghostOriginRef.current = null; evalDragDataRef.current = null; resizeStartRef.current = null; }}
+                                  >
+                                    <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderBottomColor: textoColor }}>
+                                      <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
+                                    </View>
+                                  </PanGestureHandler>
+                                </>
                               ) : (
                                 <View style={{ flex: 1, padding: 2 }}>
                                   <Text
