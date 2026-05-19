@@ -420,7 +420,7 @@ export function ConfigScreen() {
           {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
           {config.usarEstadoAprobado && campoUmbral('Aprobación ≥', 'umbralAprobacion')}
           {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
-          {campoUmbral('Nota mínima de salvar examen ≥', 'umbralExamenExoneracion')}
+          {campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
