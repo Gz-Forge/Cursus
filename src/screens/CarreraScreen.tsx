@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Platform, Animated, useWindowDimensions, TextInput } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { SemestreSection } from '../components/SemestreSection';
@@ -33,6 +33,7 @@ export function CarreraScreen() {
   const [mostrarAgregar, setMostrarAgregar] = useState(false);
   const tema = useTemaPantalla('carrera');
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const [vista, setVista] = useState<Vista>('carrera');
   const [semestreActual, setSemestreActual] = useState(1);
   const [filtroEstado, setFiltroEstado] = useState<EstadoMateria | null>(null);
@@ -99,6 +100,33 @@ export function CarreraScreen() {
 
   const semestres = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
   const coloresSem = useColoresSemestres(semestres);
+
+  // Ref para que el keydown siempre vea el array actualizado sin recrear el listener
+  const semestresRef = React.useRef(semestres);
+  React.useEffect(() => { semestresRef.current = semestres; }, [semestres]);
+
+  // ← → / A D para navegar entre semestres cuando el panel semestre está activo (escritorio)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isFocused || vista !== 'semestre') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      const sems = semestresRef.current;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        setSemestreActual(s => {
+          const idx = sems.indexOf(s);
+          return idx > 0 ? sems[idx - 1] : s;
+        });
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        setSemestreActual(s => {
+          const idx = sems.indexOf(s);
+          return idx < sems.length - 1 ? sems[idx + 1] : s;
+        });
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFocused, vista]);
 
   const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
 

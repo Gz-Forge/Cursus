@@ -186,8 +186,10 @@ export interface Config {
   notasObtenidasModo?: 'exacta' | 'rangos';    // agrupar notas exactas o en rangos
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
-  // Horario — evaluaciones grupales
-  coloresEvaluacionesGrupales?: ColorBloque; // color compartido de todas las evaluaciones de grupo
+  // Horario — evaluaciones grupales e individuales
+  coloresEvaluacionesGrupales?: ColorBloque;               // legado — color global (fallback)
+  coloresGruposEvaluacion?: Record<string, ColorBloque>;   // por GrupoEvaluacion.id
+  coloresEvaluacionesSimples?: Record<string, ColorBloque>; // por EvaluacionSimple.id
   // UI state — persistido para recordar entre sesiones
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;

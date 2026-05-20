@@ -12,7 +12,7 @@ import { generarPromptHorario } from '../utils/horarioImportExport';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
-import { TipoBloque, ColorBloque, EvaluacionSimple, EstadoMateria } from '../types';
+import { TipoBloque, ColorBloque, EvaluacionSimple, GrupoEvaluacion, EstadoMateria } from '../types';
 import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
 import { estadoColores } from '../theme/colors';
 
@@ -128,6 +128,7 @@ export function ConfigScreen() {
   const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
+  const [acordeonBloques, setAcordeonBloques] = useState<Record<string, boolean>>({});
   const [estadoExpandido, setEstadoExpandido] = useState<EstadoMateria | null>(null);
   const { getColor, getIcono, getLabel } = useEstadoEstilo();
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
@@ -145,6 +146,9 @@ export function ConfigScreen() {
 
   const toggleAcordeonHorario = (id: string) =>
     setAcordeonesHorario(p => ({ ...p, [id]: !p[id] }));
+
+  const toggleBloque = (key: string) =>
+    setAcordeonBloques(p => ({ ...p, [key]: !p[key] }));
 
   const materiasConHorario = materias.filter(m => {
     if (calcularEstadoFinal(m, config) !== 'cursando') return false;
@@ -397,7 +401,6 @@ export function ConfigScreen() {
                           value={config.estadoIconosPersonalizados?.[estado] ?? ICONOS_DEFAULT[estado]}
                           onChangeText={v => {
                             const trimmed = v.trim();
-                            if (!trimmed) return;
                             actualizarConfig({
                               estadoIconosPersonalizados: {
                                 ...config.estadoIconosPersonalizados,
@@ -686,6 +689,7 @@ export function ConfigScreen() {
                         padding: 14, paddingTop: 8,
                         borderTopWidth: 1, borderTopColor: tema.borde,
                       }}>
+                        {/* ── Bloques de horario ── */}
                         {tiposPresentes.map(tipo => {
                           const label = (() => {
                             switch (tipo) {
@@ -697,79 +701,159 @@ export function ConfigScreen() {
                           })();
                           const colorPorDefecto = COLORES_BLOQUES_DEFAULT[m.numero % COLORES_BLOQUES_DEFAULT.length];
                           const colorActual: ColorBloque = coloresMateria[tipo] ?? { fondo: colorPorDefecto, texto: '#ffffff' };
+                          const blockKey = `b|${m.id}|${tipo}`;
+                          const bloqueExpandido = !!acordeonBloques[blockKey];
 
                           const actualizarColor = (campo: 'fondo' | 'texto', valor: string) => {
                             actualizarConfig({
                               coloresHorario: {
                                 ...config.coloresHorario,
-                                [m.id]: {
-                                  ...coloresMateria,
-                                  [tipo]: { ...colorActual, [campo]: valor },
-                                },
+                                [m.id]: { ...coloresMateria, [tipo]: { ...colorActual, [campo]: valor } },
                               },
                             });
                           };
 
                           return (
-                            <View key={tipo} style={{ marginBottom: 14 }}>
-                              {/* Vista previa del bloque */}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <View style={{ backgroundColor: colorActual.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}>
-                                  <Text style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+                            <View key={tipo}>
+                              <TouchableOpacity
+                                onPress={() => toggleBloque(blockKey)}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}
+                              >
+                                <View style={{ backgroundColor: colorActual.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5, minWidth: 64 }}>
+                                  <Text style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700', textAlign: 'center' }}>{label}</Text>
                                 </View>
-                                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Vista previa</Text>
-                              </View>
-                              <ColorInput
-                                label="Fondo"
-                                value={colorActual.fondo}
-                                onChange={v => actualizarColor('fondo', v)}
-                              />
-                              <ColorInput
-                                label="Texto"
-                                value={colorActual.texto}
-                                onChange={v => actualizarColor('texto', v)}
-                              />
+                                <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Bloque</Text>
+                                <Text style={{ color: tema.acento, fontSize: 12 }}>{bloqueExpandido ? '▲' : '▼'}</Text>
+                              </TouchableOpacity>
+                              {bloqueExpandido && (
+                                <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
+                                  <ColorInput label="Fondo" value={colorActual.fondo} onChange={v => actualizarColor('fondo', v)} />
+                                  <ColorInput label="Texto" value={colorActual.texto} onChange={v => actualizarColor('texto', v)} />
+                                </View>
+                              )}
                             </View>
                           );
                         })}
 
-                        {/* Color para Evaluaciones en el horario (solo si la materia las tiene con fecha) */}
-                        {config.horarioMostrarEvaluaciones &&
-                          m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) &&
-                          (() => {
-                          const evalColor: ColorBloque = coloresMateria['parcial'] ?? { fondo: '#FF9800', texto: '#ffffff' };
-                          const actualizarColorEval = (campo: 'fondo' | 'texto', valor: string) => {
-                            actualizarConfig({
-                              coloresHorario: {
-                                ...config.coloresHorario,
-                                [m.id]: {
-                                  ...coloresMateria,
-                                  parcial: { ...evalColor, [campo]: valor },
-                                },
-                              },
-                            });
-                          };
+                        {/* ── Grupos de evaluación ── */}
+                        {config.horarioMostrarEvaluaciones && (() => {
+                          const grupos = m.evaluaciones.filter((ev): ev is GrupoEvaluacion => ev.tipo === 'grupo');
+                          if (grupos.length === 0) return null;
                           return (
-                            <View style={{ marginBottom: 14, borderTopWidth: 1, borderTopColor: tema.borde, paddingTop: 10 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <View style={{ backgroundColor: evalColor.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1.5, borderColor: evalColor.texto, borderStyle: 'dashed' }}>
-                                  <Text style={{ color: evalColor.texto, fontSize: 13, fontWeight: '700' }}>Evaluación</Text>
-                                </View>
-                                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Vista previa</Text>
-                              </View>
-                              <ColorInput label="Fondo" value={evalColor.fondo} onChange={v => actualizarColorEval('fondo', v)} />
-                              <ColorInput label="Texto" value={evalColor.texto} onChange={v => actualizarColorEval('texto', v)} />
+                            <View style={{ borderTopWidth: 1, borderTopColor: tema.borde, marginTop: 4, paddingTop: 4 }}>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 10, fontWeight: '600', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Grupos de evaluación
+                              </Text>
+                              {grupos.map(grupo => {
+                                const grupoKey = `g|${grupo.id}`;
+                                const grupoExpandido = !!acordeonBloques[grupoKey];
+                                const colorActual: ColorBloque = config.coloresGruposEvaluacion?.[grupo.id] ?? { fondo: '#9C27B0', texto: '#ffffff' };
+
+                                const actualizarColorGrupo = (campo: 'fondo' | 'texto', valor: string) => {
+                                  actualizarConfig({
+                                    coloresGruposEvaluacion: {
+                                      ...config.coloresGruposEvaluacion,
+                                      [grupo.id]: { ...colorActual, [campo]: valor },
+                                    },
+                                  });
+                                };
+
+                                return (
+                                  <View key={grupo.id}>
+                                    <TouchableOpacity
+                                      onPress={() => toggleBloque(grupoKey)}
+                                      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}
+                                    >
+                                      <View style={{ backgroundColor: colorActual.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 180 }}>
+                                        <Text numberOfLines={1} style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700' }}>{grupo.nombre}</Text>
+                                      </View>
+                                      <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Grupo</Text>
+                                      <Text style={{ color: tema.acento, fontSize: 12 }}>{grupoExpandido ? '▲' : '▼'}</Text>
+                                    </TouchableOpacity>
+                                    {grupoExpandido && (
+                                      <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
+                                        <ColorInput label="Fondo" value={colorActual.fondo} onChange={v => actualizarColorGrupo('fondo', v)} />
+                                        <ColorInput label="Texto" value={colorActual.texto} onChange={v => actualizarColorGrupo('texto', v)} />
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          );
+                        })()}
+
+                        {/* ── Evaluaciones individuales ── */}
+                        {config.horarioMostrarEvaluaciones && (() => {
+                          const evalsConFecha = m.evaluaciones.filter(
+                            (ev): ev is EvaluacionSimple => ev.tipo === 'simple' && !!ev.fecha,
+                          );
+                          if (evalsConFecha.length === 0) return null;
+                          return (
+                            <View style={{ borderTopWidth: 1, borderTopColor: tema.borde, marginTop: 4, paddingTop: 4 }}>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 10, fontWeight: '600', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Evaluaciones individuales
+                              </Text>
+                              {evalsConFecha.map(ev => {
+                                const evalKey = `e|${ev.id}`;
+                                const evalExpandida = !!acordeonBloques[evalKey];
+                                const colorActual: ColorBloque = config.coloresEvaluacionesSimples?.[ev.id] ?? { fondo: '#FF9800', texto: '#ffffff' };
+
+                                const actualizarColorEval = (campo: 'fondo' | 'texto', valor: string) => {
+                                  actualizarConfig({
+                                    coloresEvaluacionesSimples: {
+                                      ...config.coloresEvaluacionesSimples,
+                                      [ev.id]: { ...colorActual, [campo]: valor },
+                                    },
+                                  });
+                                };
+
+                                return (
+                                  <View key={ev.id}>
+                                    <TouchableOpacity
+                                      onPress={() => toggleBloque(evalKey)}
+                                      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}
+                                    >
+                                      <View style={{ backgroundColor: colorActual.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 180 }}>
+                                        <Text numberOfLines={1} style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700' }}>{ev.nombre}</Text>
+                                      </View>
+                                      <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Eval.</Text>
+                                      <Text style={{ color: tema.acento, fontSize: 12 }}>{evalExpandida ? '▲' : '▼'}</Text>
+                                    </TouchableOpacity>
+                                    {evalExpandida && (
+                                      <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
+                                        <ColorInput label="Fondo" value={colorActual.fondo} onChange={v => actualizarColorEval('fondo', v)} />
+                                        <ColorInput label="Texto" value={colorActual.texto} onChange={v => actualizarColorEval('texto', v)} />
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })}
                             </View>
                           );
                         })()}
 
                         <TouchableOpacity
                           onPress={() => {
-                            const nuevo = { ...(config.coloresHorario ?? {}) };
-                            delete nuevo[m.id];
-                            actualizarConfig({ coloresHorario: nuevo });
+                            const nuevoColores = { ...(config.coloresHorario ?? {}) };
+                            delete nuevoColores[m.id];
+                            const gruposIds = m.evaluaciones
+                              .filter((ev): ev is GrupoEvaluacion => ev.tipo === 'grupo')
+                              .map(g => g.id);
+                            const nuevosGrupos = { ...(config.coloresGruposEvaluacion ?? {}) };
+                            gruposIds.forEach(id => delete nuevosGrupos[id]);
+                            const evalsIds = m.evaluaciones
+                              .filter((ev): ev is EvaluacionSimple => ev.tipo === 'simple')
+                              .map(e => e.id);
+                            const nuevosEvals = { ...(config.coloresEvaluacionesSimples ?? {}) };
+                            evalsIds.forEach(id => delete nuevosEvals[id]);
+                            actualizarConfig({
+                              coloresHorario: nuevoColores,
+                              coloresGruposEvaluacion: nuevosGrupos,
+                              coloresEvaluacionesSimples: nuevosEvals,
+                            });
                           }}
-                          style={{ alignItems: 'center', paddingVertical: 6 }}
+                          style={{ alignItems: 'center', paddingVertical: 6, marginTop: 6 }}
                         >
                           <Text style={{ color: '#F44336', fontSize: 12 }}>Resetear colores de esta materia</Text>
                         </TouchableOpacity>
@@ -955,11 +1039,17 @@ export function ConfigScreen() {
               const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
                 m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
               if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
+              const coloresPersonalizados = config.coloresHorario?.[m.id] ?? {};
+              const colorFondoDefault = COLORES_BLOQUES_DEFAULT[m.numero % COLORES_BLOQUES_DEFAULT.length];
+              const coloresActuales: Record<string, { fondo: string; texto: string }> = {};
+              tiposBloque.forEach(t => {
+                coloresActuales[t] = coloresPersonalizados[t] ?? { fondo: colorFondoDefault, texto: '#ffffff' };
+              });
               return {
                 id: m.id,
                 nombre: m.nombre,
                 bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
-                coloresActuales: config.coloresHorario?.[m.id] ?? {},
+                coloresActuales,
               };
             });
             const coloresEvGrupales = config.coloresEvaluacionesGrupales
