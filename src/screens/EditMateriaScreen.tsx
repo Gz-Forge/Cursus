@@ -146,14 +146,16 @@ export function EditMateriaScreen() {
   });
 
   const handleNotaManualChange = (v: string) => {
-    // Permitir solo dígitos y un punto decimal
     const cleaned = v.replace(/[^0-9.]/g, '');
     const parts = cleaned.split('.');
     const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
     setNotaManualStr(normalized);
     const num = parseFloat(normalized);
     if (!isNaN(num)) {
-      const pct = form.tipoNotaManual === 'numero' ? (num / config.notaMaxima) * 100 : num;
+      const maxVal = form.tipoNotaManual === 'numero' ? config.notaMaxima : 100;
+      const clamped = Math.max(0, Math.min(maxVal, num));
+      const pct = form.tipoNotaManual === 'numero' ? (clamped / config.notaMaxima) * 100 : clamped;
+      if (num > maxVal) setNotaManualStr(String(maxVal));
       setForm(f => ({ ...f, notaManual: Math.max(0, Math.min(100, pct)) }));
     } else if (normalized === '' || normalized === '.') {
       setForm(f => ({ ...f, notaManual: null }));
@@ -504,13 +506,21 @@ export function EditMateriaScreen() {
     setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
   };
 
-  const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false) => (
+  const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false, maxLength?: number) => (
     <View style={{ marginBottom: 12 }}>
       <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>{label}</Text>
       <TextInput
         style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, ...(numerico ? { width: 80 } : {}) }}
-        value={value} onChangeText={onChange} keyboardType={numerico ? 'numeric' : 'default'}
+        value={value}
+        onChangeText={onChange}
+        keyboardType={numerico ? 'numeric' : 'default'}
+        maxLength={maxLength}
       />
+      {maxLength !== undefined && (
+        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+          {value.length}/{maxLength}
+        </Text>
+      )}
     </View>
   );
 
@@ -539,7 +549,7 @@ export function EditMateriaScreen() {
         </View>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
-        {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })))}
+        {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })), false, 100)}
         {campo('Semestre', String(form.semestre), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, semestre: Math.max(1, n) })); }, true)}
         {campo('Créditos que da', String(form.creditosQueDA), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }, true)}
         {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }, true)}
@@ -1297,6 +1307,12 @@ export function EditMateriaScreen() {
                 onChangeText={v => {
                   const n = parseInt(v, 10);
                   setForm(f => ({ ...f, [key]: v === '' ? undefined : isNaN(n) ? f[key] : n }));
+                }}
+                onBlur={() => {
+                  const val = form[key];
+                  if (val !== undefined) {
+                    setForm(f => ({ ...f, [key]: Math.max(1, Math.min(99, val)) }));
+                  }
                 }}
                 keyboardType="number-pad"
                 placeholder="Sin límite"

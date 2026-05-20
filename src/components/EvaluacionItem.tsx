@@ -352,9 +352,12 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
         {/* Fila: Nombre + eliminar */}
         <View style={estilos.fila}>
           <TextInput style={estilos.input} placeholder="Nombre" placeholderTextColor={tema.textoSecundario}
-            value={evaluacion.nombre} onChangeText={nombre => actualizarSimple({ nombre })} />
+            value={evaluacion.nombre} onChangeText={nombre => actualizarSimple({ nombre })} maxLength={20} />
           <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
         </View>
+        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+          {evaluacion.nombre.length}/20
+        </Text>
         {/* Fila: Peso% */}
         <View style={estilos.fila}>
           <Text style={estilos.label}>Peso%</Text>
@@ -419,9 +422,12 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
     <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acento }]}>
       <View style={estilos.fila}>
         <TextInput style={estilos.input} placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
-          value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} />
+          value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} maxLength={20} />
         <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
       </View>
+      <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+        {grupo.nombre.length}/20
+      </Text>
       <View style={estilos.fila}>
         <Text style={estilos.label}>Peso total del grupo en materia (%)</Text>
         <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
@@ -431,11 +437,14 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
         <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>
           <View style={estilos.fila}>
             <TextInput style={estilos.input} placeholder={`Prueba ${i + 1}`} placeholderTextColor={tema.textoSecundario}
-              value={sub.nombre} onChangeText={nombre => actualizarSub(i, { nombre })} />
+              value={sub.nombre} onChangeText={nombre => actualizarSub(i, { nombre })} maxLength={20} />
             <TouchableOpacity onPress={() => eliminarSub(i)}>
               <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>
             </TouchableOpacity>
           </View>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+            {sub.nombre.length}/20
+          </Text>
           <View style={estilos.fila}>
             <Text style={estilos.label}>Nota</Text>
             <NotaInput

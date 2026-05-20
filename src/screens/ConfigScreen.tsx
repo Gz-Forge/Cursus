@@ -193,7 +193,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -279,6 +279,12 @@ export function ConfigScreen() {
           >
             <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
           </TouchableOpacity>
+          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>MOTIVACIÓN</Text>
+          {toggle(
+            'Felicitaciones por semestre completo',
+            'mostrarFelicitaciones',
+            'Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre',
+          )}
           {/* ── ESTADOS DE MATERIA ──────────────────────── */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
@@ -338,26 +344,32 @@ export function ConfigScreen() {
                       {/* Nombre editable */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>Nombre</Text>
-                        <TextInput
-                          style={{
-                            flex: 1, backgroundColor: tema.superficie,
-                            color: tema.texto, padding: 8, borderRadius: 6,
-                            fontSize: 14, borderWidth: 1, borderColor: tema.borde,
-                          }}
-                          value={config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado]}
-                          onChangeText={v => {
-                            const trimmed = v.trim();
-                            if (!trimmed) return;
-                            actualizarConfig({
-                              estadoNombresPersonalizados: {
-                                ...config.estadoNombresPersonalizados,
-                                [estado]: trimmed,
-                              },
-                            });
-                          }}
-                          placeholder={ESTADO_NOMBRES[estado]}
-                          placeholderTextColor={tema.textoSecundario}
-                        />
+                        <View style={{ flex: 1 }}>
+                          <TextInput
+                            style={{
+                              flex: 1, backgroundColor: tema.superficie,
+                              color: tema.texto, padding: 8, borderRadius: 6,
+                              fontSize: 14, borderWidth: 1, borderColor: tema.borde,
+                            }}
+                            value={config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado]}
+                            onChangeText={v => {
+                              const trimmed = v.trim();
+                              if (!trimmed) return;
+                              actualizarConfig({
+                                estadoNombresPersonalizados: {
+                                  ...config.estadoNombresPersonalizados,
+                                  [estado]: trimmed,
+                                },
+                              });
+                            }}
+                            placeholder={ESTADO_NOMBRES[estado]}
+                            placeholderTextColor={tema.textoSecundario}
+                            maxLength={20}
+                          />
+                          <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+                            {(config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado]).length}/20
+                          </Text>
+                        </View>
                       </View>
 
                       {/* Color picker */}
@@ -481,15 +493,21 @@ export function ConfigScreen() {
               return (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   {estaEditando ? (
-                    <TextInput
-                      autoFocus
-                      style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, marginRight: 8, borderWidth: 1, borderColor: tema.acento }}
-                      value={textoEdicion}
-                      onChangeText={setTextoEdicion}
-                      onBlur={confirmarEdicion}
-                      onSubmitEditing={confirmarEdicion}
-                      returnKeyType="done"
-                    />
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <TextInput
+                        autoFocus
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, borderWidth: 1, borderColor: tema.acento }}
+                        value={textoEdicion}
+                        onChangeText={setTextoEdicion}
+                        onBlur={confirmarEdicion}
+                        onSubmitEditing={confirmarEdicion}
+                        returnKeyType="done"
+                        maxLength={50}
+                      />
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2, marginRight: 8 }}>
+                        {textoEdicion.length}/50
+                      </Text>
+                    </View>
                   ) : (
                     <TouchableOpacity style={{ flex: 1 }} onPress={() => { setEditandoTipo(tipo); setTextoEdicion(tipo); }}>
                       <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
@@ -523,13 +541,21 @@ export function ConfigScreen() {
               );
             })}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <TextInput
-                placeholder="Nuevo tipo..."
-                placeholderTextColor={tema.textoSecundario}
-                style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 8 }}
-                value={nuevoTipo}
-                onChangeText={setNuevoTipo}
-              />
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  placeholder="Nuevo tipo..."
+                  placeholderTextColor={tema.textoSecundario}
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 8 }}
+                  value={nuevoTipo}
+                  onChangeText={setNuevoTipo}
+                  maxLength={50}
+                />
+                {nuevoTipo.length > 0 && (
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+                    {nuevoTipo.length}/50
+                  </Text>
+                )}
+              </View>
               <TouchableOpacity
                 onPress={() => {
                   const t = nuevoTipo.trim();
@@ -562,13 +588,19 @@ export function ConfigScreen() {
               ]
             ).map(({ labelKey, abrevKey, abrevDefault }) => (
               <View key={abrevKey} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <TextInput
-                  style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 8, fontSize: 14 }}
-                  value={String(config[labelKey] ?? '')}
-                  onChangeText={v => actualizarConfig({ [labelKey]: v } as any)}
-                  placeholder={labelKey.replace('label', '')}
-                  placeholderTextColor={tema.textoSecundario}
-                />
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 8, fontSize: 14 }}
+                    value={String(config[labelKey] ?? '')}
+                    onChangeText={v => actualizarConfig({ [labelKey]: v } as any)}
+                    placeholder={labelKey.replace('label', '')}
+                    placeholderTextColor={tema.textoSecundario}
+                    maxLength={35}
+                  />
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+                    {String(config[labelKey] ?? '').length}/35
+                  </Text>
+                </View>
                 <TextInput
                   style={{
                     backgroundColor: tema.fondo, color: tema.texto,
