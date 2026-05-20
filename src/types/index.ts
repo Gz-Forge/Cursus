@@ -192,6 +192,7 @@ export interface Config {
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
+  estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;
 }
 
 export interface AppState {

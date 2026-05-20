@@ -31,7 +31,7 @@ export function useEstadoEstilo() {
 
   /** Devuelve solo el nombre del estado, ej: "Aprobadas" */
   const getLabel = (estado: EstadoMateria): string =>
-    ESTADO_NOMBRES[estado];
+    config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado];
 
   return { getColor, getIcono, getLabel };
 }

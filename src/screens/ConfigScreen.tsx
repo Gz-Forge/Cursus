@@ -286,6 +286,7 @@ export function ConfigScreen() {
               onPress={() => actualizarConfig({
                 estadoColoresPersonalizados: undefined,
                 estadoIconosPersonalizados: undefined,
+                estadoNombresPersonalizados: undefined,
               })}
             >
               <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar todos</Text>
@@ -319,7 +320,7 @@ export function ConfigScreen() {
                     <Text style={{ fontSize: 18, marginRight: 10 }}>{icono}</Text>
                     {/* Nombre estado */}
                     <Text style={{ color: tema.texto, fontSize: 14, flex: 1 }}>
-                      {ESTADO_NOMBRES[estado]}
+                      {getLabel(estado)}
                     </Text>
                     {/* Chevron */}
                     <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
@@ -334,6 +335,31 @@ export function ConfigScreen() {
                       borderBottomWidth: esUltimo ? 0 : 1,
                       borderBottomColor: tema.borde,
                     }}>
+                      {/* Nombre editable */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>Nombre</Text>
+                        <TextInput
+                          style={{
+                            flex: 1, backgroundColor: tema.superficie,
+                            color: tema.texto, padding: 8, borderRadius: 6,
+                            fontSize: 14, borderWidth: 1, borderColor: tema.borde,
+                          }}
+                          value={config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado]}
+                          onChangeText={v => {
+                            const trimmed = v.trim();
+                            if (!trimmed) return;
+                            actualizarConfig({
+                              estadoNombresPersonalizados: {
+                                ...config.estadoNombresPersonalizados,
+                                [estado]: trimmed,
+                              },
+                            });
+                          }}
+                          placeholder={ESTADO_NOMBRES[estado]}
+                          placeholderTextColor={tema.textoSecundario}
+                        />
+                      </View>
+
                       {/* Color picker */}
                       <ColorInput
                         label="Color"
@@ -377,11 +403,14 @@ export function ConfigScreen() {
                         onPress={() => {
                           const nuevosCols = { ...config.estadoColoresPersonalizados };
                           const nuevosIcons = { ...config.estadoIconosPersonalizados };
+                          const nuevosNombres = { ...config.estadoNombresPersonalizados };
                           delete nuevosCols[estado];
                           delete nuevosIcons[estado];
+                          delete nuevosNombres[estado];
                           actualizarConfig({
                             estadoColoresPersonalizados: Object.keys(nuevosCols).length ? nuevosCols : undefined,
                             estadoIconosPersonalizados: Object.keys(nuevosIcons).length ? nuevosIcons : undefined,
+                            estadoNombresPersonalizados: Object.keys(nuevosNombres).length ? nuevosNombres : undefined,
                           });
                         }}
                         style={{
@@ -424,8 +453,8 @@ export function ConfigScreen() {
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
-          {toggle('Usar estado "Aprobado"', 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
-          {config.usarEstadoAprobado && toggle('"Aprobado" habilita previas', 'aprobadoHabilitaPrevias', 'Si está desactivado, solo exonerado desbloquea materias siguientes')}
+          {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
+          {config.usarEstadoAprobado && toggle(`"${getLabel('aprobado')}" habilita previas`, 'aprobadoHabilitaPrevias', 'Si está desactivado, solo exonerado desbloquea materias siguientes')}
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TIPOS DE FORMACIÓN</Text>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
