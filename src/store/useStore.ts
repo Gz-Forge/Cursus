@@ -57,6 +57,8 @@ const CONFIG_DEFAULT: Config = {
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,
   semestreExpandidoMap: {},
+  mostrarFelicitaciones: true,
+  frasesUsadas: [],
 };
 
 interface Store extends AppState {
