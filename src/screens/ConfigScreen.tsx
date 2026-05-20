@@ -129,7 +129,7 @@ export function ConfigScreen() {
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const [estadoExpandido, setEstadoExpandido] = useState<EstadoMateria | null>(null);
-  const { getColor, getIcono } = useEstadoEstilo();
+  const { getColor, getIcono, getLabel } = useEstadoEstilo();
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
   // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
