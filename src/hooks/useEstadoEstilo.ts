@@ -29,9 +29,9 @@ export function useEstadoEstilo() {
   const getIcono = (estado: EstadoMateria): string =>
     config.estadoIconosPersonalizados?.[estado] ?? ICONOS_DEFAULT[estado];
 
-  /** Devuelve "icono + espacio + nombre", ej: "✅ Aprobadas" */
+  /** Devuelve solo el nombre del estado, ej: "Aprobadas" */
   const getLabel = (estado: EstadoMateria): string =>
-    `${getIcono(estado)} ${ESTADO_NOMBRES[estado]}`;
+    config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado];
 
   return { getColor, getIcono, getLabel };
 }

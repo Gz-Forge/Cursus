@@ -686,7 +686,7 @@ export function MetricsScreen() {
                     </View>
                     {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
                       <View key={e} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <Text style={{ color: tema.texto, fontSize: 13 }}>{getLabel(e)}</Text>
+                        <Text style={{ color: tema.texto, fontSize: 13 }}>{getIcono(e)} {getLabel(e)}</Text>
                         <Text style={{ color: getColor(e), fontWeight: '700', fontSize: 13 }}>
                           {conteo[e]}  ({Math.round((conteo[e] / total) * 100)}%)
                         </Text>
@@ -868,7 +868,7 @@ export function MetricsScreen() {
                             {ORDEN_ESTADOS.filter(e => conteo[e] > 0).map(e => (
                               <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: getColor(e) }} />
-                                <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{getLabel(e).split(' ').slice(1).join(' ')}</Text>
+                                <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>{getLabel(e)}</Text>
                               </View>
                             ))}
                           </View>
@@ -913,8 +913,7 @@ export function MetricsScreen() {
                 );
 
                 if (m.id === 'tipos_formacion') return (
-                  <View key="tipos_formacion" style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 } : {}}>
-                    <View style={col}>
+                  <View key="tipos_formacion" style={col}>
                       {seccion('TIPOS DE FORMACIÓN')}
                       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
@@ -962,8 +961,6 @@ export function MetricsScreen() {
                           </View>
                         )}
                       </View>
-                    </View>
-                    {isWeb && <View style={col} />}
                   </View>
                 );
 
@@ -1012,10 +1009,12 @@ export function MetricsScreen() {
                 style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 24, width: '100%', maxWidth: 320, alignItems: 'center' }}
                 onStartShouldSetResponder={() => true}
               >
-                <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: getColor(estadoMat), marginBottom: 8 }} />
-                <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>
-                  {getIcono(estadoMat)} {getLabel(estadoMat)}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: getColor(estadoMat) }} />
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
+                    {getLabel(estadoMat)}
+                  </Text>
+                </View>
                 {mat.numero !== undefined && (
                   <Text style={{ color: tema.texto, fontSize: 28, fontWeight: '800', marginBottom: 4 }}>
                     {mat.numero}
