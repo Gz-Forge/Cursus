@@ -41,7 +41,7 @@ export function CarreraScreen() {
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [modoBusqueda, setModoBusqueda] = useState<'nombre' | 'es_previa_de' | 'sus_previas'>('nombre');
   const [materiaPinned, setMateriaPinned] = useState<typeof materias[0] | null>(null);
-  const { getColor, getLabel } = useEstadoEstilo();
+  const { getColor, getLabel, getIcono } = useEstadoEstilo();
   const [mostrarQrShare, setMostrarQrShare] = useState(false);
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
@@ -585,7 +585,7 @@ export function CarreraScreen() {
                             onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
                             style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? getColor(e) : tema.tarjeta }}
                           >
-                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{getLabel(e)}</Text>
+                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{getIcono(e)} {getLabel(e)}</Text>
                           </TouchableOpacity>
                         ));
                       })()}
