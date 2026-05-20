@@ -49,6 +49,8 @@ const CONFIG_DEFAULT_PARCIAL = {
   horarioPrimerDia: 'lunes' as const,
   horarioFiltroOcultos: [] as import('../types').TipoBloque[],
   horarioFiltroOcultarEvaluaciones: false,
+  mostrarFelicitaciones: true,
+  frasesUsadas: [] as number[],
 };
 
 /**

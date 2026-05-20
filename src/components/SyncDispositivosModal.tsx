@@ -64,6 +64,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [errorClave, setErrorClave] = useState('');
   const [encryptedBlob, setEncryptedBlob] = useState('');
+  const [cargandoClave, setCargandoClave] = useState(false);
 
   const resetear = useCallback(() => {
     setEstado('idle');
@@ -78,11 +79,28 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setShowPass(false);
     setErrorClave('');
     setEncryptedBlob('');
+    setCargandoClave(false);
   }, []);
 
   useEffect(() => {
     if (!visible) resetear();
   }, [visible, resetear]);
+
+  // Oculta el ícono nativo de "mostrar contraseña" del browser en web/Tauri
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const id = 'cursus-hide-pw-reveal';
+    if (document.getElementById(id)) return;
+    const el = document.createElement('style');
+    el.id = id;
+    el.textContent = [
+      'input::-ms-reveal { display: none !important; }',
+      'input::-ms-clear { display: none !important; }',
+      'input::-webkit-contacts-auto-fill-button { display: none !important; }',
+      'input::-webkit-credentials-auto-fill-button { display: none !important; }',
+    ].join(' ');
+    document.head.appendChild(el);
+  }, []);
 
   // ── EMISOR ──────────────────────────────────────────────────────────────────
 
@@ -166,6 +184,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   const aplicarClave = async () => {
     setErrorClave('');
+    setCargandoClave(true);
     try {
       const comprimido = await decryptPayload(encryptedBlob, passphrase);
       const syncPayload = descomprimirPayload(comprimido);
@@ -173,6 +192,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       setEstado('receptor_confirmando');
     } catch (e: any) {
       setErrorClave(e?.message ?? 'Contraseña incorrecta — verificá que sea la misma que ingresó el emisor');
+    } finally {
+      setCargandoClave(false);
     }
   };
 
@@ -393,10 +414,13 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             ) : null}
             <TouchableOpacity
               onPress={aplicarClave}
-              disabled={passphrase.length < 1}
-              style={btnStyle(passphrase.length >= 1 ? tema.acento : tema.borde)}
+              disabled={passphrase.length < 1 || cargandoClave}
+              style={btnStyle(passphrase.length >= 1 && !cargandoClave ? tema.acento : tema.borde)}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
+              {cargandoClave
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
+              }
             </TouchableOpacity>
             <TouchableOpacity onPress={resetear} style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}>
               <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>

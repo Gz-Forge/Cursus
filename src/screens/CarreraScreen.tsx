@@ -20,6 +20,7 @@ import { EstadoMateria, Materia } from '../types';
 import { useAlert } from '../contexts/AlertContext';
 import { temaOscuro } from '../theme/colors';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
+import { elegirFrase } from '../utils/frases';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
 const VISTA_LABELS: Record<Vista, string> = {
@@ -47,6 +48,9 @@ export function CarreraScreen() {
   const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
   const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
   const { showAlert } = useAlert();
+
+  const [felicitacionModal, setFelicitacionModal] = useState<{ semestre: number; frase: string } | null>(null);
+  const semestresCompletadosRef = React.useRef<Set<number> | null>(null);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -160,6 +164,35 @@ export function CarreraScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez al montar para verificar períodos de examen pendientes
   }, []);
+
+  useEffect(() => {
+    if (config.mostrarFelicitaciones === false) return;
+
+    const semestresUnicos = [...new Set(materias.map(m => m.semestre))];
+    const completados = new Set(
+      semestresUnicos.filter(sem => {
+        const enSem = materias.filter(m => m.semestre === sem);
+        return enSem.length > 0 && enSem.every(m => calcularEstadoFinal(m, config) === 'exonerado');
+      })
+    );
+
+    if (semestresCompletadosRef.current === null) {
+      semestresCompletadosRef.current = completados;
+      return;
+    }
+
+    const prevCompletados = semestresCompletadosRef.current;
+    semestresCompletadosRef.current = completados;
+
+    for (const sem of completados) {
+      if (!prevCompletados.has(sem)) {
+        const { frase, nuevasUsadas } = elegirFrase(config.frasesUsadas ?? []);
+        actualizarConfig({ frasesUsadas: nuevasUsadas });
+        setFelicitacionModal({ semestre: sem, frase });
+        break;
+      }
+    }
+  }, [materias, config]);
 
   const handleImportar = async () => {
     let datos: Awaited<ReturnType<typeof importarCarrera>>;
@@ -679,6 +712,15 @@ export function CarreraScreen() {
         labelConfirmar="Confirmar"
         onConfirmar={() => { setShowConfirmPeriodo(false); doDecrementar(); }}
         onCancelar={() => setShowConfirmPeriodo(false)}
+      />
+
+      <ConfirmModal
+        visible={!!felicitacionModal}
+        titulo={`🎉 ¡${felicitacionModal?.semestre}° semestre completo!`}
+        mensaje={felicitacionModal?.frase ?? ''}
+        labelConfirmar="¡Gracias!"
+        onConfirmar={() => setFelicitacionModal(null)}
+        onCancelar={() => setFelicitacionModal(null)}
       />
 
     </View>
