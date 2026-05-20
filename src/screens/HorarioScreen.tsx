@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
@@ -80,6 +81,7 @@ export function HorarioScreen() {
   const { showAlert } = useAlert();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
+  const isFocused = useIsFocused();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
@@ -157,6 +159,23 @@ export function HorarioScreen() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [cardEnEdicion]);
+
+  // ← → / A D para navegar entre semanas (escritorio)
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !isFocused) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (cardEnEdicion !== null) return; // no interferir con edición de bloques
+      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        setWeekOffset(w => w - 1);
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        setWeekOffset(w => w + 1);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isFocused, cardEnEdicion]);
 
   // Drag & drop en escritorio — eventos nativos del DOM.
   // Razones para NO usar onPressIn / Responder system:
@@ -546,7 +565,7 @@ export function HorarioScreen() {
   // Evaluaciones con fecha de materias en curso
   type MateriaRef = typeof todosLosBloques[0]['materia'];
   type EvalSimpleConMateria = EvaluacionSimple & { materia: MateriaRef; esGrupal?: false; grupoNombre?: undefined };
-  type EvalGrupalConMateria = SubEvaluacion & { materia: MateriaRef; esGrupal: true; grupoNombre: string };
+  type EvalGrupalConMateria = SubEvaluacion & { materia: MateriaRef; esGrupal: true; grupoNombre: string; grupoId: string };
   type EvalConMateria = EvalSimpleConMateria | EvalGrupalConMateria;
 
   const todasLasEvaluaciones: EvalConMateria[] = config.horarioMostrarEvaluaciones
@@ -567,6 +586,7 @@ export function HorarioScreen() {
                 materia: m,
                 esGrupal: true as const,
                 grupoNombre: grupo.nombre,
+                grupoId: grupo.id,
               }))
           );
 
@@ -1245,16 +1265,17 @@ export function HorarioScreen() {
                         const top    = (horaI - horaInicio) * PX_POR_MIN;
                         const height = Math.max((horaF - horaI) * PX_POR_MIN, 16);
 
-                        // Colores: grupales usan coloresEvaluacionesGrupales, simples usan color parcial de la materia
+                        // Colores: grupales por grupo.id, simples por eval.id
                         let fondoColor: string;
                         let textoColor: string;
                         if (ev.esGrupal) {
-                          fondoColor = config.coloresEvaluacionesGrupales?.fondo ?? '#9C27B0';
-                          textoColor = config.coloresEvaluacionesGrupales?.texto ?? '#fff';
+                          const grupoColor = config.coloresGruposEvaluacion?.[ev.grupoId];
+                          fondoColor = grupoColor?.fondo ?? config.coloresEvaluacionesGrupales?.fondo ?? '#9C27B0';
+                          textoColor = grupoColor?.texto ?? config.coloresEvaluacionesGrupales?.texto ?? '#fff';
                         } else {
-                          const colorConfig = config.coloresHorario?.[ev.materia.id]?.parcial;
-                          fondoColor = colorConfig?.fondo ?? '#FF9800';
-                          textoColor = colorConfig?.texto ?? '#fff';
+                          const evalColor = config.coloresEvaluacionesSimples?.[ev.id];
+                          fondoColor = evalColor?.fondo ?? config.coloresHorario?.[ev.materia.id]?.parcial?.fondo ?? '#FF9800';
+                          textoColor = evalColor?.texto ?? config.coloresHorario?.[ev.materia.id]?.parcial?.texto ?? '#fff';
                         }
 
                         // Texto del bloque

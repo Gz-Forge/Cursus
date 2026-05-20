@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Platform, PanResponder } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -21,12 +21,15 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
   const [chunks, setChunks] = useState<ChunkQR[]>([]);
   const [cargando, setCargando] = useState(false);
 
+  // Ref para que PanResponder siempre vea el largo actualizado sin recrearse
+  const chunksLenRef = useRef(chunks.length);
+  useEffect(() => { chunksLenRef.current = chunks.length; }, [chunks.length]);
+
   useEffect(() => {
     if (!visible) { setChunks([]); return; }
     setPaginaActual(0);
     if (materias.length === 0) { setChunks([]); return; }
     setCargando(true);
-    // Diferir la computación pesada para no bloquear el render del modal
     const id = setTimeout(() => {
       try {
         setChunks(splitEnChunks(encodeCarrera(materiasAJson(materias))));
@@ -40,6 +43,34 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
     }, 50);
     return () => clearTimeout(id);
   }, [visible, materias]);
+
+  // Teclado (escritorio): a/d o ←/→
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (chunksLenRef.current <= 1) return;
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        setPaginaActual(p => Math.max(0, p - 1));
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        setPaginaActual(p => Math.min(chunksLenRef.current - 1, p + 1));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visible]);
+
+  // Swipe táctil (móvil)
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        chunksLenRef.current > 1 && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy),
+      onPanResponderRelease: (_, { dx }) => {
+        const len = chunksLenRef.current;
+        if (dx < -50) setPaginaActual(p => (p < len - 1 ? p + 1 : p));
+        else if (dx > 50) setPaginaActual(p => (p > 0 ? p - 1 : p));
+      },
+    }),
+  ).current;
 
   const chunkActual = chunks[paginaActual];
   const qrData = chunkActual ? JSON.stringify(chunkActual) : '{}';
@@ -82,35 +113,53 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                 </View>
               )}
 
-              <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 16 }}>
+              {/* Área del QR — swipeable en móvil */}
+              <View
+                {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
+                style={{ backgroundColor: '#fff', padding: 12, borderRadius: 12, marginBottom: 16 }}
+              >
                 <QRCode value={qrData} size={220} backgroundColor="#fff" color="#000" />
               </View>
 
               {chunks.length > 1 && (
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                  <TouchableOpacity
-                    onPress={() => setPaginaActual(p => Math.max(0, p - 1))}
-                    disabled={paginaActual === 0}
-                    style={{
-                      flex: 1, paddingVertical: 10, ...(Platform.OS === 'web' ? { paddingHorizontal: 12 } : {}),
-                      borderRadius: 8, alignItems: 'center',
-                      backgroundColor: paginaActual === 0 ? tema.borde : tema.tarjeta,
-                    }}
-                  >
-                    <Text style={{ color: paginaActual === 0 ? tema.textoSecundario : tema.texto }}>◀ Anterior</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setPaginaActual(p => Math.min(chunks.length - 1, p + 1))}
-                    disabled={paginaActual === chunks.length - 1}
-                    style={{
-                      flex: 1, paddingVertical: 10, ...(Platform.OS === 'web' ? { paddingHorizontal: 12, minWidth: 120 } : {}),
-                      borderRadius: 8, alignItems: 'center',
-                      backgroundColor: paginaActual === chunks.length - 1 ? tema.borde : tema.tarjeta,
-                    }}
-                  >
-                    <Text style={{ color: paginaActual === chunks.length - 1 ? tema.textoSecundario : tema.texto }}>Siguiente ▶</Text>
-                  </TouchableOpacity>
-                </View>
+                <>
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => setPaginaActual(p => Math.max(0, p - 1))}
+                      disabled={paginaActual === 0}
+                      style={{
+                        flex: 1, paddingVertical: 10,
+                        ...(Platform.OS === 'web' ? { paddingHorizontal: 12 } : {}),
+                        borderRadius: 8, alignItems: 'center',
+                        backgroundColor: paginaActual === 0 ? tema.borde : tema.tarjeta,
+                      }}
+                    >
+                      <Text style={{ color: paginaActual === 0 ? tema.textoSecundario : tema.texto }}>◀ Anterior</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setPaginaActual(p => Math.min(chunks.length - 1, p + 1))}
+                      disabled={paginaActual === chunks.length - 1}
+                      style={{
+                        flex: 1, paddingVertical: 10,
+                        ...(Platform.OS === 'web' ? { paddingHorizontal: 12, minWidth: 120 } : {}),
+                        borderRadius: 8, alignItems: 'center',
+                        backgroundColor: paginaActual === chunks.length - 1 ? tema.borde : tema.tarjeta,
+                      }}
+                    >
+                      <Text style={{ color: paginaActual === chunks.length - 1 ? tema.textoSecundario : tema.texto }}>Siguiente ▶</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {Platform.OS !== 'web' && (
+                    <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 8 }}>
+                      Deslizá el QR para cambiar de página
+                    </Text>
+                  )}
+                  {Platform.OS === 'web' && (
+                    <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 8 }}>
+                      Usá ← → o las teclas A / D para navegar
+                    </Text>
+                  )}
+                </>
               )}
             </>
           )}
