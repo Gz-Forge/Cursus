@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform,
-  ActivityIndicator, Modal,
+  ActivityIndicator, Modal, Alert,
 } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
@@ -169,10 +169,34 @@ function PanelImportar() {
       (datos as any).version === 1 &&
       Array.isArray((datos as any).perfiles)
     ) {
-      showAlert(
-        'Importar datos completos',
-        `El archivo contiene ${(datos as any).perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
-      );
+      const d = datos as any;
+
+      if (d.config && typeof d.config === 'object') {
+        Alert.alert(
+          'El archivo incluye configuración',
+          '¿Querés aplicar la configuración guardada en este archivo?',
+          [
+            { text: 'No', style: 'cancel', onPress: () => {
+              showAlert(
+                'Importar datos completos',
+                `El archivo contiene ${d.perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
+              );
+            }},
+            { text: 'Sí, aplicar', onPress: () => {
+              actualizarConfig(d.config as Partial<typeof config>);
+              showAlert(
+                'Importar datos completos',
+                `Configuración aplicada. El archivo contiene ${d.perfiles.length} perfil(es). La importación de perfiles estará disponible próximamente.`,
+              );
+            }},
+          ],
+        );
+      } else {
+        showAlert(
+          'Importar datos completos',
+          `El archivo contiene ${d.perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
+        );
+      }
       return;
     }
 
