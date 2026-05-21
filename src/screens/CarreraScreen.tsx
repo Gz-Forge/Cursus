@@ -54,7 +54,7 @@ export function CarreraScreen() {
   const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
   const { showAlert } = useAlert();
 
-  const [felicitacionModal, setFelicitacionModal] = useState<{ titulo: string; frase: string } | null>(null);
+  const [colaFelicitaciones, setColaFelicitaciones] = useState<{ titulo: string; frase: string }[]>([]);
   const semestresCompletadosRef = React.useRef<Set<number> | null>(null);
   const anosCompletadosRef = React.useRef<Set<number> | null>(null);
 
@@ -233,54 +233,54 @@ export function CarreraScreen() {
     semestresCompletadosRef.current = semsCompletos;
     anosCompletadosRef.current = anosCompletos;
 
+    const mensajes: { titulo: string; frase: string }[] = [];
+
     // ── Prioridad 1: carrera completa (todos los semestres exonerados) ────────
     const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
     const carreraAntesFaltaba = prevSems.size < totalSems;
     if (carreraCompleta && carreraAntesFaltaba) {
-      setFelicitacionModal({ titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA });
+      setColaFelicitaciones([{ titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
       return;
     }
 
-    // ── Prioridad 2: año recién completado ────────────────────────────────────
-    for (const anio of anosCompletos) {
-      if (!prevAnos.has(anio)) {
-        // Año recién completado
-        const anosRestantes = totalAnos - anosCompletos.size;
-
-        if (config.mostrarFelicitacionesAnio !== false) {
-          if (anosRestantes === 1) {
-            // Penúltimo año completo → solo queda 1 año
-            setFelicitacionModal({ titulo: `🎯 ¡Año ${anio}° completo!`, frase: FRASE_UN_ANIO_RESTANTE });
-            return;
+    // ── Semestre recién completado → mensaje 1 (si habilitado) ───────────────
+    if (config.mostrarFelicitaciones !== false) {
+      for (const sem of semsCompletos) {
+        if (!prevSems.has(sem)) {
+          const semsRestantes = totalSems - semsCompletos.size;
+          if (semsRestantes === 1) {
+            mensajes.push({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_UN_SEMESTRE_RESTANTE });
+          } else if (semsRestantes === 2) {
+            mensajes.push({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_DOS_SEMESTRES_RESTANTES });
+          } else {
+            const { frase, nuevasUsadas } = elegirFrase(config.frasesUsadas ?? []);
+            actualizarConfig({ frasesUsadas: nuevasUsadas });
+            mensajes.push({ titulo: `🎉 ¡${sem}° semestre completo!`, frase });
           }
-          // Año genérico
-          const { frase, nuevasUsadas } = elegirFraseAnio(config.frasesAnioUsadas ?? []);
-          actualizarConfig({ frasesAnioUsadas: nuevasUsadas });
-          setFelicitacionModal({ titulo: `🎉 ¡Año ${anio}° completo!`, frase });
-          return;
+          break;
         }
-        break;
       }
     }
 
-    // ── Prioridad 3: semestre recién completado ───────────────────────────────
-    if (config.mostrarFelicitaciones === false) return;
-
-    for (const sem of semsCompletos) {
-      if (!prevSems.has(sem)) {
-        const semsRestantes = totalSems - semsCompletos.size;
-
-        if (semsRestantes === 1) {
-          setFelicitacionModal({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_UN_SEMESTRE_RESTANTE });
-        } else if (semsRestantes === 2) {
-          setFelicitacionModal({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_DOS_SEMESTRES_RESTANTES });
-        } else {
-          const { frase, nuevasUsadas } = elegirFrase(config.frasesUsadas ?? []);
-          actualizarConfig({ frasesUsadas: nuevasUsadas });
-          setFelicitacionModal({ titulo: `🎉 ¡${sem}° semestre completo!`, frase });
+    // ── Año recién completado → mensaje 2 (si habilitado) ────────────────────
+    if (config.mostrarFelicitacionesAnio !== false) {
+      for (const anio of anosCompletos) {
+        if (!prevAnos.has(anio)) {
+          const anosRestantes = totalAnos - anosCompletos.size;
+          if (anosRestantes === 1) {
+            mensajes.push({ titulo: `🎯 ¡Año ${anio}° completo!`, frase: FRASE_UN_ANIO_RESTANTE });
+          } else {
+            const { frase, nuevasUsadas } = elegirFraseAnio(config.frasesAnioUsadas ?? []);
+            actualizarConfig({ frasesAnioUsadas: nuevasUsadas });
+            mensajes.push({ titulo: `🎉 ¡Año ${anio}° completo!`, frase });
+          }
+          break;
         }
-        break;
       }
+    }
+
+    if (mensajes.length > 0) {
+      setColaFelicitaciones(q => [...q, ...mensajes]);
     }
   }, [materias, config]);
 
@@ -805,12 +805,12 @@ export function CarreraScreen() {
       />
 
       <ConfirmModal
-        visible={!!felicitacionModal}
-        titulo={felicitacionModal?.titulo ?? ''}
-        mensaje={felicitacionModal?.frase ?? ''}
+        visible={colaFelicitaciones.length > 0}
+        titulo={colaFelicitaciones[0]?.titulo ?? ''}
+        mensaje={colaFelicitaciones[0]?.frase ?? ''}
         labelConfirmar="¡Gracias!"
-        onConfirmar={() => setFelicitacionModal(null)}
-        onCancelar={() => setFelicitacionModal(null)}
+        onConfirmar={() => setColaFelicitaciones(q => q.slice(1))}
+        onCancelar={() => setColaFelicitaciones(q => q.slice(1))}
       />
 
     </View>
