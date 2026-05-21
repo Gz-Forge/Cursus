@@ -413,7 +413,12 @@ export function ConfigScreen() {
                               },
                             });
                           }}
-                          placeholder={ICONOS_DEFAULT[estado]}
+                          placeholder={
+                            config.estadoIconosPersonalizados &&
+                            estado in config.estadoIconosPersonalizados
+                              ? '(sin icono)'
+                              : ICONOS_DEFAULT[estado]
+                          }
                           placeholderTextColor={tema.textoSecundario}
                         />
                       </View>
