@@ -198,6 +198,14 @@ export function CarreraScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez al montar para verificar períodos de examen pendientes
   }, []);
 
+  // Al cambiar de perfil (o eliminar el activo) los refs quedan con datos del
+  // perfil anterior. Resetearlos aquí, antes del useEffect de felicitaciones,
+  // garantiza que ese efecto solo inicialice en lugar de disparar modales falsos.
+  useEffect(() => {
+    semestresCompletadosRef.current = null;
+    anosCompletadosRef.current = null;
+  }, [perfilActivoId]);
+
   useEffect(() => {
     const semestresUnicos = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
     const totalSems = semestresUnicos.length;
@@ -299,6 +307,10 @@ export function CarreraScreen() {
 
   const doImportar = (datos: Awaited<ReturnType<typeof importarCarrera>>) => {
     if (!datos) return;
+    // Resetear refs para que el useEffect de felicitaciones no dispare modales
+    // al detectar semestres/años "nuevos" que venían ya exonerados en el import.
+    semestresCompletadosRef.current = null;
+    anosCompletadosRef.current = null;
     const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
     const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
     if (tiposNuevos.length > 0) {
