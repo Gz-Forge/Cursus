@@ -19,6 +19,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
+import { parsearMes } from '../utils/fecha';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -209,7 +210,7 @@ export function EditMateriaScreen() {
   const confirmarBloque = () => {
     const anio = new Date().getFullYear();
     const dia = parseInt(bloqueNuevo.dia, 10);
-    const mes = parseInt(bloqueNuevo.mes, 10);
+    const mes = parsearMes(bloqueNuevo.mes) ?? NaN;
 
     if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
       showAlert('Día inválido', 'Ingresá un día entre 1 y 31.');
@@ -831,6 +832,7 @@ export function EditMateriaScreen() {
                   value={bloqueNuevo.dia}
                   onChangeText={v => setBloqueNuevo(b => ({ ...b, dia: v.replace(/\D/g, '').slice(0, 2) }))}
                   onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
+                  onSubmitEditing={() => setDropdownDia(false)}
                   placeholder="DD"
                   placeholderTextColor={tema.textoSecundario}
                   keyboardType="number-pad"
@@ -859,12 +861,19 @@ export function EditMateriaScreen() {
                 <TextInput
                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
                   value={bloqueNuevo.mes}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v }))}
                   onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
-                  placeholder="MM"
+                  onBlur={() => {
+                    const n = parsearMes(bloqueNuevo.mes);
+                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
+                  }}
+                  onSubmitEditing={() => {
+                    const n = parsearMes(bloqueNuevo.mes);
+                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
+                  }}
+                  placeholder="MM o mes"
                   placeholderTextColor={tema.textoSecundario}
-                  keyboardType="number-pad"
-                  maxLength={2}
+                  maxLength={20}
                 />
                 {bloqueNuevo.mes && !isNaN(parseInt(bloqueNuevo.mes, 10)) &&
                   parseInt(bloqueNuevo.mes, 10) >= 1 && parseInt(bloqueNuevo.mes, 10) <= 12 && (

@@ -1411,8 +1411,7 @@ export function HorarioScreen() {
                             enabled={evalEnDrag === null && cardEnEdicion === null}
                             onHandlerStateChange={(lpe: LongPressGestureHandlerStateChangeEvent) => {
                               if (lpe.nativeEvent.state === State.ACTIVE) {
-                                // Usar measureInWindow igual que los bloques para obtener
-                                // coordenadas absolutas de pantalla (evita cálculo incorrecto de y)
+                                setEvalEnDrag(ev.id);
                                 cardRefs.current.get(ev.id)?.measureInWindow((cx, cy) => {
                                   ghostOriginRef.current = { x: cx, y: cy };
                                   const blockTopInGrid = (horaI - horaInicioRef.current) * PX_POR_MIN;
@@ -1428,7 +1427,6 @@ export function HorarioScreen() {
                                     fondoColor, textoColor, labelBloque, height,
                                     horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
                                   };
-                                  setEvalEnDrag(ev.id);
                                 });
                               }
                             }}
@@ -1502,14 +1500,16 @@ export function HorarioScreen() {
                                       const ghostTopY = (ghostOriginRef.current?.y ?? 0) + ne.translationY;
                                       const { fecha: destFecha, horaInicio: nuevoInicio } = calcularDestino(ne.absoluteX, ghostTopY);
                                       persistirEval(destFecha, nuevoInicio, ev.horaFin !== undefined ? nuevoInicio + duracion : undefined);
-                                      setEvalEnDrag(null);
-                                      setGhostPos(null);
                                       ghostOriginRef.current   = null;
                                       evalDragDataRef.current  = null;
                                       persistirEvalRef.current = null;
+                                      requestAnimationFrame(() => {
+                                        setEvalEnDrag(null);
+                                        setGhostPos(null);
+                                      });
                                     }}
-                                    onFailed={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
-                                    onCancelled={() => { setEvalEnDrag(null); setGhostPos(null); ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; }}
+                                    onFailed={() => { ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; requestAnimationFrame(() => { setEvalEnDrag(null); setGhostPos(null); }); }}
+                                    onCancelled={() => { ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; requestAnimationFrame(() => { setEvalEnDrag(null); setGhostPos(null); }); }}
                                   >
                                     <View style={{ flex: 1, padding: 2 }}>
                                       <Text
