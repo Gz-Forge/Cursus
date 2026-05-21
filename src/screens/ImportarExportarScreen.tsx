@@ -103,7 +103,8 @@ function PanelImportar() {
     if (
       typeof datos === 'object' && datos !== null &&
       !Array.isArray(datos) &&
-      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales)
+      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales ||
+       (datos as any).coloresGruposEvaluacion || (datos as any).coloresEvaluacionesSimples)
     ) {
       const d = datos as any;
       const updates: Record<string, unknown> = {};
@@ -112,6 +113,12 @@ function PanelImportar() {
       }
       if (d.coloresEvaluacionesGrupales && typeof d.coloresEvaluacionesGrupales === 'object') {
         updates.coloresEvaluacionesGrupales = d.coloresEvaluacionesGrupales;
+      }
+      if (d.coloresGruposEvaluacion && typeof d.coloresGruposEvaluacion === 'object') {
+        updates.coloresGruposEvaluacion = { ...(config.coloresGruposEvaluacion ?? {}), ...d.coloresGruposEvaluacion };
+      }
+      if (d.coloresEvaluacionesSimples && typeof d.coloresEvaluacionesSimples === 'object') {
+        updates.coloresEvaluacionesSimples = { ...(config.coloresEvaluacionesSimples ?? {}), ...d.coloresEvaluacionesSimples };
       }
       actualizarConfig(updates as Partial<typeof config>);
       showAlert('Colores importados', 'Los colores se aplicaron correctamente.');

@@ -1050,30 +1050,52 @@ export function ConfigScreen() {
               tiposBloque.forEach(t => {
                 coloresActuales[t] = coloresPersonalizados[t] ?? { fondo: colorFondoDefault, texto: '#ffffff' };
               });
+
+              // Grupos de evaluación con colores individuales
+              const grupos = m.evaluaciones.filter(ev => ev.tipo === 'grupo') as GrupoEvaluacion[];
+              const gruposEvaluacion = grupos.length > 0
+                ? grupos.map(g => ({
+                    id: g.id,
+                    nombre: g.nombre,
+                    colorActual: config.coloresGruposEvaluacion?.[g.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
+                  }))
+                : undefined;
+
+              // Evaluaciones simples con fecha (aparecen en el horario)
+              const simplesConFecha = config.horarioMostrarEvaluaciones
+                ? (m.evaluaciones.filter(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) as EvaluacionSimple[])
+                : [];
+              const evaluacionesConFecha = simplesConFecha.length > 0
+                ? simplesConFecha.map(ev => ({
+                    id: ev.id,
+                    nombre: ev.nombre,
+                    colorActual: config.coloresEvaluacionesSimples?.[ev.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
+                  }))
+                : undefined;
+
               return {
                 id: m.id,
                 nombre: m.nombre,
                 bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
                 coloresActuales,
+                ...(gruposEvaluacion ? { gruposEvaluacion } : {}),
+                ...(evaluacionesConFecha ? { evaluacionesConFecha } : {}),
               };
             });
-            const coloresEvGrupales = config.coloresEvaluacionesGrupales
-              ? JSON.stringify(config.coloresEvaluacionesGrupales)
-              : 'no configurado';
             const prompt = `Sos un asistente de diseño de colores para una app académica de horarios.
 
 Estado actual de colores de mis materias:
 ${JSON.stringify(materiasExport, null, 2)}
 
-Evaluaciones grupales (color compartido): ${coloresEvGrupales}
-
 Ayudame a elegir colores para cada materia y tipo de bloque.
-Preguntame materia por materia qué colores quiero usar para fondo y texto.
-También preguntame si quiero cambiar el color de las evaluaciones grupales.
-Cuando termines, devolvé SOLO el JSON con este formato:
+Preguntame materia por materia qué colores quiero usar para fondo y texto de cada bloque.
+Si la materia tiene "gruposEvaluacion", preguntame también el color de cada grupo.
+Si la materia tiene "evaluacionesConFecha", preguntame también el color de cada evaluación individual.
+Cuando termines, devolvé SOLO el JSON con este formato (incluí solo los campos que modificaste):
 {
-  "coloresHorario": { "[id_materia]": { "[tipo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
-  "coloresEvaluacionesGrupales": { "fondo": "#RRGGBB", "texto": "#RRGGBB" }
+  "coloresHorario": { "[id_materia]": { "[tipo_bloque]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
+  "coloresGruposEvaluacion": { "[id_grupo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } },
+  "coloresEvaluacionesSimples": { "[id_evaluacion]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } }
 }`;
             return (
               <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8, marginTop: -4 }}>
