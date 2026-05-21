@@ -360,9 +360,9 @@ function PanelExportar() {
   const [inclNotas, setInclNotas] = useState(false);
   const [inclEvaluaciones, setInclEvaluaciones] = useState(false);
   const [inclHorarios, setInclHorarios] = useState(false);
+  const [inclConfig, setInclConfig] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
-  const [inclConfig, setInclConfig] = useState(false);
 
   const togglePerfil = (id: string) => {
     setPerfilesSelec(prev =>
