@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform,
-  ActivityIndicator, Modal, Alert,
+  ActivityIndicator, Modal,
 } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
@@ -68,7 +68,7 @@ export function ImportarExportarScreen() {
 
 function PanelImportar() {
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -170,26 +170,31 @@ function PanelImportar() {
       Array.isArray((datos as any).perfiles)
     ) {
       const d = datos as any;
+      const tieneConfig = d.config && typeof d.config === 'object' && !Array.isArray(d.config);
 
-      if (d.config && typeof d.config === 'object') {
-        Alert.alert(
+      if (tieneConfig) {
+        showConfirm(
           'El archivo incluye configuración',
-          '¿Querés aplicar la configuración guardada en este archivo?',
-          [
-            { text: 'No', style: 'cancel', onPress: () => {
-              showAlert(
-                'Importar datos completos',
-                `El archivo contiene ${d.perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
+          `El archivo contiene ${d.perfiles.length} perfil(es) (importación próximamente) y configuración guardada.\n\n¿Querés aplicar la configuración ahora?`,
+          async () => {
+            try {
+              const { aplicarConfigJson } = await import('../utils/importExport');
+              const resultado = aplicarConfigJson(
+                { cursus_config: 1, ...d.config },
+                actualizarConfig,
               );
-            }},
-            { text: 'Sí, aplicar', onPress: () => {
-              actualizarConfig(d.config as Partial<typeof config>);
-              showAlert(
-                'Importar datos completos',
-                `Configuración aplicada. El archivo contiene ${d.perfiles.length} perfil(es). La importación de perfiles estará disponible próximamente.`,
-              );
-            }},
-          ],
+              const resumen = [
+                `✅ ${resultado.aplicados.length} campo(s) de configuración aplicado(s)`,
+                resultado.ignorados.length > 0
+                  ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos`
+                  : null,
+              ].filter(Boolean).join('\n');
+              showAlert('Configuración aplicada', resumen);
+            } catch {
+              showAlert('Error', 'No se pudo aplicar la configuración.');
+            }
+          },
+          { labelConfirmar: 'Sí, aplicar' },
         );
       } else {
         showAlert(
