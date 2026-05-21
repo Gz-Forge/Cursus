@@ -22,7 +22,6 @@ export interface OpcionesExport {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
-  inclConfig: boolean;
   config?: Config;
   perfilesSelec: Perfil[];
 }
@@ -70,7 +69,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
     perfiles,
   };
 
-  if (opts.inclConfig && opts.config) {
+  if (opts.config) {
     payload.config = opts.config;
   }
 
