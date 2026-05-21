@@ -171,6 +171,9 @@ export function HorarioScreen() {
         setWeekOffset(w => w - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
         setWeekOffset(w => w + 1);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setWeekOffset(0);
       }
     };
     document.addEventListener('keydown', handleKeyDown);

@@ -195,8 +195,10 @@ export interface Config {
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;
-  mostrarFelicitaciones?: boolean;  // default true — aviso al exonerar todo un semestre
-  frasesUsadas?: number[];          // índices de frases ya mostradas (para no repetir)
+  mostrarFelicitaciones?: boolean;     // default true — aviso al exonerar todo un semestre
+  frasesUsadas?: number[];             // índices de frases de semestre ya mostradas
+  mostrarFelicitacionesAnio?: boolean; // default true — aviso al exonerar todo un año
+  frasesAnioUsadas?: number[];         // índices de frases de año ya mostradas
 }
 
 export interface AppState {

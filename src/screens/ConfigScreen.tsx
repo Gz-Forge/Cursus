@@ -197,7 +197,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -288,6 +288,11 @@ export function ConfigScreen() {
             'Felicitaciones por semestre completo',
             'mostrarFelicitaciones',
             'Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre',
+          )}
+          {toggle(
+            'Felicitaciones por año completo',
+            'mostrarFelicitacionesAnio',
+            'Mostrá un mensaje motivacional cuando exonerás todas las materias de un año académico',
           )}
           {/* ── ESTADOS DE MATERIA ──────────────────────── */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

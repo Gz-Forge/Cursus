@@ -20,7 +20,11 @@ import { EstadoMateria, Materia } from '../types';
 import { useAlert } from '../contexts/AlertContext';
 import { temaOscuro } from '../theme/colors';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
-import { elegirFrase } from '../utils/frases';
+import {
+  elegirFrase, elegirFraseAnio,
+  FRASE_UN_ANIO_RESTANTE, FRASE_DOS_SEMESTRES_RESTANTES,
+  FRASE_UN_SEMESTRE_RESTANTE, FRASE_CARRERA_COMPLETA,
+} from '../utils/frases';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
 const VISTA_LABELS: Record<Vista, string> = {
@@ -50,8 +54,9 @@ export function CarreraScreen() {
   const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
   const { showAlert } = useAlert();
 
-  const [felicitacionModal, setFelicitacionModal] = useState<{ semestre: number; frase: string } | null>(null);
+  const [colaFelicitaciones, setColaFelicitaciones] = useState<{ titulo: string; frase: string }[]>([]);
   const semestresCompletadosRef = React.useRef<Set<number> | null>(null);
+  const anosCompletadosRef = React.useRef<Set<number> | null>(null);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -194,31 +199,88 @@ export function CarreraScreen() {
   }, []);
 
   useEffect(() => {
-    if (config.mostrarFelicitaciones === false) return;
+    const semestresUnicos = [...new Set(materias.map(m => m.semestre))].sort((a, b) => a - b);
+    const totalSems = semestresUnicos.length;
+    if (totalSems === 0) return;
 
-    const semestresUnicos = [...new Set(materias.map(m => m.semestre))];
-    const completados = new Set(
+    // Semestres completados (todos exonerados)
+    const semsCompletos = new Set(
       semestresUnicos.filter(sem => {
         const enSem = materias.filter(m => m.semestre === sem);
         return enSem.length > 0 && enSem.every(m => calcularEstadoFinal(m, config) === 'exonerado');
-      })
+      }),
     );
 
-    if (semestresCompletadosRef.current === null) {
-      semestresCompletadosRef.current = completados;
+    // Años completados: año = Math.ceil(semestre / 2); completo cuando todos sus semestres están en semsCompletos
+    const anosEnCarrera = [...new Set(semestresUnicos.map(s => Math.ceil(s / 2)))].sort((a, b) => a - b);
+    const totalAnos = anosEnCarrera.length;
+    const anosCompletos = new Set(
+      anosEnCarrera.filter(anio => {
+        const semsDeEsteAnio = semestresUnicos.filter(s => Math.ceil(s / 2) === anio);
+        return semsDeEsteAnio.length > 0 && semsDeEsteAnio.every(s => semsCompletos.has(s));
+      }),
+    );
+
+    // Primera vez: solo inicializar refs, no mostrar nada
+    if (semestresCompletadosRef.current === null || anosCompletadosRef.current === null) {
+      semestresCompletadosRef.current = semsCompletos;
+      anosCompletadosRef.current = anosCompletos;
       return;
     }
 
-    const prevCompletados = semestresCompletadosRef.current;
-    semestresCompletadosRef.current = completados;
+    const prevSems = semestresCompletadosRef.current;
+    const prevAnos = anosCompletadosRef.current;
+    semestresCompletadosRef.current = semsCompletos;
+    anosCompletadosRef.current = anosCompletos;
 
-    for (const sem of completados) {
-      if (!prevCompletados.has(sem)) {
-        const { frase, nuevasUsadas } = elegirFrase(config.frasesUsadas ?? []);
-        actualizarConfig({ frasesUsadas: nuevasUsadas });
-        setFelicitacionModal({ semestre: sem, frase });
-        break;
+    const mensajes: { titulo: string; frase: string }[] = [];
+
+    // ── Prioridad 1: carrera completa (todos los semestres exonerados) ────────
+    const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
+    const carreraAntesFaltaba = prevSems.size < totalSems;
+    if (carreraCompleta && carreraAntesFaltaba) {
+      setColaFelicitaciones([{ titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
+      return;
+    }
+
+    // ── Semestre recién completado → mensaje 1 (si habilitado) ───────────────
+    if (config.mostrarFelicitaciones !== false) {
+      for (const sem of semsCompletos) {
+        if (!prevSems.has(sem)) {
+          const semsRestantes = totalSems - semsCompletos.size;
+          if (semsRestantes === 1) {
+            mensajes.push({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_UN_SEMESTRE_RESTANTE });
+          } else if (semsRestantes === 2) {
+            mensajes.push({ titulo: `🎯 ¡${sem}° semestre completo!`, frase: FRASE_DOS_SEMESTRES_RESTANTES });
+          } else {
+            const { frase, nuevasUsadas } = elegirFrase(config.frasesUsadas ?? []);
+            actualizarConfig({ frasesUsadas: nuevasUsadas });
+            mensajes.push({ titulo: `🎉 ¡${sem}° semestre completo!`, frase });
+          }
+          break;
+        }
       }
+    }
+
+    // ── Año recién completado → mensaje 2 (si habilitado) ────────────────────
+    if (config.mostrarFelicitacionesAnio !== false) {
+      for (const anio of anosCompletos) {
+        if (!prevAnos.has(anio)) {
+          const anosRestantes = totalAnos - anosCompletos.size;
+          if (anosRestantes === 1) {
+            mensajes.push({ titulo: `🎯 ¡Año ${anio}° completo!`, frase: FRASE_UN_ANIO_RESTANTE });
+          } else {
+            const { frase, nuevasUsadas } = elegirFraseAnio(config.frasesAnioUsadas ?? []);
+            actualizarConfig({ frasesAnioUsadas: nuevasUsadas });
+            mensajes.push({ titulo: `🎉 ¡Año ${anio}° completo!`, frase });
+          }
+          break;
+        }
+      }
+    }
+
+    if (mensajes.length > 0) {
+      setColaFelicitaciones(q => [...q, ...mensajes]);
     }
   }, [materias, config]);
 
@@ -743,12 +805,12 @@ export function CarreraScreen() {
       />
 
       <ConfirmModal
-        visible={!!felicitacionModal}
-        titulo={`🎉 ¡${felicitacionModal?.semestre}° semestre completo!`}
-        mensaje={felicitacionModal?.frase ?? ''}
+        visible={colaFelicitaciones.length > 0}
+        titulo={colaFelicitaciones[0]?.titulo ?? ''}
+        mensaje={colaFelicitaciones[0]?.frase ?? ''}
         labelConfirmar="¡Gracias!"
-        onConfirmar={() => setFelicitacionModal(null)}
-        onCancelar={() => setFelicitacionModal(null)}
+        onConfirmar={() => setColaFelicitaciones(q => q.slice(1))}
+        onCancelar={() => setColaFelicitaciones(q => q.slice(1))}
       />
 
     </View>
