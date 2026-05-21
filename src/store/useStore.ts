@@ -59,6 +59,8 @@ const CONFIG_DEFAULT: Config = {
   semestreExpandidoMap: {},
   mostrarFelicitaciones: true,
   frasesUsadas: [],
+  mostrarFelicitacionesAnio: true,
+  frasesAnioUsadas: [],
 };
 
 interface Store extends AppState {
