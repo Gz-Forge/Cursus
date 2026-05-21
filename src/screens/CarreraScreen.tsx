@@ -299,6 +299,10 @@ export function CarreraScreen() {
 
   const doImportar = (datos: Awaited<ReturnType<typeof importarCarrera>>) => {
     if (!datos) return;
+    // Resetear refs para que el useEffect de felicitaciones no dispare modales
+    // al detectar semestres/años "nuevos" que venían ya exonerados en el import.
+    semestresCompletadosRef.current = null;
+    anosCompletadosRef.current = null;
     const nuevas = jsonAMaterias(datos, config.oportunidadesExamenDefault);
     const tiposNuevos = extraerTiposNuevos(datos, config.tiposFormacion);
     if (tiposNuevos.length > 0) {
