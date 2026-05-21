@@ -1,6 +1,6 @@
 import { cargarPerfilEstado } from './perfiles';
 import { materiasAJson } from './importExport';
-import { Perfil } from '../types';
+import { Perfil, Config } from '../types';
 
 export interface ExportPerfilPayload {
   id: string;
@@ -15,12 +15,15 @@ export interface ExportPayload {
   version: 1;
   exportadoEn: string;
   perfiles: ExportPerfilPayload[];
+  config?: Config;
 }
 
 export interface OpcionesExport {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
+  inclConfig: boolean;
+  config?: Config;
   perfilesSelec: Perfil[];
 }
 
@@ -61,9 +64,15 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
     perfiles.push(entry);
   }
 
-  return {
+  const payload: ExportPayload = {
     version: 1,
     exportadoEn: new Date().toISOString(),
     perfiles,
   };
+
+  if (opts.inclConfig && opts.config) {
+    payload.config = opts.config;
+  }
+
+  return payload;
 }
