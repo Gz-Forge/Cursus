@@ -362,6 +362,7 @@ function PanelExportar() {
   const [inclHorarios, setInclHorarios] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
+  const [inclConfig, setInclConfig] = useState(false);
 
   const togglePerfil = (id: string) => {
     setPerfilesSelec(prev =>
@@ -398,6 +399,7 @@ function PanelExportar() {
         <Checkbox label="Notas" value={inclNotas} onChange={setInclNotas} />
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
+        <Checkbox label="Configuración" value={inclConfig} onChange={setInclConfig} />
         {(inclNotas || inclEvaluaciones) && (
           <Text style={{ color: '#FF9800', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
             ⚠️ El archivo exportado contendrá datos académicos personales (notas y/o evaluaciones). Compartilo solo con personas de confianza.
@@ -437,6 +439,7 @@ function PanelExportar() {
         inclNotas={inclNotas}
         inclEvaluaciones={inclEvaluaciones}
         inclHorarios={inclHorarios}
+        config={inclConfig ? config : undefined}
         perfilesSelec={perfiles.filter(p => perfilesSelec.includes(p.id))}
         materiasActivas={materias}
       />
@@ -514,12 +517,14 @@ interface PanelMetodosProps {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
+  config?: Config;
   perfilesSelec: Perfil[];
   materiasActivas: Materia[];
 }
 
 function PanelMetodos({
-  inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec, materiasActivas,
+  inclNotas, inclEvaluaciones, inclHorarios, config,
+  perfilesSelec, materiasActivas,
 }: PanelMetodosProps) {
   const tema = useTema();
   const { showAlert } = useAlert();
@@ -537,7 +542,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
@@ -556,7 +561,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await Clipboard.setStringAsync(contenido);
@@ -584,7 +589,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const materias = payload.perfiles[0]?.materias ?? [];
       const encoded = encodeCarrera(materias);
