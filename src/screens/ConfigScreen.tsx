@@ -6,9 +6,8 @@ import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
-import { normalizarTipo, generarPromptCarrera, generarPromptEvaluaciones, generarPromptCompleto, generarPromptConfig } from '../utils/importExport';
+import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
 import { useNavigation } from '@react-navigation/native';
-import { generarPromptHorario } from '../utils/horarioImportExport';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
@@ -115,17 +114,15 @@ export function ConfigScreen() {
   const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
-  const [promptCarreraExpandido, setPromptCarreraExpandido] = useState(false);
-  const [promptHorarioExpandido, setPromptHorarioExpandido] = useState(false);
-  const [promptColoresExpandido, setPromptColoresExpandido] = useState(false);
+  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
+  const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
+    new Set(TODOS_MODULOS)
+  );
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [editandoTipo, setEditandoTipo] = useState<string | null>(null);
   const [textoEdicion, setTextoEdicion] = useState('');
   const [mostrarPeriodo, setMostrarPeriodo] = useState(false);
   const [mostrarSync, setMostrarSync] = useState(false);
-  const [promptEvalExpandido, setPromptEvalExpandido] = useState(false);
-  const [promptCompletoExpandido, setPromptCompletoExpandido] = useState(false);
-  const [promptConfigExpandido, setPromptConfigExpandido] = useState(false);
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const [acordeonBloques, setAcordeonBloques] = useState<Record<string, boolean>>({});
