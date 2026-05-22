@@ -1,4 +1,6 @@
-import { Materia, BloqueHorario, Evaluacion, TipoBloque } from '../types';
+import { Materia, BloqueHorario, Evaluacion, TipoBloque, EvaluacionSimple, GrupoEvaluacion, Config } from '../types';
+
+export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'colores';
 
 export function generarPromptCarrera(): string {
   return `Generá un archivo JSON con el plan de estudios de mi carrera.
