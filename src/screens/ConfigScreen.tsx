@@ -894,248 +894,84 @@ export function ConfigScreen() {
 
           <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>PROMPTS PARA IA</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 14 }}>
-            Copiá el prompt que necesites y pegalo en tu IA favorita.
+            Seleccioná qué querés generar. La IA preguntará solo lo necesario y generará un único JSON para importar.
           </Text>
 
-          <TouchableOpacity
-            onPress={() => setPromptCarreraExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan de carrera</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Usalo cuando querés cargar toda tu carrera (materias, semestres, previas) desde cero.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCarreraExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptCarreraExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCarrera()}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCarrera())}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setPromptHorarioExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar horarios JSON</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Usalo cuando tenés los horarios de tus materias y querés importarlos a la app.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptHorarioExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptHorarioExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptHorario(config)}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptHorario(config))}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setPromptEvalExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar evaluaciones JSON</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Usalo para generar el esquema de evaluaciones de una o varias materias e importarlo.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptEvalExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptEvalExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptEvaluaciones()}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptEvaluaciones())}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setPromptConfigExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar configuración</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Usalo para configurar la app desde cero o ajustar tu config. La IA te preguntará solo lo que necesite.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptConfigExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptConfigExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12, marginTop: -4 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptConfig()}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptConfig())}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => setPromptColoresExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Configurar colores del horario</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                La IA te pregunta materia por materia qué colores querés usar. Al terminar devuelve un JSON que podés importar.
-              </Text>
-            </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptColoresExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptColoresExpandido && (() => {
-            const labelTipo = (tipo: string) => {
-              switch (tipo) {
-                case 'teorica':  return config.labelTeorica  || 'Teórica';
-                case 'practica': return config.labelPractica || 'Práctica';
-                case 'parcial':  return 'Evaluación';
-                case 'otro':     return config.labelOtro     || 'Otro';
-                default:         return tipo;
-              }
-            };
-            const materiasConHorario = materias.filter(m => {
-              if (calcularEstadoFinal(m, config) !== 'cursando') return false;
-              return (m.bloques ?? []).length > 0 ||
-                (config.horarioMostrarEvaluaciones && m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha));
-            });
-            const materiasExport = materiasConHorario.map(m => {
-              const tiposBloque = [...new Set((m.bloques ?? []).map(b => b.tipo))] as TipoBloque[];
-              const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
-                m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
-              if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
-              const coloresPersonalizados = config.coloresHorario?.[m.id] ?? {};
-              const colorFondoDefault = COLORES_BLOQUES_DEFAULT[m.numero % COLORES_BLOQUES_DEFAULT.length];
-              const coloresActuales: Record<string, { fondo: string; texto: string }> = {};
-              tiposBloque.forEach(t => {
-                coloresActuales[t] = coloresPersonalizados[t] ?? { fondo: colorFondoDefault, texto: '#ffffff' };
-              });
-
-              // Grupos de evaluación con colores individuales
-              const grupos = m.evaluaciones.filter(ev => ev.tipo === 'grupo') as GrupoEvaluacion[];
-              const gruposEvaluacion = grupos.length > 0
-                ? grupos.map(g => ({
-                    id: g.id,
-                    nombre: g.nombre,
-                    colorActual: config.coloresGruposEvaluacion?.[g.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
-                  }))
-                : undefined;
-
-              // Evaluaciones simples con fecha (aparecen en el horario)
-              const simplesConFecha = config.horarioMostrarEvaluaciones
-                ? (m.evaluaciones.filter(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) as EvaluacionSimple[])
-                : [];
-              const evaluacionesConFecha = simplesConFecha.length > 0
-                ? simplesConFecha.map(ev => ({
-                    id: ev.id,
-                    nombre: ev.nombre,
-                    colorActual: config.coloresEvaluacionesSimples?.[ev.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
-                  }))
-                : undefined;
-
-              return {
-                id: m.id,
-                nombre: m.nombre,
-                bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t) })),
-                coloresActuales,
-                ...(gruposEvaluacion ? { gruposEvaluacion } : {}),
-                ...(evaluacionesConFecha ? { evaluacionesConFecha } : {}),
-              };
-            });
-            const prompt = `Sos un asistente de diseño de colores para una app académica de horarios.
-
-Estado actual de colores de mis materias:
-${JSON.stringify(materiasExport, null, 2)}
-
-Ayudame a elegir colores para cada materia y tipo de bloque.
-Preguntame materia por materia qué colores quiero usar para fondo y texto de cada bloque.
-Si la materia tiene "gruposEvaluacion", preguntame también el color de cada grupo.
-Si la materia tiene "evaluacionesConFecha", preguntame también el color de cada evaluación individual.
-Cuando termines, devolvé SOLO el JSON con este formato (incluí solo los campos que modificaste):
-{
-  "coloresHorario": { "[id_materia]": { "[tipo_bloque]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } },
-  "coloresGruposEvaluacion": { "[id_grupo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } },
-  "coloresEvaluacionesSimples": { "[id_evaluacion]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } }
-}`;
-            return (
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8, marginTop: -4 }}>
-                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>{prompt}</Text>
-                </ScrollView>
-                <TouchableOpacity
-                  onPress={() => Clipboard.setStringAsync(prompt)}
-                  style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-                </TouchableOpacity>
+          {/* Checkboxes de módulos */}
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+            {/* Seleccionar todo */}
+            <TouchableOpacity
+              onPress={() => {
+                if (modulosSeleccionados.size === TODOS_MODULOS.length) {
+                  setModulosSeleccionados(new Set());
+                } else {
+                  setModulosSeleccionados(new Set(TODOS_MODULOS));
+                }
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+                borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', marginBottom: 4 }}
+            >
+              <View style={{
+                width: 20, height: 20, borderRadius: 4, borderWidth: 2,
+                borderColor: tema.acento, marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: modulosSeleccionados.size === TODOS_MODULOS.length ? tema.acento : 'transparent',
+              }}>
+                {modulosSeleccionados.size === TODOS_MODULOS.length && (
+                  <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
+                )}
               </View>
-            );
-          })()}
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Seleccionar todo</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setPromptCompletoExpandido(v => !v)}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}
-          >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Generar plan completo (todo en uno)</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
-                Generá carrera + horarios + evaluaciones + configuración en un solo prompt. La IA genera un único JSON con todo incluido.
-              </Text>
+            {/* Opciones individuales */}
+            {([
+              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',         desc: 'Materias, semestres, previas, créditos' },
+              { id: 'horarios'      as ModuloIA, label: 'Horarios',                desc: 'Bloques de clase por materia' },
+              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',            desc: 'Parciales, finales, trabajos y sus pesos' },
+              { id: 'config'        as ModuloIA, label: 'Configuración de la app', desc: 'Umbrales, etiquetas, tarjetas' },
+              { id: 'colores'       as ModuloIA, label: 'Colores del horario',     desc: 'Colores por materia y tipo de bloque' },
+            ] as const).map(({ id, label, desc }) => (
+              <TouchableOpacity
+                key={id}
+                onPress={() => setModulosSeleccionados(prev => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id); else next.add(id);
+                  return next;
+                })}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
+              >
+                <View style={{
+                  width: 20, height: 20, borderRadius: 4, borderWidth: 2,
+                  borderColor: modulosSeleccionados.has(id) ? tema.acento : tema.textoSecundario,
+                  marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: modulosSeleccionados.has(id) ? tema.acento : 'transparent',
+                }}>
+                  {modulosSeleccionados.has(id) && (
+                    <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13 }}>{label}</Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 1 }}>{desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Preview y botón copiar */}
+          {modulosSeleccionados.size === 0 ? (
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, alignItems: 'center' }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Seleccioná al menos un módulo para generar el prompt.</Text>
             </View>
-            <Text style={{ color: tema.acento, fontSize: 16 }}>{promptCompletoExpandido ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {promptCompletoExpandido && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, marginTop: -4 }}>
+          ) : (
+            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
               <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCompleto()}
+                  {generarPromptCombinado(modulosSeleccionados, config, materias)}
                 </Text>
               </ScrollView>
               <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCompleto())}
+                onPress={() => Clipboard.setStringAsync(generarPromptCombinado(modulosSeleccionados, config, materias))}
                 style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
