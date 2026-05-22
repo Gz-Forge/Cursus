@@ -1,4 +1,5 @@
 import { Materia, BloqueHorario, Evaluacion, TipoBloque, EvaluacionSimple, GrupoEvaluacion, Config } from '../types';
+import { generarPromptHorario } from './horarioImportExport';
 
 export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'colores';
 
@@ -821,4 +822,240 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "tarjetaCreditosExtendida": "ambos",
   "tarjetaMostrarToggleCursando": true
 }`;
+}
+
+const COLORES_BLOQUES_DEFAULT_PROMPT = [
+  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
+  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
+];
+
+function buildSeccionColores(config: Config, materias: Materia[]): string {
+  const materiasConHorario = materias.filter(m => {
+    const bloques = m.bloques ?? [];
+    const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
+      m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
+    return bloques.length > 0 || tieneEvalsConFecha;
+  });
+
+  if (materiasConHorario.length === 0) return '';
+
+  const labelTipo = (tipo: string, cfg: Config) => {
+    switch (tipo) {
+      case 'teorica':  return cfg.labelTeorica  || 'Teórica';
+      case 'practica': return cfg.labelPractica || 'Práctica';
+      case 'parcial':  return 'Evaluación';
+      case 'otro':     return cfg.labelOtro     || 'Otro';
+      default:         return tipo;
+    }
+  };
+
+  const materiasExport = materiasConHorario.map(m => {
+    const tiposBloque = [...new Set((m.bloques ?? []).map((b: BloqueHorario) => b.tipo))] as TipoBloque[];
+    const tieneEvalsConFecha = config.horarioMostrarEvaluaciones &&
+      m.evaluaciones.some(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha);
+    if (tieneEvalsConFecha && !tiposBloque.includes('parcial')) tiposBloque.push('parcial');
+
+    const coloresPersonalizados = config.coloresHorario?.[m.id] ?? {};
+    const colorFondoDefault = COLORES_BLOQUES_DEFAULT_PROMPT[m.numero % COLORES_BLOQUES_DEFAULT_PROMPT.length];
+    const coloresActuales: Record<string, { fondo: string; texto: string }> = {};
+    tiposBloque.forEach(t => {
+      coloresActuales[t] = coloresPersonalizados[t] ?? { fondo: colorFondoDefault, texto: '#ffffff' };
+    });
+
+    const grupos = m.evaluaciones.filter(ev => ev.tipo === 'grupo') as GrupoEvaluacion[];
+    const gruposEvaluacion = grupos.length > 0
+      ? grupos.map(g => ({
+          id: g.id,
+          nombre: g.nombre,
+          colorActual: config.coloresGruposEvaluacion?.[g.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
+        }))
+      : undefined;
+
+    const simplesConFecha = config.horarioMostrarEvaluaciones
+      ? (m.evaluaciones.filter(ev => ev.tipo === 'simple' && !!(ev as EvaluacionSimple).fecha) as EvaluacionSimple[])
+      : [];
+    const evaluacionesConFecha = simplesConFecha.length > 0
+      ? simplesConFecha.map(ev => ({
+          id: ev.id,
+          nombre: ev.nombre,
+          colorActual: config.coloresEvaluacionesSimples?.[ev.id] ?? { fondo: colorFondoDefault, texto: '#ffffff' },
+        }))
+      : undefined;
+
+    return {
+      id: m.id,
+      nombre: m.nombre,
+      bloques: tiposBloque.map(t => ({ tipo: t, nombre: labelTipo(t, config) })),
+      coloresActuales,
+      ...(gruposEvaluacion ? { gruposEvaluacion } : {}),
+      ...(evaluacionesConFecha ? { evaluacionesConFecha } : {}),
+    };
+  });
+
+  return `
+════════════════════════════
+SECCIÓN "config" — COLORES DEL HORARIO
+════════════════════════════
+
+Estado actual de colores de mis materias:
+${JSON.stringify(materiasExport, null, 2)}
+
+Para cada materia, preguntame qué colores quiero usar para fondo y texto de cada tipo de bloque.
+Si la materia tiene "gruposEvaluacion", preguntame también el color de cada grupo.
+Si la materia tiene "evaluacionesConFecha", preguntame también el color de cada evaluación individual.
+
+Incluí los colores elegidos dentro de la sección "config" del JSON final con este formato:
+- "coloresHorario": { "[id_materia]": { "[tipo_bloque]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } } }
+- "coloresGruposEvaluacion": { "[id_grupo]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } }
+- "coloresEvaluacionesSimples": { "[id_evaluacion]": { "fondo": "#RRGGBB", "texto": "#RRGGBB" } }
+(Omitir los que no apliquen o no se modifiquen)`;
+}
+
+export function generarPromptCombinado(
+  modulos: Set<ModuloIA>,
+  config: Config,
+  materias: Materia[],
+): string {
+  // Caso de módulo único: delegar al prompt individual sin cambios
+  if (modulos.size === 1) {
+    const [unico] = modulos;
+    if (unico === 'carrera')      return generarPromptCarrera();
+    if (unico === 'horarios')     return generarPromptHorario(config);
+    if (unico === 'evaluaciones') return generarPromptEvaluaciones();
+    if (unico === 'config')       return generarPromptConfig();
+    if (unico === 'colores') {
+      const seccion = buildSeccionColores(config, materias);
+      if (!seccion) return 'No hay materias con horarios definidos para configurar colores.';
+      return `Sos un asistente de diseño de colores para una app académica de horarios.\n${seccion}\nCuando termines de preguntar, devolvé SOLO el JSON con los colores elegidos (sin texto adicional).`;
+    }
+  }
+
+  const tieneMaterias = modulos.has('carrera') || modulos.has('horarios') || modulos.has('evaluaciones');
+  const tieneConfig   = modulos.has('config')  || modulos.has('colores');
+
+  const LABELS: Record<ModuloIA, string> = {
+    carrera:      'el plan de carrera (materias, semestres, previas)',
+    horarios:     'los horarios de las materias',
+    evaluaciones: 'las evaluaciones de las materias',
+    config:       'la configuración de la app',
+    colores:      'los colores del horario',
+  };
+  const descripcion = [...modulos].map(m => LABELS[m]).join(', ');
+
+  const partes: string[] = [];
+  partes.push(`  "cursus_todo_en_uno": 1`);
+  if (tieneConfig)   partes.push(`  "config": { ...campos de configuración... }`);
+  if (tieneMaterias) partes.push(`  "materias": [ ...array de materias... ]`);
+  const estructuraRaiz = `{\n${partes.join(',\n')}\n}`;
+
+  let seccionMaterias = '';
+  if (tieneMaterias) {
+    const camposMateriaPartes: string[] = [
+      `  "nombre": "Nombre de la materia",`,
+      `  "semestre": 1,`,
+    ];
+    if (modulos.has('carrera')) {
+      camposMateriaPartes.push(
+        `  "creditos_da": 6,          // opcional`,
+        `  "creditos_necesarios": 0,  // opcional`,
+        `  "previas": ["Nombre de prerequisito"],  // opcional`,
+        `  "tipo_formacion": "Básica",             // opcional`,
+      );
+    }
+    if (modulos.has('horarios')) {
+      camposMateriaPartes.push(
+        `  "bloques": [`,
+        `    { "fecha": "YYYY-MM-DD", "horaInicio": 480, "horaFin": 600, "tipo": "teorica", "salon": "Aula 3" }`,
+        `  ],`,
+      );
+    }
+    if (modulos.has('evaluaciones')) {
+      camposMateriaPartes.push(
+        `  "evaluaciones": [`,
+        `    { "id": "ev1", "tipo": "simple", "nombre": "Parcial 1", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }`,
+        `  ],`,
+      );
+    }
+
+    const reglasPartes: string[] = [];
+    if (modulos.has('horarios')) {
+      reglasPartes.push(
+        `Reglas para "bloques":`,
+        `- "fecha": formato ISO YYYY-MM-DD (ej: "2026-03-15")`,
+        `- "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)`,
+        `- "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)`,
+        `- "salon" (opcional): nombre del aula`,
+      );
+    }
+    if (modulos.has('evaluaciones')) {
+      reglasPartes.push(
+        `Reglas para "evaluaciones":`,
+        `- "tipo": "simple" para una evaluación, "grupo" para agrupar varias.`,
+        `- "pesoEnMateria": % que pesa en la nota final. La suma de todos los ítems de una materia debe ser 100.`,
+        `- "tipoNota": "numero" o "porcentaje". "nota": null si no hay nota aún.`,
+        `- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria").`,
+        `- "notaMaxima": puntaje máximo de esa evaluación.`,
+      );
+    }
+
+    seccionMaterias = `
+════════════════════════════
+SECCIÓN "materias" (array)
+════════════════════════════
+
+Cada elemento del array representa una materia:
+{
+${camposMateriaPartes.join('\n')}
+}
+
+${reglasPartes.join('\n')}
+
+Campos opcionales por materia: creditos_da, creditos_necesarios, previas, tipo_formacion${modulos.has('horarios') ? ', bloques' : ''}${modulos.has('evaluaciones') ? ', evaluaciones' : ''}.`;
+  }
+
+  let seccionConfig = '';
+  if (modulos.has('config')) {
+    seccionConfig = `
+════════════════════════════
+SECCIÓN "config" — CONFIGURACIÓN DE LA APP
+════════════════════════════
+
+Por cada campo que no puedas determinar con la información provista, preguntale al usuario de a uno por vez antes de generar el JSON.
+Solo incluí los campos que puedas confirmar. Omití los que queden sin confirmar.
+
+Campos disponibles (los más comunes):
+- notaMaxima (número): nota máxima de la carrera. Ej: 12, 10, 100.
+- umbralExoneracion (0–100): % mínimo para exonerar una materia.
+- umbralAprobacion (0–100): % mínimo para estado "Aprobado" (si aplica).
+- umbralPorExamen (0–100): % mínimo para tener derecho a rendir examen.
+- umbralExamenExoneracion (0–100): % mínimo EN el examen para aprobar.
+- usarEstadoAprobado (true/false): ¿existe el estado "Aprobado" separado de "Exonerado"?
+- aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
+- oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
+- modoExamen ("automatico" o "manual"): cómo se activa el modo examen.
+- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos de examen (si automatico).
+- tiposFormacion (array de strings): categorías de materias. Ej: ["Básica", "Específica"].
+- horarioPrimerDia ("lunes" o "domingo"): primer día de la semana en el horario.
+- horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha en el horario.
+- labelTeorica / abrevTeorica, labelPractica / abrevPractica, labelParcial / abrevParcial, labelOtro / abrevOtro: etiquetas y abreviaturas de tipos de bloque (máx 3 chars).
+- tarjetaMostrarNota (true/false), tarjetaNota ("numero" o "porcentaje"): nota en tarjeta.
+- tarjetaPrevias ("todas", "faltantes" o "ninguna"): previas visibles en tarjeta.
+- tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.`;
+  }
+
+  const seccionColores = modulos.has('colores') ? buildSeccionColores(config, materias) : '';
+
+  return `Sos un asistente de la app Cursus. Tu objetivo es generar UN SOLO archivo JSON con ${descripcion}.
+
+Para lograrlo:
+1. Analizá toda la información que te proporcione el usuario (documentos, programas, calendarios académicos, etc.).
+2. Por cada dato que no puedas determinar con certeza, preguntale al usuario de a uno por vez, explicándole brevemente para qué sirve.
+3. Solo incluí en el JSON los datos que puedas confirmar. Omití los que queden sin confirmar.
+4. Al final, devolvé ÚNICAMENTE el JSON completo, sin texto adicional.
+
+FORMATO DEL JSON:
+${estructuraRaiz}
+${seccionMaterias}
+${seccionConfig}
+${seccionColores}`;
 }
