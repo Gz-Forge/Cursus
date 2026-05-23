@@ -2227,6 +2227,7 @@ export function HorarioScreen() {
   );
 
   return (
+    <>
     <View
       ref={outerViewRef}
       onLayout={() => {
@@ -2441,5 +2442,6 @@ export function HorarioScreen() {
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
+    </>
   );
 }
