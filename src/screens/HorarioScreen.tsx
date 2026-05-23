@@ -132,6 +132,7 @@ export function HorarioScreen() {
   const evalDragDataRef = React.useRef<{
     fondoColor: string; textoColor: string; labelBloque: string; height: number;
     horaI: number; duracion: number; tieneHoraFin: boolean; fecha: string;
+    salon?: string; materiaId?: string;
   } | null>(null);
   // Ref a la función persistirEval del render actual (para usarla en el useEffect de web)
   const persistirEvalRef = React.useRef<((fecha: string, hora: number, horaFin: number | undefined) => void) | null>(null);
@@ -207,6 +208,7 @@ export function HorarioScreen() {
     if (!blockEl) return;
 
     const HANDLE_H = 16;
+    let lastPdTime = 0;
 
     const handleBlockPointerDown = (e: PointerEvent) => {
       e.preventDefault();
@@ -216,6 +218,19 @@ export function HorarioScreen() {
       const relY = e.clientY - rect.top;
       const draft = draftBloqueRef.current;
       if (!draft) return;
+
+      // Detectar doble clic (dos pointerdown en zona central dentro de 350ms)
+      const now = e.timeStamp;
+      const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
+      if (inCentral && now - lastPdTime < 350) {
+        lastPdTime = 0;
+        const [, mesStr, diaStr] = draft.fecha.split('-');
+        setModalEdicionRapida({ bloqueId: draft.id, tipo: 'regular' });
+        setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+        setModalSalonStr(draft.salon ?? '');
+        return;
+      }
+      lastPdTime = now;
 
       // Recalcular outerOriginRef sincrónicamente (puede haber scroll desde el último onLayout)
       const outerEl = outerViewRef.current as unknown as HTMLElement | null;
@@ -348,12 +363,30 @@ export function HorarioScreen() {
 
     const HANDLE_H = 16;
 
+    let lastPdTimeEval = 0;
+
     const handleEvalPointerDown = (e: PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
       const rect = evalEl.getBoundingClientRect();
       const relY = e.clientY - rect.top;
+
+      // Detectar doble clic en zona central
+      const now = e.timeStamp;
+      const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
+      if (inCentral && now - lastPdTimeEval < 350) {
+        lastPdTimeEval = 0;
+        const data = evalDragDataRef.current;
+        if (data?.fecha) {
+          const [, mesStr, diaStr] = data.fecha.split('-');
+          setModalEdicionRapida({ bloqueId: evalEnDrag, tipo: 'eval', materiaId: data.materiaId });
+          setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+          setModalSalonStr(data.salon ?? '');
+        }
+        return;
+      }
+      lastPdTimeEval = now;
 
       // Recalibrar outerOriginRef y gridAreaTopRef sincrónicamente
       const outerEl = outerViewRef.current as unknown as HTMLElement | null;
@@ -1068,18 +1101,8 @@ export function HorarioScreen() {
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
                                   </View>
 
-                                  {/* Zona central — drag para mover + doble clic edición rápida */}
-                                  <View
-                                    style={{ flex: 1, padding: 2 }}
-                                    {...(Platform.OS === 'web' ? {
-                                      onDoubleClick: () => {
-                                        const [, mesStr, diaStr] = b.fecha.split('-');
-                                        setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
-                                        setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
-                                        setModalSalonStr(b.salon ?? '');
-                                      }
-                                    } as any : {})}
-                                  >
+                                  {/* Zona central — drag para mover (doble clic detectado en handleBlockPointerDown) */}
+                                  <View style={{ flex: 1, padding: 2 }}>
                                     <Text
                                       style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
@@ -1378,6 +1401,7 @@ export function HorarioScreen() {
                             evalDragDataRef.current = {
                               fondoColor, textoColor, labelBloque, height,
                               horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
+                              salon: ev.salon, materiaId: ev.materia.id,
                             };
                             persistirEvalRef.current = persistirEval;
                             setEvalEnDrag(ev.id);
@@ -1405,18 +1429,7 @@ export function HorarioScreen() {
                                   <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderTopWidth: 4, borderTopColor: textoColor }}>
                                     <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
                                   </View>
-                                  <View
-                                    style={{ flex: 1, padding: 2 }}
-                                    {...(Platform.OS === 'web' ? {
-                                      onDoubleClick: () => {
-                                        const fecha = ev.fecha ?? '';
-                                        const [, mesStr, diaStr] = fecha.split('-');
-                                        setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
-                                        setModalFechaStr(diaStr && mesStr ? `${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}` : '');
-                                        setModalSalonStr(ev.salon ?? '');
-                                      }
-                                    } as any : {})}
-                                  >
+                                  <View style={{ flex: 1, padding: 2 }}>
                                     <Text
                                       style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
@@ -1471,6 +1484,7 @@ export function HorarioScreen() {
                                   evalDragDataRef.current = {
                                     fondoColor, textoColor, labelBloque, height,
                                     horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
+                                    salon: ev.salon, materiaId: ev.materia.id,
                                   };
                                 });
                               }
