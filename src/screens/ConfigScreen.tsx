@@ -114,7 +114,7 @@ export function ConfigScreen() {
   const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
-  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
+  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores', 'revisar'];
   const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
     new Set(TODOS_MODULOS)
   );
@@ -925,11 +925,12 @@ export function ConfigScreen() {
 
             {/* Opciones individuales */}
             {([
-              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',         desc: 'Materias, semestres, previas, créditos' },
-              { id: 'horarios'      as ModuloIA, label: 'Horarios',                desc: 'Bloques de clase por materia' },
-              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',            desc: 'Parciales, finales, trabajos y sus pesos' },
-              { id: 'config'        as ModuloIA, label: 'Configuración de la app', desc: 'Umbrales, etiquetas, tarjetas' },
-              { id: 'colores'       as ModuloIA, label: 'Colores del horario',     desc: 'Colores por materia y tipo de bloque' },
+              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',            desc: 'Materias, semestres, previas, créditos' },
+              { id: 'horarios'      as ModuloIA, label: 'Horarios',                 desc: 'Bloques de clase por materia' },
+              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',             desc: 'Parciales, finales, trabajos y sus pesos' },
+              { id: 'config'        as ModuloIA, label: 'Configuración de la app',  desc: 'Umbrales, etiquetas, tarjetas' },
+              { id: 'colores'       as ModuloIA, label: 'Colores del horario',      desc: 'Colores por materia y tipo de bloque' },
+              { id: 'revisar'       as ModuloIA, label: 'Revisar y corregir datos', desc: 'Detecta errores en un JSON exportado comparándolo con tu malla' },
             ] as const).map(({ id, label, desc }) => (
               <TouchableOpacity
                 key={id}
