@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -42,6 +42,16 @@ function parsearFecha(str: string): string | null {
   if (!m) return null;
   const [, d, mo, y] = m;
   return isNaN(Date.parse(`${y}-${mo}-${d}T00:00:00`)) ? null : `${y}-${mo}-${d}`;
+}
+
+/** Parsea "DD/MM" con el año actual → "YYYY-MM-DD" o null */
+function parsearFechaDDMM(str: string): string | null {
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const [, d, mo] = m;
+  const y = new Date().getFullYear();
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  return isNaN(Date.parse(iso + 'T00:00:00')) ? null : iso;
 }
 
 function autoFormatFechaBloque(prev: string, next: string): string {
@@ -115,6 +125,12 @@ export function EditMateriaScreen() {
   const [dropdownMes, setDropdownMes] = useState(false);
   const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
+
+  // ── Filtros de horario ──
+  const [filtroTipos, setFiltroTipos] = useState<TipoBloque[]>([]);
+  const [filtroFecha, setFiltroFecha] = useState<'todos' | 'futuros' | 'semana' | 'mes' | 'rango'>('todos');
+  const [filtroDesde, setFiltroDesde] = useState('');
+  const [filtroHasta, setFiltroHasta] = useState('');
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
@@ -191,6 +207,35 @@ export function EditMateriaScreen() {
 
   const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones);
   const estado = calcularEstadoFinal(form, config);
+
+  const hayFiltrosActivos = filtroTipos.length > 0 || filtroFecha !== 'todos';
+
+  const bloquesFiltrados = useMemo(() => {
+    const hoy = new Date();
+    const hoyISO = hoy.toISOString().slice(0, 10);
+    let lista = [...(form.bloques ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (filtroTipos.length > 0) lista = lista.filter(b => filtroTipos.includes(b.tipo));
+    if (filtroFecha === 'futuros') {
+      lista = lista.filter(b => b.fecha >= hoyISO);
+    } else if (filtroFecha === 'semana') {
+      const lunes = new Date(hoy);
+      lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      const desdeISO = lunes.toISOString().slice(0, 10);
+      const hastaISO = domingo.toISOString().slice(0, 10);
+      lista = lista.filter(b => b.fecha >= desdeISO && b.fecha <= hastaISO);
+    } else if (filtroFecha === 'mes') {
+      const mesActual = hoyISO.slice(0, 7);
+      lista = lista.filter(b => b.fecha.startsWith(mesActual));
+    } else if (filtroFecha === 'rango') {
+      const desde = parsearFechaDDMM(filtroDesde);
+      const hasta = parsearFechaDDMM(filtroHasta);
+      if (desde) lista = lista.filter(b => b.fecha >= desde);
+      if (hasta) lista = lista.filter(b => b.fecha <= hasta);
+    }
+    return lista;
+  }, [form.bloques, filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
 
   // Auto-save para materias existentes
   const esMateriaExistente = !!materiaOriginal;
@@ -934,7 +979,15 @@ export function EditMateriaScreen() {
             <TextInput
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
               value={bloqueNuevo.salon}
-              onChangeText={v => setBloqueNuevo(b => ({ ...b, salon: v }))}
+              onChangeText={v => {
+                setBloqueNuevo(b => ({ ...b, salon: v }));
+                if (bloqueEditandoId) {
+                  setForm(f => ({
+                    ...f,
+                    bloques: f.bloques.map(b => b.id === bloqueEditandoId ? { ...b, salon: v } : b),
+                  }));
+                }
+              }}
               placeholder="Ej: Aula 3, Lab 201..."
               placeholderTextColor={tema.textoSecundario}
             />
