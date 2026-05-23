@@ -20,11 +20,13 @@ import { calcularLayoutSuperposicion, LayoutBloque } from '../utils/horarioLayou
 import {
   LongPressGestureHandler,
   PanGestureHandler,
+  TapGestureHandler,
   State,
   type PanGestureHandlerGestureEvent,
   type PanGestureHandlerEventPayload,
   type HandlerStateChangeEvent,
   type LongPressGestureHandlerStateChangeEvent,
+  type TapGestureHandlerStateChangeEvent,
 } from 'react-native-gesture-handler';
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -116,6 +118,15 @@ export function HorarioScreen() {
   const [ghostPos, setGhostPos]           = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const cardRefs         = React.useRef<Map<string, View>>(new Map());
   const ghostOriginRef   = React.useRef<{ x: number; y: number } | null>(null);
+
+  // --- Modal edición rápida (doble tap) ---
+  const [modalEdicionRapida, setModalEdicionRapida] = useState<{
+    bloqueId: string;
+    tipo: 'regular' | 'eval';
+    materiaId?: string;
+  } | null>(null);
+  const [modalFechaStr, setModalFechaStr] = useState('');
+  const [modalSalonStr, setModalSalonStr] = useState('');
   // --- Estado de drag para evaluaciones ---
   const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
   const evalDragDataRef = React.useRef<{
@@ -1057,8 +1068,18 @@ export function HorarioScreen() {
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
                                   </View>
 
-                                  {/* Zona central — drag para mover */}
-                                  <View style={{ flex: 1, padding: 2 }}>
+                                  {/* Zona central — drag para mover + doble clic edición rápida */}
+                                  <View
+                                    style={{ flex: 1, padding: 2 }}
+                                    {...(Platform.OS === 'web' ? {
+                                      onDoubleClick: () => {
+                                        const [, mesStr, diaStr] = b.fecha.split('-');
+                                        setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
+                                        setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+                                        setModalSalonStr(b.salon ?? '');
+                                      }
+                                    } as any : {})}
+                                  >
                                     <Text
                                       style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
@@ -1151,7 +1172,18 @@ export function HorarioScreen() {
                                     </View>
                                   </PanGestureHandler>
 
-                                  {/* Zona central — drag para mover */}
+                                  {/* Zona central — drag para mover + doble tap edición rápida */}
+                                  <TapGestureHandler
+                                    numberOfTaps={2}
+                                    onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                      if (e.nativeEvent.state === State.ACTIVE) {
+                                        const [, mesStr, diaStr] = b.fecha.split('-');
+                                        setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
+                                        setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+                                        setModalSalonStr(b.salon ?? '');
+                                      }
+                                    }}
+                                  >
                                   <PanGestureHandler
                                     activeOffsetX={[-10, 10]}
                                     activeOffsetY={[-10, 10]}
@@ -1169,10 +1201,11 @@ export function HorarioScreen() {
                                       });
                                     }}
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
-                                      if (!ghostOriginRef.current) return;
+                                      const origin = ghostOriginRef.current;
+                                      if (!origin) return;
                                       setGhostPos(prev => prev ? {
-                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
-                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                        x: origin.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                        y: origin.y - outerOriginRef.current.y + e.nativeEvent.translationY,
                                         w: prev.w,
                                         h: prev.h,
                                       } : prev);
@@ -1217,6 +1250,7 @@ export function HorarioScreen() {
                                       </Text>
                                     </View>
                                   </PanGestureHandler>
+                                  </TapGestureHandler>
 
                                   {/* Handle inferior — resize horaFin */}
                                   <PanGestureHandler
@@ -1371,7 +1405,18 @@ export function HorarioScreen() {
                                   <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderTopWidth: 4, borderTopColor: textoColor }}>
                                     <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
                                   </View>
-                                  <View style={{ flex: 1, padding: 2 }}>
+                                  <View
+                                    style={{ flex: 1, padding: 2 }}
+                                    {...(Platform.OS === 'web' ? {
+                                      onDoubleClick: () => {
+                                        const fecha = ev.fecha ?? '';
+                                        const [, mesStr, diaStr] = fecha.split('-');
+                                        setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
+                                        setModalFechaStr(diaStr && mesStr ? `${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}` : '');
+                                        setModalSalonStr(ev.salon ?? '');
+                                      }
+                                    } as any : {})}
+                                  >
                                     <Text
                                       style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
@@ -1473,7 +1518,19 @@ export function HorarioScreen() {
                                     </View>
                                   </PanGestureHandler>
 
-                                  {/* Zona central — drag para mover */}
+                                  {/* Zona central — drag para mover + doble tap edición rápida */}
+                                  <TapGestureHandler
+                                    numberOfTaps={2}
+                                    onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                      if (e.nativeEvent.state === State.ACTIVE) {
+                                        const fecha = ev.fecha ?? '';
+                                        const [, mesStr, diaStr] = fecha.split('-');
+                                        setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
+                                        setModalFechaStr(diaStr && mesStr ? `${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}` : '');
+                                        setModalSalonStr(ev.salon ?? '');
+                                      }
+                                    }}
+                                  >
                                   <PanGestureHandler
                                     activeOffsetX={[-10, 10]}
                                     activeOffsetY={[-10, 10]}
@@ -1487,10 +1544,11 @@ export function HorarioScreen() {
                                       });
                                     }}
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
-                                      if (!ghostOriginRef.current) return;
+                                      const origin = ghostOriginRef.current;
+                                      if (!origin) return;
                                       setGhostPos(prev => prev ? {
-                                        x: ghostOriginRef.current!.x - outerOriginRef.current.x + e.nativeEvent.translationX,
-                                        y: ghostOriginRef.current!.y - outerOriginRef.current.y + e.nativeEvent.translationY,
+                                        x: origin.x - outerOriginRef.current.x + e.nativeEvent.translationX,
+                                        y: origin.y - outerOriginRef.current.y + e.nativeEvent.translationY,
                                         w: prev.w,
                                         h: prev.h,
                                       } : prev);
@@ -1521,6 +1579,7 @@ export function HorarioScreen() {
                                       </Text>
                                     </View>
                                   </PanGestureHandler>
+                                  </TapGestureHandler>
 
                                   {/* Handle inferior — resize horaF */}
                                   <PanGestureHandler
@@ -2280,5 +2339,107 @@ export function HorarioScreen() {
         );
       })()}
     </View>
+
+    {/* ── Modal de edición rápida (doble tap / doble clic) ── */}
+    <Modal
+      visible={modalEdicionRapida !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setModalEdicionRapida(null)}
+    >
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+        activeOpacity={1}
+        onPress={() => setModalEdicionRapida(null)}
+      >
+        <TouchableOpacity activeOpacity={1}>
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 20, width: 280 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 16 }}>
+              Edición rápida
+            </Text>
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Día (DD/MM)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 14 }}
+              value={modalFechaStr}
+              onChangeText={v => {
+                const digits = v.replace(/\D/g, '').slice(0, 4);
+                setModalFechaStr(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+              }}
+              placeholder="ej: 15/06"
+              placeholderTextColor={tema.textoSecundario}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Salón (opcional)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 16, fontSize: 14 }}
+              value={modalSalonStr}
+              onChangeText={setModalSalonStr}
+              placeholder="Ej: Aula 3"
+              placeholderTextColor={tema.textoSecundario}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 10, backgroundColor: tema.fondo, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setModalEdicionRapida(null)}
+              >
+                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => {
+                  if (!modalEdicionRapida) return;
+                  const m = modalFechaStr.match(/^(\d{1,2})\/(\d{1,2})$/);
+                  if (!m) return;
+                  const [, d, mo] = m;
+                  const y = new Date().getFullYear();
+                  const nuevaFecha = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                  if (isNaN(Date.parse(nuevaFecha + 'T00:00:00'))) return;
+                  const { guardarMateria, materias: mats } = useStore.getState();
+                  if (modalEdicionRapida.tipo === 'regular') {
+                    const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
+                    if (materia) {
+                      guardarMateria({
+                        ...materia,
+                        bloques: (materia.bloques ?? []).map(bl =>
+                          bl.id === modalEdicionRapida.bloqueId
+                            ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined }
+                            : bl
+                        ),
+                      });
+                    }
+                  } else {
+                    const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
+                    if (materia) {
+                      const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
+                        evs.map(ev => {
+                          if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) {
+                            return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined };
+                          }
+                          if (ev.tipo === 'grupo') {
+                            return { ...ev, subEvaluaciones: ev.subEvaluaciones.map(sub =>
+                              sub.id === modalEdicionRapida.bloqueId
+                                ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined }
+                                : sub
+                            )};
+                          }
+                          return ev;
+                        });
+                      guardarMateria({ ...materia, evaluaciones: patchEval(materia.evaluaciones) });
+                    }
+                  }
+                  setModalEdicionRapida(null);
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 }
