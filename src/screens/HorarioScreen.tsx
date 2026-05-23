@@ -142,6 +142,8 @@ export function HorarioScreen() {
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
+  // Persiste el timestamp del primer clic en enterEditWeb para detectar doble clic cross-render
+  const lastEnterEditRef = React.useRef<{ blockId: string; t: number } | null>(null);
   const draftBloqueRef          = React.useRef<BloqueHorario | null>(null);
   const gridAreaRef             = React.useRef<View>(null);
   const gridAreaTopRef          = React.useRef(0);
@@ -220,16 +222,23 @@ export function HorarioScreen() {
       if (!draft) return;
 
       // Detectar doble clic (dos pointerdown en zona central dentro de 350ms)
-      const now = e.timeStamp;
+      // Caso A: ya en modo edición → lastPdTime (mismo useEffect, mismo render)
+      // Caso B: primer clic entró vía TouchableOpacity → lastEnterEditRef persiste cross-render
+      const now = Date.now();
       const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
-      if (inCentral && now - lastPdTime < 350) {
+      const prevRef = lastEnterEditRef.current;
+      const isCrossPathDouble = inCentral && prevRef?.blockId === draft.id && now - prevRef.t < 350;
+      const isSamePathDouble  = inCentral && now - lastPdTime < 350;
+      if (isCrossPathDouble || isSamePathDouble) {
         lastPdTime = 0;
+        lastEnterEditRef.current = null;
         const [, mesStr, diaStr] = draft.fecha.split('-');
         setModalEdicionRapida({ bloqueId: draft.id, tipo: 'regular' });
         setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
         setModalSalonStr(draft.salon ?? '');
         return;
       }
+      lastEnterEditRef.current = null;
       lastPdTime = now;
 
       // Recalcular outerOriginRef sincrónicamente (puede haber scroll desde el último onLayout)
@@ -373,10 +382,16 @@ export function HorarioScreen() {
       const relY = e.clientY - rect.top;
 
       // Detectar doble clic en zona central
-      const now = e.timeStamp;
+      // Caso A: ya en modo edición → lastPdTimeEval (mismo useEffect)
+      // Caso B: primer clic entró vía TouchableOpacity → lastEnterEditRef persiste cross-render
+      const now = Date.now();
       const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
-      if (inCentral && now - lastPdTimeEval < 350) {
+      const prevRef = lastEnterEditRef.current;
+      const isCrossPathDouble = inCentral && prevRef?.blockId === evalEnDrag && now - prevRef.t < 350;
+      const isSamePathDouble  = inCentral && now - lastPdTimeEval < 350;
+      if (isCrossPathDouble || isSamePathDouble) {
         lastPdTimeEval = 0;
+        lastEnterEditRef.current = null;
         const data = evalDragDataRef.current;
         if (data?.fecha) {
           const [, mesStr, diaStr] = data.fecha.split('-');
@@ -386,6 +401,7 @@ export function HorarioScreen() {
         }
         return;
       }
+      lastEnterEditRef.current = null;
       lastPdTimeEval = now;
 
       // Recalibrar outerOriginRef y gridAreaTopRef sincrónicamente
@@ -1070,6 +1086,7 @@ export function HorarioScreen() {
                         if (Platform.OS === 'web') {
                           const enterEditWeb = () => {
                             if (cardEnEdicion !== null || evalEnDrag !== null) return;
+                            lastEnterEditRef.current = { blockId: b.id, t: Date.now() };
                             setCardEnEdicion(b.id);
                             setDraftBloque({ ...b });
                             // NO measureInWindow: el useEffect calibra sincrónicamente
@@ -1399,6 +1416,7 @@ export function HorarioScreen() {
                         if (Platform.OS === 'web') {
                           const enterEditEvalWeb = () => {
                             if (cardEnEdicion !== null || evalEnDrag !== null) return;
+                            lastEnterEditRef.current = { blockId: ev.id, t: Date.now() };
                             evalDragDataRef.current = {
                               fondoColor, textoColor, labelBloque, height,
                               horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
