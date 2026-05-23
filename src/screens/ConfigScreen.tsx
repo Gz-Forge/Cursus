@@ -162,7 +162,7 @@ export function ConfigScreen() {
       <View style={{ marginBottom: 14 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
         <TextInput
-          style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
+          style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80, textAlign: 'center' }}
           value={str}
           keyboardType="numeric"
           onChangeText={v => {
@@ -183,7 +183,7 @@ export function ConfigScreen() {
         <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <TextInput
-            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80 }}
+            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80, textAlign: 'center' }}
             value={String(val)}
             keyboardType="numeric"
             onChangeText={v => { const n = Number(v); if (!isNaN(n)) actualizarConfig({ [key]: Math.max(0, Math.min(100, n)) }); }}
