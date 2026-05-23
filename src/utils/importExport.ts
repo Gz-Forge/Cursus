@@ -1,9 +1,39 @@
 import { Materia, BloqueHorario, Evaluacion, TipoBloque, EvaluacionSimple, GrupoEvaluacion, Config } from '../types';
 import { generarPromptHorario } from './horarioImportExport';
 
-export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'colores' | 'revisar';
+export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'colores';
 
-export function generarPromptCarrera(): string {
+export function generarPromptCarrera(modo: 'crear' | 'revisar' = 'crear'): string {
+  if (modo === 'revisar') {
+    return `Voy a pedirte que revises y actualices un JSON con el plan de carrera de mi app universitaria.
+Devolvé solo el JSON actualizado al final, sin explicaciones extras.
+
+Tu tarea:
+1. Pedime que pegue mi JSON actual (array de materias con nombre, semestre, previas, créditos, etc.)
+2. Pedime que describa qué cambios o correcciones necesito (materias nuevas, semestres incorrectos, previas desactualizadas, créditos mal, etc.)
+3. Analizá el JSON y aplicá los cambios solicitados. Detectá también inconsistencias automáticamente:
+   - Semestres incorrectos
+   - Previas faltantes, sobrantes o con nombre mal escrito
+   - Créditos desfasados
+4. Listá todos los cambios que vas a aplicar y preguntame si los confirmo
+5. Una vez que confirme, devolvé el JSON completo actualizado en el mismo formato original
+   (compatible para reimportar a la app directamente)
+
+Formato que reconoce la app:
+[
+  {
+    "nombre": "Cálculo I",
+    "semestre": 1,
+    "creditos_da": 6,
+    "previas": [],
+    "tipo_formacion": "Básica"
+  },
+  ...
+]
+
+Empezá pidiéndome el JSON actual.`;
+  }
+
   return `Generá un archivo JSON con el plan de estudios de mi carrera.
 Devolvé solo el JSON, sin explicaciones.
 
@@ -911,49 +941,20 @@ Incluí los colores elegidos dentro de la sección "config" del JSON final con e
 (Omitir los que no apliquen o no se modifiquen)`;
 }
 
-export function generarPromptRevisar(): string {
-  return `Voy a pedirte que revises y corrijas un JSON exportado desde mi app de seguimiento de carrera universitaria.
-Devolvé solo el JSON corregido al final, sin explicaciones extras.
-
-Tu tarea:
-1. Pedime que pegue mi JSON exportado (formato array de materias con nombre, semestre, previas, créditos, etc.)
-2. Pedime que describa mi malla curricular real (semestres correctos, previas obligatorias, créditos por materia)
-3. Compará el JSON con la malla que te describo y detectá inconsistencias:
-   - Semestres incorrectos
-   - Previas faltantes, sobrantes o con nombre mal escrito
-   - Créditos desfasados
-4. Listá todos los problemas encontrados y preguntame cuáles corregir (podés listarlos todos y preguntarme en conjunto)
-5. Una vez que confirme los cambios, devolvé el JSON completo corregido en el mismo formato original
-   (compatible para reimportar a la app directamente)
-
-Formato del JSON que reconoce la app para reimportar:
-[
-  {
-    "nombre": "Cálculo I",
-    "semestre": 1,
-    "creditos_da": 6,
-    "previas": [],
-    "tipo_formacion": "Básica"
-  },
-  ...
-]
-
-Empezá pidiéndome el JSON exportado.`;
-}
 
 export function generarPromptCombinado(
   modulos: Set<ModuloIA>,
   config: Config,
   materias: Materia[],
+  modoCarrera: 'crear' | 'revisar' = 'crear',
 ): string {
   // Caso de módulo único: delegar al prompt individual sin cambios
   if (modulos.size === 1) {
     const [unico] = modulos;
-    if (unico === 'carrera')      return generarPromptCarrera();
+    if (unico === 'carrera')      return generarPromptCarrera(modoCarrera);
     if (unico === 'horarios')     return generarPromptHorario(config);
     if (unico === 'evaluaciones') return generarPromptEvaluaciones();
     if (unico === 'config')       return generarPromptConfig();
-    if (unico === 'revisar')      return generarPromptRevisar();
     if (unico === 'colores') {
       const seccion = buildSeccionColores(config, materias);
       if (!seccion) return 'No hay materias con horarios definidos para configurar colores.';
@@ -964,21 +965,14 @@ export function generarPromptCombinado(
   const tieneMaterias = modulos.has('carrera') || modulos.has('horarios') || modulos.has('evaluaciones');
   const tieneConfig   = modulos.has('config')  || modulos.has('colores');
 
-  // Si 'revisar' está combinado con otros módulos, anteponer el prompt de revisión
-  if (modulos.has('revisar') && modulos.size > 1) {
-    const restantes = new Set([...modulos].filter(m => m !== 'revisar') as ModuloIA[]);
-    return `${generarPromptRevisar()}\n\n---\n\nAdemás de revisar el JSON, también necesito generar:\n${generarPromptCombinado(restantes, config, materias)}`;
-  }
-
   const LABELS: Record<ModuloIA, string> = {
     carrera:      'el plan de carrera (materias, semestres, previas)',
     horarios:     'los horarios de las materias',
     evaluaciones: 'las evaluaciones de las materias',
     config:       'la configuración de la app',
     colores:      'los colores del horario',
-    revisar:      'revisar y corregir el JSON exportado',
   };
-  const descripcion = [...modulos].filter(m => m !== 'revisar').map(m => LABELS[m]).join(', ');
+  const descripcion = [...modulos].map(m => LABELS[m]).join(', ');
 
   const partes: string[] = [];
   partes.push(`  "cursus_todo_en_uno": 1`);

@@ -114,10 +114,11 @@ export function ConfigScreen() {
   const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
-  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores', 'revisar'];
+  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
   const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
     new Set(TODOS_MODULOS)
   );
+  const [modoCarrera, setModoCarrera] = useState<'crear' | 'revisar'>('crear');
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [editandoTipo, setEditandoTipo] = useState<string | null>(null);
   const [textoEdicion, setTextoEdicion] = useState('');
@@ -925,37 +926,64 @@ export function ConfigScreen() {
 
             {/* Opciones individuales */}
             {([
-              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',            desc: 'Materias, semestres, previas, créditos' },
-              { id: 'horarios'      as ModuloIA, label: 'Horarios',                 desc: 'Bloques de clase por materia' },
-              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',             desc: 'Parciales, finales, trabajos y sus pesos' },
-              { id: 'config'        as ModuloIA, label: 'Configuración de la app',  desc: 'Umbrales, etiquetas, tarjetas' },
-              { id: 'colores'       as ModuloIA, label: 'Colores del horario',      desc: 'Colores por materia y tipo de bloque' },
-              { id: 'revisar'       as ModuloIA, label: 'Revisar y corregir datos', desc: 'Detecta errores en un JSON exportado comparándolo con tu malla' },
+              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',           desc: 'Materias, semestres, previas, créditos' },
+              { id: 'horarios'      as ModuloIA, label: 'Horarios',                  desc: 'Bloques de clase por materia' },
+              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',              desc: 'Parciales, finales, trabajos y sus pesos' },
+              { id: 'config'        as ModuloIA, label: 'Configuración de la app',   desc: 'Umbrales, etiquetas, tarjetas' },
+              { id: 'colores'       as ModuloIA, label: 'Colores del horario',       desc: 'Colores por materia y tipo de bloque' },
             ] as const).map(({ id, label, desc }) => (
-              <TouchableOpacity
-                key={id}
-                onPress={() => setModulosSeleccionados(prev => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id); else next.add(id);
-                  return next;
-                })}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
-              >
-                <View style={{
-                  width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                  borderColor: modulosSeleccionados.has(id) ? tema.acento : tema.textoSecundario,
-                  marginRight: 10, alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: modulosSeleccionados.has(id) ? tema.acento : 'transparent',
-                }}>
-                  {modulosSeleccionados.has(id) && (
-                    <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13 }}>{label}</Text>
-                  <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 1 }}>{desc}</Text>
-                </View>
-              </TouchableOpacity>
+              <View key={id}>
+                <TouchableOpacity
+                  onPress={() => setModulosSeleccionados(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id); else next.add(id);
+                    return next;
+                  })}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
+                >
+                  <View style={{
+                    width: 20, height: 20, borderRadius: 4, borderWidth: 2,
+                    borderColor: modulosSeleccionados.has(id) ? tema.acento : tema.textoSecundario,
+                    marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: modulosSeleccionados.has(id) ? tema.acento : 'transparent',
+                  }}>
+                    {modulosSeleccionados.has(id) && (
+                      <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13 }}>{label}</Text>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 1 }}>{desc}</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Sub-radios modo para Plan de carrera */}
+                {id === 'carrera' && modulosSeleccionados.has('carrera') && (
+                  <View style={{ marginLeft: 30, marginBottom: 6, gap: 6 }}>
+                    {([
+                      { valor: 'crear'   as const, label: 'Crear desde cero' },
+                      { valor: 'revisar' as const, label: 'Revisar / actualizar un JSON existente' },
+                    ]).map(({ valor, label: labelRadio }) => (
+                      <TouchableOpacity
+                        key={valor}
+                        onPress={() => setModoCarrera(valor)}
+                        style={{ flexDirection: 'row', alignItems: 'center' }}
+                      >
+                        <View style={{
+                          width: 16, height: 16, borderRadius: 8, borderWidth: 2,
+                          borderColor: modoCarrera === valor ? tema.acento : tema.textoSecundario,
+                          marginRight: 8, alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {modoCarrera === valor && (
+                            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tema.acento }} />
+                          )}
+                        </View>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{labelRadio}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
             ))}
           </View>
 
@@ -968,11 +996,11 @@ export function ConfigScreen() {
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
               <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCombinado(modulosSeleccionados, config, materias)}
+                  {generarPromptCombinado(modulosSeleccionados, config, materias, modoCarrera)}
                 </Text>
               </ScrollView>
               <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCombinado(modulosSeleccionados, config, materias))}
+                onPress={() => Clipboard.setStringAsync(generarPromptCombinado(modulosSeleccionados, config, materias, modoCarrera))}
                 style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
