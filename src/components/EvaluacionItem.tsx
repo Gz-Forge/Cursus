@@ -86,31 +86,36 @@ function FechaHoraPicker({
   const [dropdownMes, setDropdownMes] = useState(false);
   const [horaInicio, setHoraInicio] = useState<number>(hora !== undefined ? hora : 480);
   const [horaFinVal, setHoraFinVal] = useState<number>(horaFin !== undefined ? horaFin : 600);
+  // Refs para acceder al valor actual sin depender del closure del render
+  const diaRef = useRef(inicial.dia);
+  const mesRef = useRef(inicial.mes);
   // true when user explicitly interacted with the time pickers (or hora was already set)
   const horaIntencionalRef = useRef(hora !== undefined);
-  // true while mes dropdown is open — prevents onBlur from firing guardar() mid-selection
-  const dropdownMesAbiertoRef = useRef(false);
+  const horaInicioRef = useRef(hora !== undefined ? hora : 480);
+  const horaFinRef = useRef(horaFin !== undefined ? horaFin : 600);
 
-  const construirFechaISO = (mesOverride?: number): string | undefined => {
-    const dia = parseInt(diaStr, 10);
-    const mes = mesOverride !== undefined ? mesOverride : parseInt(mesStr, 10);
-    if (isNaN(dia) || isNaN(mes) || dia < 1 || dia > 31 || mes < 1 || mes > 12) return undefined;
+  const setDia = (v: string) => { diaRef.current = v; setDiaStr(v); };
+  const setMes = (v: string) => { mesRef.current = v; setMesStr(v); };
+
+  const construirFechaISO = (): string | undefined => {
+    const dia = parseInt(diaRef.current, 10);
+    const mes = parsearMes(mesRef.current) ?? 0;
+    if (isNaN(dia) || dia < 1 || dia > 31 || mes < 1 || mes > 12) return undefined;
     const anio = new Date().getFullYear();
-    const fecha = new Date(anio, mes - 1, dia);
-    if (fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return undefined;
+    const d = new Date(anio, mes - 1, dia);
+    if (d.getMonth() !== mes - 1 || d.getDate() !== dia) return undefined;
     return `${anio}-${mes.toString().padStart(2, '0')}-${dia.toString().padStart(2, '0')}`;
   };
 
-  const guardar = (mesOverride?: number) => {
-    const f = construirFechaISO(mesOverride);
+  const guardar = () => {
     onActualizar({
-      fecha: f,
-      ...(horaIntencionalRef.current ? { hora: horaInicio, horaFin: horaFinVal } : {}),
+      fecha: construirFechaISO(),
+      ...(horaIntencionalRef.current ? { hora: horaInicioRef.current, horaFin: horaFinRef.current } : {}),
     });
   };
 
   const limpiar = () => {
-    setDiaStr(''); setMesStr('');
+    setDia(''); setMes('');
     onActualizar({ fecha: undefined, hora: undefined, horaFin: undefined });
   };
 
@@ -142,7 +147,7 @@ function FechaHoraPicker({
               <TextInput
                 style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
                 value={diaStr}
-                onChangeText={v => { setDiaStr(v.replace(/\D/g, '').slice(0, 2)); setDropdownMes(false); }}
+                onChangeText={v => { setDia(v.replace(/\D/g, '').slice(0, 2)); setDropdownMes(false); }}
                 onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
                 onBlur={guardar}
                 onSubmitEditing={guardar}
@@ -157,7 +162,7 @@ function FechaHoraPicker({
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                       <TouchableOpacity
                         key={d}
-                        onPress={() => { setDiaStr(String(d)); setDropdownDia(false); }}
+                        onPress={() => { setDia(String(d)); setDropdownDia(false); guardar(); }}
                         style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
                       >
                         <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
@@ -174,19 +179,17 @@ function FechaHoraPicker({
               <TextInput
                 style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6 }}
                 value={mesStr}
-                onChangeText={v => { setMesStr(v); setDropdownDia(false); }}
-                onFocus={() => { dropdownMesAbiertoRef.current = true; setDropdownMes(true); setDropdownDia(false); }}
+                onChangeText={v => { setMes(v); setDropdownDia(false); }}
+                onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
                 onBlur={() => {
-                  const wasOpen = dropdownMesAbiertoRef.current;
-                  dropdownMesAbiertoRef.current = false;
-                  if (wasOpen) { setDropdownMes(false); return; } // dropdown onPress will handle save
-                  const n = parsearMes(mesStr);
-                  if (n !== null) setMesStr(String(n));
+                  const n = parsearMes(mesRef.current);
+                  if (n !== null) setMes(String(n));
+                  setDropdownMes(false);
                   guardar();
                 }}
                 onSubmitEditing={() => {
-                  const n = parsearMes(mesStr);
-                  if (n !== null) setMesStr(String(n));
+                  const n = parsearMes(mesRef.current);
+                  if (n !== null) setMes(String(n));
                   guardar();
                 }}
                 placeholder="MM o mes"
@@ -204,7 +207,7 @@ function FechaHoraPicker({
                     {MESES.map((nombre, i) => (
                       <TouchableOpacity
                         key={i}
-                        onPress={() => { const m = i + 1; dropdownMesAbiertoRef.current = false; setMesStr(String(m)); setDropdownMes(false); guardar(m); }}
+                        onPress={() => { setMes(String(i + 1)); setDropdownMes(false); guardar(); }}
                         style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
                       >
                         <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
@@ -225,12 +228,12 @@ function FechaHoraPicker({
             <HoraPicker
               label="Hora inicio"
               value={horaInicio}
-              onChange={v => { horaIntencionalRef.current = true; setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinVal }); }}
+              onChange={v => { horaIntencionalRef.current = true; horaInicioRef.current = v; setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinRef.current }); }}
             />
             <HoraPicker
               label="Fin"
               value={horaFinVal}
-              onChange={v => { horaIntencionalRef.current = true; setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicio, horaFin: v }); }}
+              onChange={v => { horaIntencionalRef.current = true; horaFinRef.current = v; setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: v }); }}
             />
           </View>
 
