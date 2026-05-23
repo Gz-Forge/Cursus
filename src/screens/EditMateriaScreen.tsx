@@ -837,6 +837,54 @@ export function EditMateriaScreen() {
           })}
         </View>
 
+        {/* ── Filtro fecha ── */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+          {(['todos', 'futuros', 'semana', 'mes', 'rango'] as const).map(op => {
+            const labels = { todos: 'Todos', futuros: 'Futuros', semana: 'Esta sem', mes: 'Este mes', rango: 'Rango' };
+            const activo = filtroFecha === op;
+            return (
+              <TouchableOpacity
+                key={op}
+                onPress={() => setFiltroFecha(op)}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: activo ? tema.acento : tema.fondo }}
+              >
+                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{labels[op]}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Inputs de rango ── */}
+        {filtroFecha === 'rango' && (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+            <TextInput
+              style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 7, borderRadius: 6, fontSize: 12 }}
+              placeholder="Desde  DD/MM"
+              placeholderTextColor={tema.textoSecundario}
+              value={filtroDesde}
+              onChangeText={v => {
+                const digits = v.replace(/\D/g, '').slice(0, 4);
+                setFiltroDesde(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+            <TextInput
+              style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 7, borderRadius: 6, fontSize: 12 }}
+              placeholder="Hasta  DD/MM"
+              placeholderTextColor={tema.textoSecundario}
+              value={filtroHasta}
+              onChangeText={v => {
+                const digits = v.replace(/\D/g, '').slice(0, 4);
+                setFiltroHasta(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+          </View>
+        )}
+
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: 260 }}
