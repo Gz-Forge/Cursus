@@ -811,14 +811,38 @@ export function EditMateriaScreen() {
         )}
 
         {/* ── HORARIO ── */}
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>HORARIO</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
+          <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
+          {hayFiltrosActivos && (
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+              {bloquesFiltrados.length} de {(form.bloques ?? []).length}
+            </Text>
+          )}
+        </View>
+
+        {/* ── Filtro tipo ── */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+          {tiposBloque.map(({ key, label }) => {
+            const activo = filtroTipos.includes(key);
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setFiltroTipos(prev => activo ? prev.filter(t => t !== key) : [...prev, key])}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: activo ? tema.acento : tema.fondo }}
+              >
+                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: 260 }}
           contentContainerStyle={{ paddingBottom: 2 }}
         >
-          {[...(form.bloques ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha)).map((b) => (
+          {bloquesFiltrados.map((b) => (
             <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: tema.texto, fontSize: 13 }}>
