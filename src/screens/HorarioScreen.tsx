@@ -1200,6 +1200,7 @@ export function HorarioScreen() {
                                     numberOfTaps={2}
                                     onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
                                       if (e.nativeEvent.state === State.ACTIVE) {
+                                        setGhostPos(null); // limpiar ghost residual del onBegan del pan
                                         const [, mesStr, diaStr] = b.fecha.split('-');
                                         setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
                                         setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
@@ -1537,6 +1538,7 @@ export function HorarioScreen() {
                                     numberOfTaps={2}
                                     onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
                                       if (e.nativeEvent.state === State.ACTIVE) {
+                                        setGhostPos(null); // limpiar ghost residual del onBegan del pan
                                         const fecha = ev.fecha ?? '';
                                         const [, mesStr, diaStr] = fecha.split('-');
                                         setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
