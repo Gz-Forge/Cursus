@@ -5,8 +5,8 @@ import { NavigationContainerRef } from '@react-navigation/native';
 import { useTema } from '../theme/ThemeContext';
 
 const TABS = [
-  { name: 'Carrera',       icon: '🗺️' },
-  { name: 'Horario',       icon: '📅' },
+  { name: 'Carrera',       icon: '🎓' },
+  { name: 'Horarios',      icon: '📅' },
   { name: 'Métricas',      icon: '📊' },
   { name: 'Configuración', icon: '⚙️' },
   { name: 'Apoyar',        icon: '❤️' },
