@@ -372,7 +372,9 @@ export function MetricsScreen() {
           activeOpacity={1}
           onPress={() => setModalPersonalizar(false)}
         >
-          <View
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
             style={{
               backgroundColor: tema.superficie,
               borderTopLeftRadius: 20, borderTopRightRadius: 20,
@@ -381,7 +383,6 @@ export function MetricsScreen() {
                 ? { maxWidth: 480, alignSelf: 'center' as const, width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
                 : {}),
             }}
-            onStartShouldSetResponder={() => true}
           >
             {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -569,7 +570,7 @@ export function MetricsScreen() {
                 </View>
               ))}
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     );
@@ -1038,9 +1039,10 @@ export function MetricsScreen() {
             const mat = materiaMapaSeleccionada;
             const estadoMat = calcularEstadoFinal(mat, config);
             return (
-              <View
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => {}}
                 style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 24, width: '100%', maxWidth: 320, alignItems: 'center' }}
-                onStartShouldSetResponder={() => true}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: getColor(estadoMat) }} />
@@ -1062,7 +1064,7 @@ export function MetricsScreen() {
                 >
                   <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             );
           })()}
         </TouchableOpacity>
@@ -1081,9 +1083,10 @@ export function MetricsScreen() {
           onPress={() => setNotaBarraSeleccionada(null)}
         >
           {notaBarraSeleccionada !== null && (
-            <View
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
               style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
-              onStartShouldSetResponder={() => true}
             >
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
                 Nota {notaBarraSeleccionada.label}
@@ -1111,7 +1114,7 @@ export function MetricsScreen() {
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       </Modal>
@@ -1129,9 +1132,10 @@ export function MetricsScreen() {
           onPress={() => setTipoFormacionSeleccionado(null)}
         >
           {tipoFormacionSeleccionado !== null && (
-            <View
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
               style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
-              onStartShouldSetResponder={() => true}
             >
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
                 {tipoFormacionSeleccionado.tipo}
@@ -1160,7 +1164,7 @@ export function MetricsScreen() {
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       </Modal>
