@@ -1751,7 +1751,7 @@ export function HorarioScreen() {
                   ↑ Exportar
                 </Text>
               </TouchableOpacity>
-            </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
