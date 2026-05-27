@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import { View, Text, ScrollView, TouchableOpacity, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Pressable, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
@@ -127,6 +127,8 @@ export function HorarioScreen() {
   } | null>(null);
   const [modalFechaStr, setModalFechaStr] = useState('');
   const [modalSalonStr, setModalSalonStr] = useState('');
+  const modalAbiertaRef = React.useRef(false);
+  React.useEffect(() => { modalAbiertaRef.current = modalEdicionRapida !== null; }, [modalEdicionRapida]);
   // --- Estado de drag para evaluaciones ---
   const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
   const evalDragDataRef = React.useRef<{
@@ -338,8 +340,9 @@ export function HorarioScreen() {
       }
     };
 
-    // Clic fuera del bloque → salir del modo edición
+    // Clic fuera del bloque → salir del modo edición (no aplica cuando el modal está abierto)
     const handleOutsidePointerDown = (e: PointerEvent) => {
+      if (modalAbiertaRef.current) return;
       if (!blockEl.contains(e.target as Node)) {
         webDragModeRef.current = null;
         webDragStartRef.current = null;
@@ -2387,7 +2390,7 @@ export function HorarioScreen() {
         activeOpacity={1}
         onPress={() => setModalEdicionRapida(null)}
       >
-        <TouchableOpacity activeOpacity={1}>
+        <Pressable onPress={() => {}}>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 20, width: 280 }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 16 }}>
               Edición rápida
@@ -2477,7 +2480,7 @@ export function HorarioScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </TouchableOpacity>
     </Modal>
     </>
