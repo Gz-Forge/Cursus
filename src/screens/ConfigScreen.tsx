@@ -664,7 +664,7 @@ export function ConfigScreen() {
           {materiasConHorario.length === 0 ? (
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
               <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
-                No hay materias en estado "Cursando" con horarios definidos.
+                {`No hay materias en estado "${getLabel('cursando')}" con horarios definidos.`}
               </Text>
             </View>
           ) : (

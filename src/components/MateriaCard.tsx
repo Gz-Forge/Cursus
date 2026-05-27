@@ -46,7 +46,7 @@ interface Props {
 export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
-  const { getColor, getIcono } = useEstadoEstilo();
+  const { getColor, getIcono, getLabel } = useEstadoEstilo();
 
   const notaPct = obtenerNotaFinal(materia);
   const estado = calcularEstadoFinal(materia, config);
@@ -171,8 +171,8 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
                   onValueChange={onToggleCursando}
                   trackColor={{ true: getColor('cursando') }}
                 />
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                  {materia.cursando ? 'Cursando' : 'No cursando'}
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
+                  {materia.cursando ? getLabel('cursando') : `No ${getLabel('cursando').toLowerCase()}`}
                 </Text>
               </View>
             )}

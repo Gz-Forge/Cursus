@@ -19,6 +19,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { parsearMes } from '../utils/fecha';
 
 
@@ -105,6 +106,7 @@ export function EditMateriaScreen() {
   const { materias, config, guardarMateria, eliminarMateria, actualizarConfig } = useStore();
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
+  const { getLabel } = useEstadoEstilo();
 
   const materiaOriginal = materias.find(m => m.id === route.params?.materiaId);
   const [form, setForm] = useState<Materia>(materiaOriginal ?? {
@@ -529,7 +531,7 @@ export function EditMateriaScreen() {
 
     showAlert(
       'No cumple los requisitos',
-      `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`,
+      `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`,
       'Entendido'
     );
   };
@@ -579,10 +581,10 @@ export function EditMateriaScreen() {
         <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: tema.texto, fontWeight: '600' }}>Estoy cursando esta materia</Text>
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>{`¿Estado ${getLabel('cursando')}?`}</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
                 {form.cursando
-                  ? 'El estado se muestra como Cursando sin importar la nota'
+                  ? `El estado se muestra como ${getLabel('cursando')} sin importar la nota`
                   : 'El estado se calcula a partir de la nota'}
               </Text>
             </View>

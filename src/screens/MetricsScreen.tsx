@@ -653,7 +653,7 @@ export function MetricsScreen() {
                       <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{creditosTotal - creditos}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Exoneradas</Text>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>{getLabel('exonerado')}</Text>
                       <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{conteo.exonerado} / {materias.length}</Text>
                     </View>
                     {promedioEnEscala !== null && (
@@ -752,7 +752,7 @@ export function MetricsScreen() {
                   <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                     <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
                       {soloSiguiente && siguienteSem !== null
-                        ? `Cursando + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
+                        ? `${getLabel('cursando')} + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
                         : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
                     </Text>
 
