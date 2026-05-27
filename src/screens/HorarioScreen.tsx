@@ -693,7 +693,7 @@ export function HorarioScreen() {
       !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
     ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
   // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
