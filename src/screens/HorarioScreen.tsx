@@ -2445,6 +2445,10 @@ export function HorarioScreen() {
                             : bl
                         ),
                       });
+                      setDraftBloque(prev => prev?.id === modalEdicionRapida.bloqueId
+                        ? { ...prev, fecha: nuevaFecha, salon: modalSalonStr || undefined }
+                        : prev
+                      );
                     }
                   } else {
                     const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);

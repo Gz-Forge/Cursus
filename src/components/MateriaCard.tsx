@@ -99,19 +99,21 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   });
 
   return (
-    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress}>
-      <View style={s.fila}>
-        <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
-        <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
-      </View>
+    <View style={s.tarjeta}>
+      <TouchableOpacity onPress={() => setExpandida(!expandida)} onLongPress={onLongPress}>
+        <View style={s.fila}>
+          <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
+          <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
+        </View>
 
-      {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
-        <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
-      )}
+        {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
+          <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
+        )}
 
-      {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
-        <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
-      )}
+        {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
+          <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
+        )}
+      </TouchableOpacity>
 
       {expandida && (
         <View style={s.detalle}>
@@ -182,6 +184,6 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
           </View>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
