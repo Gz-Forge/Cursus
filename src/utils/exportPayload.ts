@@ -1,11 +1,10 @@
 import { cargarPerfilEstado } from './perfiles';
-import { materiasAJson } from './importExport';
-import { Perfil, Config } from '../types';
+import { Perfil, Config, Materia } from '../types';
 
 export interface ExportPerfilPayload {
   id: string;
   nombre: string;
-  materias: ReturnType<typeof materiasAJson>;
+  materias: Materia[];
   notas?: Record<string, number | null>;
   evaluaciones?: Record<string, import('../types').Evaluacion[]>;
   horarios?: import('../types').BloqueHorario[];
@@ -31,12 +30,19 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
   for (const perfil of opts.perfilesSelec) {
     const estado = await cargarPerfilEstado(perfil.id);
-    const materiasJson = materiasAJson(estado.materias);
+
+    const materiasLimpias: Materia[] = estado.materias.map(m => ({
+      ...m,
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      })),
+    }));
 
     const entry: ExportPerfilPayload = {
       id: perfil.id,
       nombre: perfil.nombre,
-      materias: materiasJson,
+      materias: materiasLimpias,
     };
 
     if (opts.inclNotas) {
@@ -56,8 +62,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
     }
 
     if (opts.inclHorarios) {
-      const bloques = estado.materias.flatMap(m => m.bloques ?? []);
-      entry.horarios = bloques;
+      entry.horarios = materiasLimpias.flatMap(m => m.bloques ?? []);
     }
 
     perfiles.push(entry);
