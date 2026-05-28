@@ -2448,10 +2448,10 @@ export function HorarioScreen() {
                             : bl
                         ),
                       });
-                      setDraftBloque(prev => prev?.id === modalEdicionRapida.bloqueId
-                        ? { ...prev, fecha: nuevaFecha, salon: modalSalonStr || undefined }
-                        : prev
-                      );
+                      // Salir del modo edición para que el bloque lea directamente desde
+                      // bloquesEstaSemana (que ya refleja el nuevo salón del store Zustand).
+                      setCardEnEdicion(null);
+                      setDraftBloque(null);
                     }
                   } else {
                     const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
