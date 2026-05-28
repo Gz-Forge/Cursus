@@ -1,11 +1,11 @@
 import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar } from '../src/utils/importExport';
 import { Materia } from '../src/types';
 
-// Nuevo formato: previas = materias que esta materia desbloquea (esPreviaDe)
+// previas = materias que necesito para cursar ESTA materia (previasNecesarias)
 // numero es opcional; oportunidades_examen no existe en el JSON
 const jsonEjemplo = [
-  { numero: 1, semestre: 1, nombre: 'Matematicas I', creditos_da: 6, creditos_necesarios: 0, previas: ['Matematicas II'] },
-  { numero: 2, semestre: 2, nombre: 'Matematicas II', creditos_da: 6, creditos_necesarios: 0, previas: [] },
+  { numero: 1, semestre: 1, nombre: 'Matematicas I', creditos_da: 6, creditos_necesarios: 0, previas: [] },
+  { numero: 2, semestre: 2, nombre: 'Matematicas II', creditos_da: 6, creditos_necesarios: 0, previas: ['Matematicas I'] },
   { numero: 3, semestre: 2, nombre: 'Fisica I', creditos_da: 5, creditos_necesarios: 0, previas: [] },
 ];
 
@@ -16,16 +16,16 @@ describe('jsonAMaterias', () => {
     expect(materias[0].nombre).toBe('Matematicas I');
   });
 
-  it('previas en JSON mapea a esPreviaDe', () => {
-    const materias = jsonAMaterias(jsonEjemplo, 3);
-    const mat1 = materias.find(m => m.numero === 1)!;
-    expect(mat1.esPreviaDe).toContain(2);
-  });
-
-  it('previasNecesarias se deriva invirtiendo esPreviaDe', () => {
+  it('previas en JSON mapea a previasNecesarias', () => {
     const materias = jsonAMaterias(jsonEjemplo, 3);
     const mat2 = materias.find(m => m.numero === 2)!;
     expect(mat2.previasNecesarias).toContain(1);
+  });
+
+  it('esPreviaDe se deriva invirtiendo previasNecesarias', () => {
+    const materias = jsonAMaterias(jsonEjemplo, 3);
+    const mat1 = materias.find(m => m.numero === 1)!;
+    expect(mat1.esPreviaDe).toContain(2);
   });
 
   it('materia sin previas tiene esPreviaDe y previasNecesarias vacíos', () => {
@@ -40,7 +40,7 @@ describe('jsonAMaterias', () => {
       { numero: 1, semestre: 1, nombre: 'Algebra', creditos_da: 4, creditos_necesarios: 0, previas: ['Materia Inexistente'] },
     ];
     const materias = jsonAMaterias(jsonConError, 3);
-    expect(materias[0].esPreviaDe).toEqual([]);
+    expect(materias[0].previasNecesarias).toEqual([]);
   });
 
   it('usa oportunidadesDefault para todas las materias', () => {
@@ -71,11 +71,11 @@ describe('materiasAJson', () => {
     expect(exportado[0]).not.toHaveProperty('oportunidades_examen');
   });
 
-  it('exporta previas como los nombres de materias que esta desbloquea', () => {
+  it('exporta previas como los nombres de materias que necesita para cursarse', () => {
     const materias = jsonAMaterias(jsonEjemplo, 3);
     const exportado = materiasAJson(materias);
-    const mat1 = exportado.find(m => m.nombre === 'Matematicas I')!;
-    expect(mat1.previas).toContain('Matematicas II');
+    const mat2 = exportado.find(m => m.nombre === 'Matematicas II')!;
+    expect(mat2.previas).toContain('Matematicas I');
   });
 
   it('roundtrip: importar→exportar→importar produce las mismas relaciones', () => {
