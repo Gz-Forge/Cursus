@@ -697,14 +697,16 @@ export function HorarioScreen() {
     [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
-  // Limpiar salonOverride cuando bloquesEstaSemana ya refleja el nuevo valor de Zustand
+  // Limpiar salonOverride cuando bloquesEstaSemana o evaluacionesEstaSemana ya reflejan el nuevo valor de Zustand
   React.useEffect(() => {
     if (!salonOverride) return;
     const bloque = bloquesEstaSemana.find(b => b.id === salonOverride.id);
-    if (bloque && bloque.salon === salonOverride.salon) {
+    const eval_ = evaluacionesEstaSemana.find(ev => ev.id === salonOverride.id);
+    const item = bloque ?? eval_;
+    if (item && item.salon === salonOverride.salon) {
       setSalonOverride(null);
     }
-  }, [bloquesEstaSemana, salonOverride]);
+  }, [bloquesEstaSemana, evaluacionesEstaSemana, salonOverride]);
 
   // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
   const evaluacionesEstaSemana = React.useMemo(
@@ -712,7 +714,7 @@ export function HorarioScreen() {
       ? []
       : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
+    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}:${ev.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
   );
 
   // Layout de superposición por día — incluye bloques Y evaluaciones para que compartan columna
@@ -1374,16 +1376,17 @@ export function HorarioScreen() {
                         }
 
                         // Texto del bloque
+                        const effectiveSalonEval = salonOverride?.id === ev.id ? salonOverride.salon : ev.salon;
                         let labelBloque: string;
                         if (ev.esGrupal) {
                           // "NombreGrupo / NombreSub - Materia"
                           labelBloque = [
                             [ev.grupoNombre, ev.nombre].filter(Boolean).join(' / ') || null,
-                            ev.salon || null,
+                            effectiveSalonEval || null,
                             ev.materia.nombre,
                           ].filter(Boolean).join(' - ');
                         } else {
-                          labelBloque = [ev.nombre || null, ev.salon || null, ev.materia.nombre].filter(Boolean).join(' - ');
+                          labelBloque = [ev.nombre || null, effectiveSalonEval || null, ev.materia.nombre].filter(Boolean).join(' - ');
                         }
 
                         // Persistencia al soltar una evaluación arrastrada
