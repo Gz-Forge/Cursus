@@ -109,12 +109,13 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
   );
 }
 
+const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
+
 export function ConfigScreen() {
   const { config, actualizarConfig, materias, guardarMateria } = useStore();
   const { showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
-  const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
   const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
     new Set(TODOS_MODULOS)
   );

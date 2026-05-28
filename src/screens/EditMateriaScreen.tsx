@@ -1058,7 +1058,7 @@ export function EditMateriaScreen() {
                 if (bloqueEditandoId) {
                   setForm(f => ({
                     ...f,
-                    bloques: f.bloques.map(b => b.id === bloqueEditandoId ? { ...b, salon: v } : b),
+                    bloques: (f.bloques ?? []).map(b => b.id === bloqueEditandoId ? { ...b, salon: v } : b),
                   }));
                 }
               }}

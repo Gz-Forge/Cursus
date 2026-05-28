@@ -41,15 +41,19 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
         // Cursando: exportar con evaluaciones completas
         return { ...m, bloques };
       }
-      // No cursando: colapsar a nota final como nota manual, sin evaluaciones
-      const notaFinal = obtenerNotaFinal(m);
-      return {
-        ...m,
-        bloques,
-        evaluaciones: [],
-        usarNotaManual: notaFinal !== null,
-        notaManual: notaFinal,
-      };
+      if (opts.inclNotas) {
+        // No cursando con notas habilitadas: colapsar a nota final como nota manual
+        const notaFinal = obtenerNotaFinal(m);
+        return {
+          ...m,
+          bloques,
+          evaluaciones: [],
+          usarNotaManual: notaFinal !== null,
+          notaManual: notaFinal,
+        };
+      }
+      // No cursando sin notas: solo estructura, sin datos académicos
+      return { ...m, bloques, evaluaciones: [], usarNotaManual: false, notaManual: null };
     });
 
     const entry: ExportPerfilPayload = {

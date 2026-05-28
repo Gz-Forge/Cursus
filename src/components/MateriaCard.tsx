@@ -99,9 +99,8 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   });
 
   return (
-    <View style={s.tarjeta}>
-      <TouchableOpacity onPress={() => setExpandida(!expandida)} onLongPress={onLongPress}>
-        <View style={s.fila}>
+    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress} activeOpacity={0.75}>
+      <View style={s.fila}>
           <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
           <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
         </View>
@@ -113,9 +112,9 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
         {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
           <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
         )}
-      </TouchableOpacity>
 
       {expandida && (
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
         <View style={s.detalle}>
           {(config.tarjetaAvisoCreditosExtendida ?? true) && mostrarAvisoCreditos && (
             <Text style={[s.advertencia, { marginBottom: 6 }]}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
@@ -183,7 +182,8 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
             </TouchableOpacity>
           </View>
         </View>
+        </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }

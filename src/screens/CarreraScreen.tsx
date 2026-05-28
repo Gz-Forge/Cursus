@@ -247,7 +247,7 @@ export function CarreraScreen() {
     const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
     const carreraAntesFaltaba = prevSems.size < totalSems;
     if (carreraCompleta && carreraAntesFaltaba) {
-      setColaFelicitaciones([{ titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
+      setColaFelicitaciones(q => [...q, { titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
       return;
     }
 

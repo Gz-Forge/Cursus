@@ -70,7 +70,7 @@ export function ImportarExportarScreen() {
 
 function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number): Materia[] {
   const primera = (perfil.materias as any[])[0];
-  if (primera?.cursando !== undefined) {
+  if (primera && 'cursando' in primera && 'id' in primera && 'evaluaciones' in primera) {
     // Formato nuevo: Materia[] completa
     return (perfil.materias as unknown as Materia[]).map(m => ({
       ...m,
