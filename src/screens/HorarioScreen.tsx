@@ -826,12 +826,15 @@ export function HorarioScreen() {
   }
 
   function persistirBloque(bloque: BloqueHorario) {
-    const materia = materiasEnCurso.find(m => m.bloques?.some(b => b.id === bloque.id));
+    const { id, fecha, horaInicio, horaFin, tipo, salon } = bloque;
+    const clean: BloqueHorario = { id, fecha, horaInicio, horaFin, tipo };
+    if (salon !== undefined) clean.salon = salon;
+    const materia = materiasEnCurso.find(m => m.bloques?.some(b => b.id === id));
     if (!materia) return;
     const { guardarMateria } = useStore.getState();
     guardarMateria({
       ...materia,
-      bloques: materia.bloques!.map(b => b.id === bloque.id ? bloque : b),
+      bloques: materia.bloques!.map(b => b.id === id ? clean : b),
     });
   }
 
