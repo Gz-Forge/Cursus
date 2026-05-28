@@ -127,6 +127,7 @@ export function HorarioScreen() {
   } | null>(null);
   const [modalFechaStr, setModalFechaStr] = useState('');
   const [modalSalonStr, setModalSalonStr] = useState('');
+  const [salonOverride, setSalonOverride] = useState<{ id: string; salon?: string } | null>(null);
   const modalAbiertaRef = React.useRef(false);
   React.useEffect(() => { modalAbiertaRef.current = modalEdicionRapida !== null; }, [modalEdicionRapida]);
   // --- Estado de drag para evaluaciones ---
@@ -696,6 +697,15 @@ export function HorarioScreen() {
     [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
+  // Limpiar salonOverride cuando bloquesEstaSemana ya refleja el nuevo valor de Zustand
+  React.useEffect(() => {
+    if (!salonOverride) return;
+    const bloque = bloquesEstaSemana.find(b => b.id === salonOverride.id);
+    if (bloque && bloque.salon === salonOverride.salon) {
+      setSalonOverride(null);
+    }
+  }, [bloquesEstaSemana, salonOverride]);
+
   // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
   const evaluacionesEstaSemana = React.useMemo(
     () => config.horarioFiltroOcultarEvaluaciones
@@ -1063,6 +1073,7 @@ export function HorarioScreen() {
                         const lyt        = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
                         const subColW    = colW / lyt.totalSubCols;
                         const bloqueDraft = cardEnEdicion === b.id && draftBloque ? draftBloque : b;
+                        const effectiveSalon = salonOverride?.id === b.id ? salonOverride.salon : bloqueDraft.salon;
                         const top        = (bloqueDraft.horaInicio - horaInicio) * PX_POR_MIN;
                         const height     = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
                         const left       = 1 + lyt.subCol * subColW;
@@ -1128,7 +1139,7 @@ export function HorarioScreen() {
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                       ellipsizeMode="tail"
                                     >
-                                      {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                      {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
                                     </Text>
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -1154,7 +1165,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </TouchableOpacity>
                               )}
@@ -1287,7 +1298,7 @@ export function HorarioScreen() {
                                         numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                         ellipsizeMode="tail"
                                       >
-                                        {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                        {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
                                       </Text>
                                       <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                         {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -1327,7 +1338,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </View>
                               )}
@@ -2440,6 +2451,7 @@ export function HorarioScreen() {
                   if (modalEdicionRapida.tipo === 'regular') {
                     const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
                     if (materia) {
+                      setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
                       guardarMateria({
                         ...materia,
                         bloques: (materia.bloques ?? []).map(bl =>
@@ -2448,8 +2460,6 @@ export function HorarioScreen() {
                             : bl
                         ),
                       });
-                      // Salir del modo edición para que el bloque lea directamente desde
-                      // bloquesEstaSemana (que ya refleja el nuevo salón del store Zustand).
                       setCardEnEdicion(null);
                       setDraftBloque(null);
                     }
@@ -2471,6 +2481,7 @@ export function HorarioScreen() {
                           return ev;
                         });
                       guardarMateria({ ...materia, evaluaciones: patchEval(materia.evaluaciones) });
+                      setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
                     }
                   }
                   setModalEdicionRapida(null);
