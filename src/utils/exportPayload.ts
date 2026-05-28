@@ -1,4 +1,5 @@
 import { cargarPerfilEstado } from './perfiles';
+import { obtenerNotaFinal } from './calculos';
 import { Perfil, Config, Materia } from '../types';
 
 export interface ExportPerfilPayload {
@@ -31,13 +32,25 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
   for (const perfil of opts.perfilesSelec) {
     const estado = await cargarPerfilEstado(perfil.id);
 
-    const materiasLimpias: Materia[] = estado.materias.map(m => ({
-      ...m,
-      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }) => ({
+    const materiasLimpias: Materia[] = estado.materias.map(m => {
+      const bloques = (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }) => ({
         id, fecha, horaInicio, horaFin, tipo,
         ...(salon !== undefined ? { salon } : {}),
-      })),
-    }));
+      }));
+      if (m.cursando) {
+        // Cursando: exportar con evaluaciones completas
+        return { ...m, bloques };
+      }
+      // No cursando: colapsar a nota final como nota manual, sin evaluaciones
+      const notaFinal = obtenerNotaFinal(m);
+      return {
+        ...m,
+        bloques,
+        evaluaciones: [],
+        usarNotaManual: notaFinal !== null,
+        notaManual: notaFinal,
+      };
+    });
 
     const entry: ExportPerfilPayload = {
       id: perfil.id,
@@ -47,7 +60,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
     if (opts.inclNotas) {
       const notas: Record<string, number | null> = {};
-      estado.materias.forEach(m => {
+      materiasLimpias.forEach(m => {
         if (m.usarNotaManual) notas[m.id] = m.notaManual;
       });
       entry.notas = notas;
@@ -55,7 +68,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
     if (opts.inclEvaluaciones) {
       const evals: Record<string, import('../types').Evaluacion[]> = {};
-      estado.materias.forEach(m => {
+      materiasLimpias.forEach(m => {
         if (m.evaluaciones.length > 0) evals[m.id] = m.evaluaciones;
       });
       entry.evaluaciones = evals;
