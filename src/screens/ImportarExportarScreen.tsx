@@ -10,7 +10,8 @@ import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { fileIO } from '../utils/fileIO';
 import { QrScannerModal } from '../components/QrScannerModal';
-import { construirPayload } from '../utils/exportPayload';
+import { construirPayload, type ExportPerfilPayload } from '../utils/exportPayload';
+import { cargarPerfilEstado, guardarPerfilEstado, MAX_PERFILES } from '../utils/perfiles';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
@@ -66,16 +67,48 @@ export function ImportarExportarScreen() {
   );
 }
 
+function reconstruirMaterias(perfil: ExportPerfilPayload): Materia[] {
+  const primera = (perfil.materias as any[])[0];
+  if (primera?.cursando !== undefined) {
+    // Formato nuevo: Materia[] completa
+    return (perfil.materias as unknown as Materia[]).map(m => ({
+      ...m,
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      })),
+    }));
+  }
+  // Formato viejo: extraer desde horarios[i].materia (primer nivel)
+  const map = new Map<string, Materia>();
+  for (const bloque of (perfil as any).horarios ?? []) {
+    const m = bloque.materia;
+    if (!m?.id || map.has(m.id)) continue;
+    map.set(m.id, {
+      ...m,
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      })),
+    });
+  }
+  return Array.from(map.values());
+}
+
 function PanelImportar() {
   const tema = useTema();
-  const { showAlert, showConfirm } = useAlert();
-  const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
+  const { showAlert } = useAlert();
+  const { reemplazarMaterias, materias, config, actualizarConfig, perfiles, perfilActivoId, crearPerfil } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
     tiposNuevos: string[];
     configAplicados?: number;
+  } | null>(null);
+  const [pendingPerfilImport, setPendingPerfilImport] = useState<{
+    nombrePerfil: string;
+    materias: Materia[];
   } | null>(null);
 
   const handleImportarJson = async () => {
@@ -171,37 +204,33 @@ function PanelImportar() {
     ) {
       const d = datos as any;
       const tieneConfig = d.config && typeof d.config === 'object' && !Array.isArray(d.config);
+      const primerPerfil: ExportPerfilPayload | undefined = d.perfiles[0];
 
+      // Aplicar config si existe
       if (tieneConfig) {
-        showConfirm(
-          'El archivo incluye configuración',
-          `El archivo contiene ${d.perfiles.length} perfil(es) (importación próximamente) y configuración guardada.\n\n¿Querés aplicar la configuración ahora?`,
-          async () => {
-            try {
-              const { aplicarConfigJson } = await import('../utils/importExport');
-              const resultado = aplicarConfigJson(
-                { cursus_config: 1, ...d.config },
-                actualizarConfig,
-              );
-              const resumen = [
-                `✅ ${resultado.aplicados.length} campo(s) de configuración aplicado(s)`,
-                resultado.ignorados.length > 0
-                  ? `⚠️ ${resultado.ignorados.length} ignorado(s) por inválidos`
-                  : null,
-              ].filter(Boolean).join('\n');
-              showAlert('Configuración aplicada', resumen);
-            } catch {
-              showAlert('Error', 'No se pudo aplicar la configuración.');
-            }
-          },
-          { labelConfirmar: 'Sí, aplicar' },
-        );
-      } else {
-        showAlert(
-          'Importar datos completos',
-          `El archivo contiene ${d.perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
-        );
+        try {
+          const { aplicarConfigJson } = await import('../utils/importExport');
+          aplicarConfigJson({ cursus_config: 1, ...d.config }, actualizarConfig);
+        } catch {
+          // ignorar errores de config
+        }
       }
+
+      if (!primerPerfil) {
+        showAlert('Error', 'El archivo no contiene perfiles.');
+        return;
+      }
+
+      const materiasImportadas = reconstruirMaterias(primerPerfil);
+      if (materiasImportadas.length === 0) {
+        showAlert('Error', 'No se encontraron materias en el archivo.');
+        return;
+      }
+
+      setPendingPerfilImport({
+        nombrePerfil: primerPerfil.nombre ?? 'Perfil importado',
+        materias: materiasImportadas,
+      });
       return;
     }
 
@@ -237,6 +266,33 @@ function PanelImportar() {
   };
 
   const MAX_MATERIAS_IMPORT = 500;
+
+  const ejecutarImportPerfil = async (targetPerfilId: string | 'nuevo') => {
+    if (!pendingPerfilImport) return;
+    const { nombrePerfil, materias: nuevasMaterias } = pendingPerfilImport;
+    setCargando(true);
+    try {
+      if (targetPerfilId === 'nuevo') {
+        await crearPerfil(nombrePerfil);
+        reemplazarMaterias(nuevasMaterias);
+        showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${nuevasMaterias.length} materias`);
+      } else if (targetPerfilId === perfilActivoId) {
+        reemplazarMaterias(nuevasMaterias);
+        const perfilActivo = perfiles.find(p => p.id === perfilActivoId);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${perfilActivo?.nombre ?? 'perfil actual'}"`);
+      } else {
+        const estadoActual = await cargarPerfilEstado(targetPerfilId);
+        await guardarPerfilEstado(targetPerfilId, { ...estadoActual, materias: nuevasMaterias });
+        const perfilTarget = perfiles.find(p => p.id === targetPerfilId);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${perfilTarget?.nombre ?? 'perfil'}"`);
+      }
+      setPendingPerfilImport(null);
+    } catch {
+      showAlert('Error', 'No se pudo importar el perfil.');
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const doImport = async (modo: ModoImport) => {
     if (!pendingImport) return;
@@ -377,6 +433,93 @@ function PanelImportar() {
           <QrScannerModal visible={mostrarScanner} onCerrar={() => setMostrarScanner(false)} />
         </>
       )}
+
+      <Modal
+        visible={!!pendingPerfilImport}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingPerfilImport(null)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+        }}>
+          <View style={{
+            backgroundColor: tema.tarjeta,
+            borderRadius: 14,
+            padding: 20,
+            width: '100%',
+            maxWidth: 400,
+          }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Importar perfil "{pendingPerfilImport?.nombrePerfil}"
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16 }}>
+              {pendingPerfilImport?.materias.length} materias encontradas
+              {perfiles.length >= MAX_PERFILES ? ' — elegí qué perfil reemplazar' : ''}
+            </Text>
+
+            {perfiles.length < MAX_PERFILES ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => ejecutarImportPerfil(perfilActivoId)}
+                  style={{
+                    backgroundColor: tema.acento,
+                    padding: 14, borderRadius: 10,
+                    alignItems: 'center', marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>
+                    Reemplazar "{perfiles.find(p => p.id === perfilActivoId)?.nombre ?? 'Perfil actual'}"
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => ejecutarImportPerfil('nuevo')}
+                  style={{
+                    backgroundColor: tema.fondo,
+                    padding: 14, borderRadius: 10,
+                    alignItems: 'center', marginBottom: 10,
+                    borderWidth: 1, borderColor: tema.acento,
+                  }}
+                >
+                  <Text style={{ color: tema.acento, fontWeight: '700' }}>Crear perfil nuevo</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {perfiles.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => ejecutarImportPerfil(p.id)}
+                    style={{
+                      backgroundColor: p.id === perfilActivoId ? tema.acento + '22' : tema.fondo,
+                      padding: 14, borderRadius: 10,
+                      flexDirection: 'row', alignItems: 'center',
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: p.id === perfilActivoId ? tema.acento : tema.borde,
+                    }}
+                  >
+                    <Text style={{ color: tema.texto, fontWeight: p.id === perfilActivoId ? '700' : '400', flex: 1 }}>
+                      {p.id === perfilActivoId ? '▶ ' : ''}{p.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setPendingPerfilImport(null)}
+              style={{ alignItems: 'center', marginTop: 4 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
