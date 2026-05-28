@@ -16,6 +16,7 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
+import { jsonAMaterias } from '../utils/importExport';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
@@ -67,7 +68,7 @@ export function ImportarExportarScreen() {
   );
 }
 
-function reconstruirMaterias(perfil: ExportPerfilPayload): Materia[] {
+function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number): Materia[] {
   const primera = (perfil.materias as any[])[0];
   if (primera?.cursando !== undefined) {
     // Formato nuevo: Materia[] completa
@@ -79,12 +80,13 @@ function reconstruirMaterias(perfil: ExportPerfilPayload): Materia[] {
       })),
     }));
   }
-  // Formato viejo: extraer desde horarios[i].materia (primer nivel)
-  const map = new Map<string, Materia>();
+  // Formato viejo: materias es carrera-format (MateriaJson)
+  // Construir mapa nombre → Materia completa desde horarios (solo las cursando que tenían bloques)
+  const mapaDesdeHorarios = new Map<string, Materia>();
   for (const bloque of (perfil as any).horarios ?? []) {
     const m = bloque.materia;
-    if (!m?.id || map.has(m.id)) continue;
-    map.set(m.id, {
+    if (!m?.nombre || mapaDesdeHorarios.has(m.nombre)) continue;
+    mapaDesdeHorarios.set(m.nombre, {
       ...m,
       bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
         id, fecha, horaInicio, horaFin, tipo,
@@ -92,13 +94,15 @@ function reconstruirMaterias(perfil: ExportPerfilPayload): Materia[] {
       })),
     });
   }
-  return Array.from(map.values());
+  // Convertir todas las materias carrera-format y hacer overlay con las que tienen estado completo
+  const todas = jsonAMaterias(perfil.materias as unknown as MateriaJson[], oportunidades);
+  return todas.map(m => mapaDesdeHorarios.get(m.nombre) ?? m);
 }
 
 function PanelImportar() {
   const tema = useTema();
   const { showAlert } = useAlert();
-  const { reemplazarMaterias, materias, config, actualizarConfig, perfiles, perfilActivoId, crearPerfil } = useStore();
+  const { reemplazarMaterias, materias, config, actualizarConfig, perfiles, perfilActivoId, crearPerfil, renombrarPerfil } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
@@ -221,7 +225,7 @@ function PanelImportar() {
         return;
       }
 
-      const materiasImportadas = reconstruirMaterias(primerPerfil);
+      const materiasImportadas = reconstruirMaterias(primerPerfil, config.oportunidadesExamenDefault);
       if (materiasImportadas.length === 0) {
         showAlert('Error', 'No se encontraron materias en el archivo.');
         return;
@@ -278,13 +282,13 @@ function PanelImportar() {
         showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${nuevasMaterias.length} materias`);
       } else if (targetPerfilId === perfilActivoId) {
         reemplazarMaterias(nuevasMaterias);
-        const perfilActivo = perfiles.find(p => p.id === perfilActivoId);
-        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${perfilActivo?.nombre ?? 'perfil actual'}"`);
+        await renombrarPerfil(perfilActivoId, nombrePerfil);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
       } else {
         const estadoActual = await cargarPerfilEstado(targetPerfilId);
         await guardarPerfilEstado(targetPerfilId, { ...estadoActual, materias: nuevasMaterias });
-        const perfilTarget = perfiles.find(p => p.id === targetPerfilId);
-        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${perfilTarget?.nombre ?? 'perfil'}"`);
+        await renombrarPerfil(targetPerfilId, nombrePerfil);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
       }
       setPendingPerfilImport(null);
     } catch {
