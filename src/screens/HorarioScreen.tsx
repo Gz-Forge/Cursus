@@ -697,6 +697,15 @@ export function HorarioScreen() {
     [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
+  // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
+  const evaluacionesEstaSemana = React.useMemo(
+    () => config.horarioFiltroOcultarEvaluaciones
+      ? []
+      : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}:${ev.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
+  );
+
   // Limpiar salonOverride cuando bloquesEstaSemana o evaluacionesEstaSemana ya reflejan el nuevo valor de Zustand
   React.useEffect(() => {
     if (!salonOverride) return;
@@ -707,15 +716,6 @@ export function HorarioScreen() {
       setSalonOverride(null);
     }
   }, [bloquesEstaSemana, evaluacionesEstaSemana, salonOverride]);
-
-  // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
-  const evaluacionesEstaSemana = React.useMemo(
-    () => config.horarioFiltroOcultarEvaluaciones
-      ? []
-      : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}:${ev.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
-  );
 
   // Layout de superposición por día — incluye bloques Y evaluaciones para que compartan columna
   const layoutPorDia = React.useMemo(() => {
