@@ -96,7 +96,23 @@ function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number)
   }
   // Convertir todas las materias carrera-format y hacer overlay con las que tienen estado completo
   const todas = jsonAMaterias(perfil.materias as unknown as MateriaJson[], oportunidades);
-  return todas.map(m => mapaDesdeHorarios.get(m.nombre) ?? m);
+  const notasRecord = (perfil as any).notas as Record<string, number | null> | undefined;
+  const evalsRecord = (perfil as any).evaluaciones as Record<string, any[]> | undefined;
+  return todas.map(m => {
+    const desdeHorarios = mapaDesdeHorarios.get(m.nombre);
+    if (desdeHorarios) return desdeHorarios;
+    // Para materias no-cursando: aplicar notas y evaluaciones del record separado si existen
+    const nota = notasRecord?.[m.id];
+    const evals = evalsRecord?.[m.id];
+    if (nota !== undefined || evals) {
+      return {
+        ...m,
+        ...(nota !== undefined ? { usarNotaManual: true, notaManual: nota } : {}),
+        ...(evals ? { evaluaciones: evals } : {}),
+      };
+    }
+    return m;
+  });
 }
 
 function PanelImportar() {
@@ -218,6 +234,14 @@ function PanelImportar() {
         } catch {
           // ignorar errores de config
         }
+        // aplicarConfigJson excluye deliberadamente los colores — aplicarlos directamente
+        const cd = d.config as any;
+        const colorUpdates: Partial<Config> = {};
+        if (cd.coloresHorario && typeof cd.coloresHorario === 'object') colorUpdates.coloresHorario = cd.coloresHorario;
+        if (cd.coloresGruposEvaluacion && typeof cd.coloresGruposEvaluacion === 'object') colorUpdates.coloresGruposEvaluacion = cd.coloresGruposEvaluacion;
+        if (cd.coloresEvaluacionesSimples && typeof cd.coloresEvaluacionesSimples === 'object') colorUpdates.coloresEvaluacionesSimples = cd.coloresEvaluacionesSimples;
+        if (cd.coloresEvaluacionesGrupales && typeof cd.coloresEvaluacionesGrupales === 'object') colorUpdates.coloresEvaluacionesGrupales = cd.coloresEvaluacionesGrupales;
+        if (Object.keys(colorUpdates).length > 0) actualizarConfig(colorUpdates);
       }
 
       if (!primerPerfil) {
