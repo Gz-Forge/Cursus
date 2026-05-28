@@ -1128,7 +1128,7 @@ export function HorarioScreen() {
                                       numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                       ellipsizeMode="tail"
                                     >
-                                      {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                      {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                     </Text>
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -1154,7 +1154,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </TouchableOpacity>
                               )}
@@ -1224,7 +1224,7 @@ export function HorarioScreen() {
                                         const [, mesStr, diaStr] = b.fecha.split('-');
                                         setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
                                         setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
-                                        setModalSalonStr(b.salon ?? '');
+                                        setModalSalonStr(draftBloqueRef.current?.id === b.id ? (draftBloqueRef.current.salon ?? '') : (b.salon ?? ''));
                                       }
                                     }}
                                   >
@@ -1287,7 +1287,7 @@ export function HorarioScreen() {
                                         numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                         ellipsizeMode="tail"
                                       >
-                                        {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                        {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                       </Text>
                                       <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                         {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
@@ -1327,7 +1327,7 @@ export function HorarioScreen() {
                                     numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     ellipsizeMode="tail"
                                   >
-                                    {[sigla(b.tipo), b.salon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    {[sigla(b.tipo), bloqueDraft.salon, b.materia.nombre].filter(Boolean).join(' - ')}
                                   </Text>
                                 </View>
                               )}
