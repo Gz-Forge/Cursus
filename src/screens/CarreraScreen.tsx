@@ -647,7 +647,13 @@ export function CarreraScreen() {
                   <>
                     {subFiltroDisp === 'para_cursar' && (() => {
                       const numerosDisp = new Set(materiasDisponibles(materias, config));
-                      const lista = materias.filter(m => numerosDisp.has(m.numero) && calcularEstadoFinal(m, config) !== 'cursando');
+                      const lista = materias.filter(m => {
+                        const estado = calcularEstadoFinal(m, config);
+                        if (estado === 'cursando') return false;
+                        if (numerosDisp.has(m.numero)) return true;
+                        if (config.usarEstadoAprobado && estado === 'aprobado') return true;
+                        return false;
+                      });
                       const primerSem = lista.filter(m => m.semestre % 2 === 1);
                       const segundoSem = lista.filter(m => m.semestre % 2 === 0);
                       return (
