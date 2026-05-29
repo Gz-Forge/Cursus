@@ -1776,7 +1776,7 @@ export function EditMateriaScreen() {
         mensaje={`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`}
         labelConfirmar="Eliminar"
         destructivo
-        onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id); navigation.goBack(); }}
+        onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id, form.numero); navigation.goBack(); }}
         onCancelar={() => setShowConfirmEliminar(false)}
       />
     </SafeAreaView>
