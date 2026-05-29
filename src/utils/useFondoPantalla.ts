@@ -15,7 +15,17 @@ export function useFondoPantalla(pagina: PaginaFondo): FondoPantalla | undefined
   }
 }
 
-/** Retorna el tema base + overrides de colores específicos de la pantalla. */
+/**
+ * Retorna el tema base + overrides de colores específicos de la pantalla.
+ *
+ * Los sub-campos de acento (`acentoTexto`, `acentoFondo`, `acentoLineas`, `acentoGraficos`)
+ * pueden ser `undefined` si el usuario no los configuró.
+ * En los puntos de consumo usar siempre el patrón de fallback:
+ *   color: tema.acentoTexto ?? tema.acento
+ *   backgroundColor: tema.acentoFondo ?? tema.acento
+ *   borderColor: tema.acentoLineas ?? tema.acento
+ *   frontColor: tema.acentoGraficos ?? tema.acento
+ */
 export function useTemaPantalla(pagina: PaginaFondo): Tema {
   const config = useStore(s => s.config);
   if (config.tema !== 'personalizado' || !config.temaPersonalizado) {
