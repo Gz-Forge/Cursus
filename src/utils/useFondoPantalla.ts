@@ -37,6 +37,10 @@ export function useTemaPantalla(pagina: PaginaFondo): Tema {
     ...(overrides.texto           ? { texto:           overrides.texto }           : {}),
     ...(overrides.textoSecundario ? { textoSecundario: overrides.textoSecundario } : {}),
     ...(overrides.acento          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.acentoTexto     ? { acentoTexto:     overrides.acentoTexto }     : {}),
+    ...(overrides.acentoFondo     ? { acentoFondo:     overrides.acentoFondo }     : {}),
+    ...(overrides.acentoLineas    ? { acentoLineas:    overrides.acentoLineas }    : {}),
+    ...(overrides.acentoGraficos  ? { acentoGraficos:  overrides.acentoGraficos }  : {}),
     ...(overrides.borde           ? { borde:           overrides.borde }           : {}),
   };
 }

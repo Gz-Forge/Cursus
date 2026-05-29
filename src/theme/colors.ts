@@ -29,4 +29,9 @@ export const temaClaro = {
   semestres: ['#3F51B5','#4CAF50','#F44336','#FF9800','#9C27B0','#00BCD4'],
 };
 
-export type Tema = typeof temaOscuro;
+export type Tema = typeof temaOscuro & {
+  acentoTexto?:    string;
+  acentoFondo?:    string;
+  acentoLineas?:   string;
+  acentoGraficos?: string;
+};

@@ -108,6 +108,10 @@ export interface ColoresScreen {
   texto?: string;
   textoSecundario?: string;
   acento?: string;
+  acentoTexto?:    string;
+  acentoFondo?:    string;
+  acentoLineas?:   string;
+  acentoGraficos?: string;
   borde?: string;
 }
 
@@ -117,6 +121,11 @@ export interface TemaPersonalizado {
   texto: string;
   textoSecundario: string;
   acento: string;
+  // Sub-campos del acento (todos opcionales, fallback a `acento` si undefined)
+  acentoTexto?:    string;   // color: en texto (headers, tabs activos, flechas, íconos)
+  acentoFondo?:    string;   // backgroundColor: en rellenos (botones, filtros, toggles ON)
+  acentoLineas?:   string;   // border*Color: + líneas finas (separadores, línea de hora)
+  acentoGraficos?: string;   // charts en MetricsScreen (frontColor, dataPointsColor, etc.)
   borde: string;
   // Per-screen color overrides (fallback: global values above)
   coloresCarrera?: ColoresScreen;
