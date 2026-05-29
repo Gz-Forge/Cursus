@@ -118,6 +118,8 @@ export function EditMateriaScreen() {
     tipoFormacion: undefined, bloques: [],
   });
   const [busquedaPrevia, setBusquedaPrevia] = useState('');
+  const [semestreStr, setSemestreStr] = useState(String(materiaOriginal?.semestre ?? 1));
+  const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
@@ -604,8 +606,18 @@ export function EditMateriaScreen() {
         </View>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
-        {campo('Nombre', form.nombre, v => setForm(f => ({ ...f, nombre: v })), false, 100)}
-        {campo('Semestre', String(form.semestre), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, semestre: Math.max(1, n) })); }, true)}
+        {campo('Nombre', form.nombre, v => {
+          setForm(f => ({ ...f, nombre: v }));
+          if (v.trim()) setCamposError(e => ({ ...e, nombre: false }));
+        }, false, 100, camposError.nombre)}
+        {campo('Semestre', semestreStr, v => {
+          setSemestreStr(v);
+          const n = parseInt(v, 10);
+          if (!isNaN(n) && n >= 1) {
+            setForm(f => ({ ...f, semestre: n }));
+            setCamposError(e => ({ ...e, semestre: false }));
+          }
+        }, true, undefined, camposError.semestre)}
         {campo('Créditos que da', String(form.creditosQueDA), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }, true)}
         {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }, true)}
         {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }, true)}
