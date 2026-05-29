@@ -891,7 +891,7 @@ export function HorarioScreen() {
                 </TouchableOpacity>
                 {filtroActivo && (
                   <View style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10,
-                    borderRadius: 5, backgroundColor: tema.acentoLineas ?? tema.acento }} />
+                    borderRadius: 5, backgroundColor: tema.acentoFondo ?? tema.acento }} />
                 )}
               </View>
             </View>
@@ -936,7 +936,7 @@ export function HorarioScreen() {
                 </TouchableOpacity>
                 {filtroActivo && (
                   <View style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8,
-                    borderRadius: 4, backgroundColor: tema.acentoLineas ?? tema.acento }} />
+                    borderRadius: 4, backgroundColor: tema.acentoFondo ?? tema.acento }} />
                 )}
               </View>
             </View>
