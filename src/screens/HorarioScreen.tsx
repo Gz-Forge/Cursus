@@ -1084,7 +1084,7 @@ export function HorarioScreen() {
                       .filter(b => b.fecha === fecha)
                       .map(b => {
                         const lyt        = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
-                        const subColW    = colW / lyt.totalSubCols;
+                        const subColW    = BASE_DAY_COL_W / lyt.totalSubCols;
                         const bloqueDraft = cardEnEdicion === b.id && draftBloque ? draftBloque : b;
                         const effectiveSalon = salonOverride?.id === b.id ? salonOverride.salon : bloqueDraft.salon;
                         const top        = (bloqueDraft.horaInicio - horaInicio) * PX_POR_MIN;
@@ -1259,7 +1259,7 @@ export function HorarioScreen() {
                                       if (!ghostOriginRef.current) return;
                                       const { x: cx, y: cy } = ghostOriginRef.current;
                                       const lyt = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
-                                      const subColW = colW / lyt.totalSubCols;
+                                      const subColW = BASE_DAY_COL_W / lyt.totalSubCols;
                                       const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
                                       setGhostPos({
                                         x: cx - outerOriginRef.current.x,
@@ -1436,7 +1436,7 @@ export function HorarioScreen() {
 
                         // Posición basada en layout (igual que bloques de horario)
                         const lytEval    = layoutDia.get(ev.id) ?? { subCol: 0, totalSubCols: 1 };
-                        const evalSubColW = colW / lytEval.totalSubCols;
+                        const evalSubColW = BASE_DAY_COL_W / lytEval.totalSubCols;
                         const evalLeft   = 1 + lytEval.subCol * evalSubColW;
                         const evalWidth  = evalSubColW - 2;
 
