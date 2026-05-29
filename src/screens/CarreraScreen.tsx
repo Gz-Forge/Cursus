@@ -73,9 +73,9 @@ export function CarreraScreen() {
   // Renderiza lista de materias en grid 2 cols (web) o lista simple (móvil)
   const renderMateriasList = (lista: Materia[]) => {
     if (!isWeb) {
-      return lista.map(m => (
+      return lista.map((m, idx) => (
         <MateriaCard
-          key={m.id}
+          key={`${m.id}_${idx}`}
           materia={m}
           todasLasMaterias={materias}
           config={config}
@@ -87,8 +87,8 @@ export function CarreraScreen() {
     }
     return (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {lista.map(m => (
-          <View key={m.id} style={{ width: '50%', paddingHorizontal: 4 }}>
+        {lista.map((m, idx) => (
+          <View key={`${m.id}_${idx}`} style={{ width: '50%', paddingHorizontal: 4 }}>
             <MateriaCard
               materia={m}
               todasLasMaterias={materias}
@@ -551,9 +551,9 @@ export function CarreraScreen() {
 
                 const renderResultados = () => {
                   if (!isWeb) {
-                    return resultados.map(r => (
+                    return resultados.map((r, idx) => (
                       <MateriaCard
-                        key={r.id}
+                        key={`${r.id}_${idx}`}
                         materia={r}
                         todasLasMaterias={materias}
                         config={config}
@@ -567,8 +567,8 @@ export function CarreraScreen() {
                   }
                   return (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                      {resultados.map(r => (
-                        <View key={r.id} style={{ width: '50%', paddingHorizontal: 4 }}>
+                      {resultados.map((r, idx) => (
+                        <View key={`${r.id}_${idx}`} style={{ width: '50%', paddingHorizontal: 4 }}>
                           <MateriaCard
                             materia={r}
                             todasLasMaterias={materias}
