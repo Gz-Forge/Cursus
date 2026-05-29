@@ -554,11 +554,18 @@ export function EditMateriaScreen() {
     setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
   };
 
-  const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false, maxLength?: number) => (
+  const campo = (label: string, value: string, onChange: (v: string) => void, numerico = false, maxLength?: number, error?: boolean) => (
     <View style={{ marginBottom: 12 }}>
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>{label}</Text>
+      <Text style={{ color: error ? '#F44336' : tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>{label}</Text>
       <TextInput
-        style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, ...(numerico ? { width: 80 } : {}) }}
+        style={{
+          backgroundColor: tema.tarjeta,
+          color: tema.texto,
+          padding: 10,
+          borderRadius: 8,
+          ...(numerico ? { width: 80 } : {}),
+          ...(error ? { borderWidth: 1.5, borderColor: '#F44336' } : {}),
+        }}
         value={value}
         onChangeText={onChange}
         keyboardType={numerico ? 'numeric' : 'default'}
