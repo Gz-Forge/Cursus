@@ -15,15 +15,16 @@ import * as ImagePicker from 'expo-image-picker';
 
 // ── Color picker ──────────────────────────────────────────────────────────────
 function ColorInput({
-  value, onChange, label,
-}: { value: string; onChange: (v: string) => void; label: string }) {
+  value, onChange, label, fallbackColor,
+}: { value: string; onChange: (v: string) => void; label: string; fallbackColor?: string }) {
   const tema = useTema();
   const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
+  const swatchColor = isValidHex ? value : (fallbackColor ?? tema.borde);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
       <View style={{
         width: 32, height: 32, borderRadius: 8,
-        backgroundColor: isValidHex ? value : tema.borde,
+        backgroundColor: swatchColor,
         borderWidth: 1, borderColor: tema.borde,
       }} />
       <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 120 }}>{label}</Text>
@@ -34,7 +35,7 @@ function ColorInput({
         }}
         value={value}
         onChangeText={onChange}
-        placeholder="#RRGGBB"
+        placeholder={fallbackColor ?? '#RRGGBB'}
         placeholderTextColor={tema.textoSecundario}
         maxLength={7}
         autoCapitalize="characters"
@@ -181,6 +182,10 @@ function mergeScreenColors(draft: TemaPersonalizado, pagina: PantallaKey): TemaP
     ...(overrides.texto           && isValidHex(overrides.texto)           ? { texto:           overrides.texto }           : {}),
     ...(overrides.textoSecundario && isValidHex(overrides.textoSecundario) ? { textoSecundario: overrides.textoSecundario } : {}),
     ...(overrides.acento          && isValidHex(overrides.acento)          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.acentoTexto     && isValidHex(overrides.acentoTexto)     ? { acentoTexto:     overrides.acentoTexto }     : {}),
+    ...(overrides.acentoFondo     && isValidHex(overrides.acentoFondo)     ? { acentoFondo:     overrides.acentoFondo }     : {}),
+    ...(overrides.acentoLineas    && isValidHex(overrides.acentoLineas)    ? { acentoLineas:    overrides.acentoLineas }    : {}),
+    ...(overrides.acentoGraficos  && isValidHex(overrides.acentoGraficos)  ? { acentoGraficos:  overrides.acentoGraficos }  : {}),
     ...(overrides.borde           && isValidHex(overrides.borde)           ? { borde:           overrides.borde }           : {}),
   };
 }
@@ -243,20 +248,30 @@ function PantallaEditor({
       </Text>
       {(
         [
-          { campo: 'tarjeta'         as const, label: 'Tarjeta / panel'   },
-          { campo: 'texto'           as const, label: 'Texto principal'   },
-          { campo: 'textoSecundario' as const, label: 'Texto secundario'  },
-          { campo: 'acento'          as const, label: 'Acento (botones)'  },
-          { campo: 'borde'           as const, label: 'Borde / separador' },
-        ] as { campo: keyof ColoresScreen; label: string }[]
-      ).map(({ campo, label }) => {
+          { campo: 'tarjeta',         label: 'Tarjeta / panel'   },
+          { campo: 'texto',           label: 'Texto principal'   },
+          { campo: 'textoSecundario', label: 'Texto secundario'  },
+          { campo: 'borde',           label: 'Borde / separador' },
+          { campo: 'acento',          label: 'Acento base'       },
+          { campo: 'acentoTexto',     label: '↳ Texto',    indentado: true },
+          { campo: 'acentoFondo',     label: '↳ Rellenos', indentado: true },
+          { campo: 'acentoLineas',    label: '↳ Líneas',   indentado: true },
+          { campo: 'acentoGraficos',  label: '↳ Gráficos', indentado: true },
+        ] as { campo: keyof ColoresScreen; label: string; indentado?: boolean }[]
+      ).map(({ campo, label, indentado }) => {
         const val = colores?.[campo] ?? '';
         const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(val);
+        // Para el swatch: usar el valor global del campo si existe, sino acento global
+        const globalVal = (draft[campo as keyof TemaPersonalizado] as string | undefined)
+          ?? draft.acento;
         return (
-          <View key={campo} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <View key={campo} style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8,
+            paddingLeft: indentado ? 16 : 0,
+          }}>
             <View style={{
               width: 28, height: 28, borderRadius: 6,
-              backgroundColor: isValidHex ? val : (draft[campo as keyof TemaPersonalizado] as string ?? tema.borde),
+              backgroundColor: isValidHex ? val : globalVal,
               borderWidth: 1, borderColor: tema.borde,
             }} />
             <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 118 }}>{label}</Text>
@@ -267,7 +282,7 @@ function PantallaEditor({
               }}
               value={val}
               onChangeText={v => v === '' ? limpiarColor(campo) : setColor(campo, v)}
-              placeholder={`global: ${draft[campo as keyof TemaPersonalizado] as string ?? ''}`}
+              placeholder={`global: ${globalVal}`}
               placeholderTextColor={tema.textoSecundario}
               maxLength={7}
               autoCapitalize="characters"
@@ -433,7 +448,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Selector de perfil */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: 8,
         borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 8 }}>
-        <Text style={{ color: t.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
         <Text style={{ color: t.texto, fontSize: 13, fontWeight: '600', marginLeft: 4 }}>Ing. Informática</Text>
         <Text style={{ color: t.textoSecundario, fontSize: 11, marginLeft: 4 }}>▼</Text>
       </View>
@@ -452,8 +467,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         {(['carrera', 'semestre', 'busqueda'] as const).map(v => (
           <TouchableOpacity key={v} onPress={() => setTab(v)}
             style={{ flex: 1, paddingVertical: 8, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: tab === v ? t.acento : 'transparent' }}>
-            <Text style={{ color: tab === v ? t.acento : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>
+              borderBottomWidth: 2, borderBottomColor: tab === v ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
+            <Text style={{ color: tab === v ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>
               {v === 'carrera' ? 'Carrera' : v === 'semestre' ? 'Semestre' : 'Búsqueda'}
             </Text>
           </TouchableOpacity>
@@ -465,7 +480,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         <>
           <View style={{ alignSelf: 'flex-end', backgroundColor: t.tarjeta,
             paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginBottom: 8 }}>
-            <Text style={{ color: t.acento, fontSize: 11 }}>▲ Colapsar todo</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 11 }}>▲ Colapsar todo</Text>
           </View>
           {semestresData.map(sem => (
             <View key={sem.num} style={{ marginBottom: 8 }}>
@@ -485,9 +500,9 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {tab === 'semestre' && (
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ color: t.acento, fontSize: 20 }}>◀</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>◀</Text>
             <Text style={{ color: t.texto, fontSize: 15, fontWeight: '700' }}>1° Semestre</Text>
-            <Text style={{ color: t.acento, fontSize: 20 }}>▶</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
           </View>
           {semestresData[0].materias.map(m => <MCard key={m.num} m={m} />)}
         </>
@@ -503,7 +518,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
               { label: 'Disponibles', active: false },
             ].map(f => (
               <View key={f.label} style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                backgroundColor: f.active ? t.acento : t.tarjeta }}>
+                backgroundColor: f.active ? (t.acentoFondo ?? t.acento) : t.tarjeta }}>
                 <Text style={{ color: f.active ? '#fff' : t.textoSecundario, fontSize: 12 }}>{f.label}</Text>
               </View>
             ))}
@@ -511,7 +526,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
           <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
             {[
-              { label: 'Todos', bg: t.acento, color: '#fff' },
+              { label: 'Todos', bg: t.acentoFondo ?? t.acento, color: '#fff' },
               { label: `⭐ ${getLabel('exonerado')}`,  bg: t.tarjeta, color: t.textoSecundario },
               { label: `✅ ${getLabel('aprobado')}`,   bg: t.tarjeta, color: t.textoSecundario },
               { label: `🔵 ${getLabel('cursando')}`,   bg: t.tarjeta, color: t.textoSecundario },
@@ -556,18 +571,18 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Navegación de semana */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 6 }}>
-        <Text style={{ color: t.acento, fontSize: 20 }}>◀</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>◀</Text>
         <View style={{ alignItems: 'center' }}>
           <Text style={{ color: t.texto, fontWeight: '700', fontSize: 13 }}>21/04 — 27/04</Text>
-          <Text style={{ color: t.acento, fontSize: 10 }}>Esta semana</Text>
+          <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 10 }}>Esta semana</Text>
         </View>
-        <Text style={{ color: t.acento, fontSize: 20 }}>▶</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           {['📥', '📤'].map((icono, i) => (
             <View key={i} style={{ backgroundColor: t.tarjeta, paddingHorizontal: 7, paddingVertical: 4,
-              borderRadius: 6, borderWidth: 1, borderColor: t.acento, alignItems: 'center' }}>
+              borderRadius: 6, borderWidth: 1, borderColor: t.acentoLineas ?? t.acento, alignItems: 'center' }}>
               <Text style={{ fontSize: 12 }}>{icono}</Text>
-              <Text style={{ color: t.acento, fontSize: 8, fontWeight: '600' }}>{i === 0 ? 'Import' : 'Export'}</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 8, fontWeight: '600' }}>{i === 0 ? 'Import' : 'Export'}</Text>
             </View>
           ))}
         </View>
@@ -578,10 +593,10 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         <View style={{ width: TIME_COL_W }} />
         {DIAS.map((dia, i) => (
           <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: i === HOY_IDX ? t.acento : t.textoSecundario, fontSize: 9, fontWeight: '700' }}>
+            <Text style={{ color: i === HOY_IDX ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontSize: 9, fontWeight: '700' }}>
               {dia}
             </Text>
-            <View style={{ backgroundColor: i === HOY_IDX ? t.acento : undefined,
+            <View style={{ backgroundColor: i === HOY_IDX ? (t.acentoFondo ?? t.acento) : undefined,
               borderRadius: 7, paddingHorizontal: 2 }}>
               <Text style={{ color: i === HOY_IDX ? '#fff' : t.textoSecundario, fontSize: 8 }}>
                 {FECHAS[i]}
@@ -608,8 +623,8 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
           <View key={diaIdx} style={{
             flex: 1, height: HORA_PX * horas.length, position: 'relative',
             borderLeftWidth: 1,
-            borderLeftColor: diaIdx === HOY_IDX ? t.acento : t.borde,
-            backgroundColor: diaIdx === HOY_IDX ? `${t.acento}12` : undefined,
+            borderLeftColor: diaIdx === HOY_IDX ? (t.acentoLineas ?? t.acento) : t.borde,
+            backgroundColor: diaIdx === HOY_IDX ? `${t.acentoFondo ?? t.acento}12` : undefined,
           }}>
             {horas.map((_, i) => (
               <View key={i} style={{ position: 'absolute', top: i * HORA_PX,
@@ -641,7 +656,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
   const EC = { exonerado: '#FFD700', aprobado: '#4CAF50', cursando: '#2196F3', por_cursar: '#9E9E9E', reprobado: '#FF9800', recursar: '#F44336' };
 
   const SecTitulo = ({ title }: { title: string }) => (
-    <Text style={{ color: t.acento, fontWeight: '600', fontSize: 12, marginBottom: 8, marginTop: 14 }}>{title}</Text>
+    <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '600', fontSize: 12, marginBottom: 8, marginTop: 14 }}>{title}</Text>
   );
 
   return (
@@ -651,8 +666,8 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
         {(['general', 'graficos'] as const).map(p => (
           <TouchableOpacity key={p} onPress={() => setPanel(p)}
             style={{ flex: 1, paddingVertical: 10, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: panel === p ? t.acento : 'transparent' }}>
-            <Text style={{ color: panel === p ? t.acento : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+              borderBottomWidth: 2, borderBottomColor: panel === p ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
+            <Text style={{ color: panel === p ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
               {p === 'general' ? 'General' : 'Gráficos'}
             </Text>
           </TouchableOpacity>
@@ -668,7 +683,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
               <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>45 / 128 (35%)</Text>
             </View>
             <View style={{ height: 6, backgroundColor: t.borde, borderRadius: 3, marginBottom: 8 }}>
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acento, width: '35%' }} />
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento, width: '35%' }} />
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
               <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos restantes</Text>
@@ -680,9 +695,9 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Promedio ponderado</Text>
-              <Text style={{ color: t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
             </View>
-            <Text style={{ color: t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
           </View>
 
           <SecTitulo title="AVANCE POR AÑO" />
@@ -695,7 +710,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
               <View key={a.año} style={{ marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                   <Text style={{ color: t.texto, fontWeight: '600', fontSize: 13 }}>Año {a.año}</Text>
-                  <Text style={{ color: a.pct === 100 ? '#4CAF50' : t.acento, fontWeight: '700', fontSize: 13 }}>
+                  <Text style={{ color: a.pct === 100 ? '#4CAF50' : (t.acentoTexto ?? t.acento), fontWeight: '700', fontSize: 13 }}>
                     {a.pct}%{'  '}
                     <Text style={{ color: t.textoSecundario, fontWeight: '400', fontSize: 11 }}>({a.crObt}/{a.crTotal} cr)</Text>
                   </Text>
@@ -754,7 +769,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 6, paddingLeft: 20, paddingBottom: 4 }}>
               {[{ v: 9.5, s: '1°' }, { v: 8.2, s: '2°' }, { v: 7.8, s: '3°' }, { v: 10.1, s: '4°' }].map((d, i) => (
                 <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: '60%', height: d.v * 6, backgroundColor: t.acento, borderRadius: 2 }} />
+                  <View style={{ width: '60%', height: d.v * 6, backgroundColor: t.acentoGraficos ?? t.acento, borderRadius: 2 }} />
                   <Text style={{ color: t.textoSecundario, fontSize: 9, marginTop: 3 }}>{d.s}</Text>
                 </View>
               ))}
@@ -818,7 +833,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
   const { getLabel } = useEstadoEstilo();
 
   const SecTitulo = ({ title }: { title: string }) => (
-    <Text style={{ color: t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
+    <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
   );
   const CampoFake = ({ label, value, ancho }: { label: string; value: string; ancho?: number }) => (
     <View style={{ marginBottom: 12 }}>
@@ -835,7 +850,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
           <Text style={{ color: t.texto, fontSize: 13 }}>{label}</Text>
           {desc && <Text style={{ color: t.textoSecundario, fontSize: 11, marginTop: 2 }}>{desc}</Text>}
         </View>
-        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? t.acento : t.borde,
+        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? (t.acentoFondo ?? t.acento) : t.borde,
           justifyContent: 'center', paddingHorizontal: 3 }}>
           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff',
             alignSelf: on ? 'flex-end' : 'flex-start' }} />
@@ -845,8 +860,8 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
   );
   const BotonFila = ({ label, acento }: { label: string; acento?: boolean }) => (
     <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, alignItems: 'center',
-      marginBottom: 16, borderWidth: 1, borderColor: acento ? t.acento : t.borde }}>
-      <Text style={{ color: acento ? t.acento : t.texto, fontWeight: acento ? '700' : '600', fontSize: 13 }}>{label}</Text>
+      marginBottom: 16, borderWidth: 1, borderColor: acento ? (t.acentoLineas ?? t.acento) : t.borde }}>
+      <Text style={{ color: acento ? (t.acentoTexto ?? t.acento) : t.texto, fontWeight: acento ? '700' : '600', fontSize: 13 }}>{label}</Text>
     </View>
   );
   const Acordeon = ({ titulo, subtitulo }: { titulo: string; subtitulo: string }) => (
@@ -856,7 +871,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
         <Text style={{ color: t.texto, fontWeight: '700', fontSize: 13 }}>{titulo}</Text>
         <Text style={{ color: t.textoSecundario, fontSize: 12, marginTop: 2 }}>{subtitulo}</Text>
       </View>
-      <Text style={{ color: t.acento, fontSize: 15 }}>▼</Text>
+      <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 15 }}>▼</Text>
     </View>
   );
 
@@ -868,7 +883,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
         <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 10 }}>
           Iniciá sesión para sincronizar tus perfiles entre dispositivos.
         </Text>
-        <View style={{ backgroundColor: t.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}>
+        <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Iniciar sesión / Registrarse</Text>
         </View>
       </View>
@@ -878,7 +893,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
       <View style={{ flexDirection: 'row', backgroundColor: t.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
         {(['Oscuro', 'Claro', 'Custom'] as const).map((op, i) => (
           <View key={op} style={{ flex: 1, padding: 12, alignItems: 'center',
-            backgroundColor: i === 2 ? t.acento : 'transparent' }}>
+            backgroundColor: i === 2 ? (t.acentoFondo ?? t.acento) : 'transparent' }}>
             <Text style={{ color: i === 2 ? '#fff' : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>{op}</Text>
           </View>
         ))}
@@ -931,7 +946,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
           <View style={{ flex: 1, backgroundColor: t.fondo, borderRadius: 8, padding: 8 }}>
             <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Nuevo tipo...</Text>
           </View>
-          <View style={{ backgroundColor: t.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}>
+          <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>+ Agregar</Text>
           </View>
         </View>
@@ -972,7 +987,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: t.tarjeta, borderRadius: 10, padding: 14 }}>
               <Text style={{ color: t.texto, fontWeight: '600', flex: 1, fontSize: 13 }}>{nombre}</Text>
-              <Text style={{ color: t.acento, fontSize: 14 }}>▼</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 14 }}>▼</Text>
             </View>
           </View>
         ))}
@@ -1100,16 +1115,53 @@ export function TemaPersonalizadoScreen() {
             {/* ── COLORES GLOBALES ── */}
             <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES GLOBALES</Text>
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <ColorInput label="Tarjeta / panel"   value={draft.tarjeta}          onChange={v => actualizarDraft({ tarjeta: v })} />
-              <ColorInput label="Texto principal"   value={draft.texto}            onChange={v => actualizarDraft({ texto: v })} />
-              <ColorInput label="Texto secundario"  value={draft.textoSecundario}  onChange={v => actualizarDraft({ textoSecundario: v })} />
-              <ColorInput label="Acento (botones)"  value={draft.acento}           onChange={v => actualizarDraft({ acento: v })} />
-              <ColorInput label="Borde / separador" value={draft.borde}            onChange={v => actualizarDraft({ borde: v })} />
+              <ColorInput label="Tarjeta / panel"   value={draft.tarjeta}         onChange={v => actualizarDraft({ tarjeta: v })} />
+              <ColorInput label="Texto principal"   value={draft.texto}           onChange={v => actualizarDraft({ texto: v })} />
+              <ColorInput label="Texto secundario"  value={draft.textoSecundario} onChange={v => actualizarDraft({ textoSecundario: v })} />
+              <ColorInput label="Borde / separador" value={draft.borde}           onChange={v => actualizarDraft({ borde: v })} />
               <ColorInput
                 label="Labels tab bar"
                 value={draft.colorLabelsTab ?? draft.textoSecundario}
                 onChange={v => actualizarDraft({ colorLabelsTab: v })}
               />
+
+              {/* Grupo acento */}
+              <View style={{ borderTopWidth: 1, borderTopColor: tema.borde, marginTop: 6, paddingTop: 10 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 8 }}>
+                  ACENTO — los sub-campos sobrescriben al base cuando están llenos
+                </Text>
+                <ColorInput
+                  label="Acento base"
+                  value={draft.acento}
+                  onChange={v => actualizarDraft({ acento: v })}
+                />
+                <View style={{ paddingLeft: 16 }}>
+                  <ColorInput
+                    label="↳ Texto"
+                    value={draft.acentoTexto ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoTexto: undefined }) : actualizarDraft({ acentoTexto: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Rellenos"
+                    value={draft.acentoFondo ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoFondo: undefined }) : actualizarDraft({ acentoFondo: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Líneas"
+                    value={draft.acentoLineas ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoLineas: undefined }) : actualizarDraft({ acentoLineas: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Gráficos"
+                    value={draft.acentoGraficos ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoGraficos: undefined }) : actualizarDraft({ acentoGraficos: v })}
+                    fallbackColor={draft.acento}
+                  />
+                </View>
+              </View>
             </View>
 
             {/* ── OPACIDAD DE SUPERFICIE ── */}
