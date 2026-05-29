@@ -51,11 +51,25 @@ function TabNavigator() {
 
 export function RootNavigator() {
   const navRef = useNavigationContainerRef();
+  const materias = useStore(s => s.materias);
 
   return (
     <View style={{ flex: 1, flexDirection: Platform.OS === 'web' ? 'row' : 'column' }}>
       {Platform.OS === 'web' && <WebSidebar navRef={navRef} />}
-      <NavigationContainer ref={navRef}>
+      <NavigationContainer
+        ref={navRef}
+        onReady={() => {
+          const incompleta = materias.find(
+            m => !m.nombre.trim() || !(m.semestre >= 1)
+          );
+          if (incompleta) {
+            navRef.navigate('EditMateria' as never, {
+              materiaId: incompleta.id,
+              incompleta: true,
+            } as never);
+          }
+        }}
+      >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Tabs" component={TabNavigator} />
           <Stack.Screen name="EditMateria" component={EditMateriaScreen}
