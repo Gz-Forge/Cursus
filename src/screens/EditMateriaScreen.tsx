@@ -241,18 +241,90 @@ export function EditMateriaScreen() {
     return lista;
   }, [form.bloques, filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
 
-  // Auto-save para materias existentes
   const esMateriaExistente = !!materiaOriginal;
+
+  // ── Modal 😏 para materias incompletas al entrar ──
+  useEffect(() => {
+    const faltantes: string[] = [];
+    if (!form.nombre.trim()) faltantes.push('Nombre');
+    const n = parseInt(semestreStr, 10);
+    if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
+
+    const esIncompleta = route.params?.incompleta === true || (esMateriaExistente && faltantes.length > 0);
+    if (!esIncompleta || faltantes.length === 0) return;
+
+    setCamposError({
+      nombre: faltantes.includes('Nombre'),
+      semestre: faltantes.includes('Semestre'),
+    });
+
+    const t = setTimeout(() => {
+      showAlert(
+        'Ey, te quedó algo pendiente 😏',
+        `Esta materia tiene campos obligatorios sin completar: ${faltantes.join(', ')}. Completalos para continuar.`,
+      );
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save para materias existentes
   const primerRender = useRef(true);
   useEffect(() => {
     if (primerRender.current) { primerRender.current = false; return; }
     if (!esMateriaExistente) return;
     if (!form.nombre.trim()) return;
+    const n = parseInt(semestreStr, 10);
+    if (!semestreStr.trim() || isNaN(n) || n < 1) return;
     guardarMateria(form);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, esMateriaExistente, guardarMateria]);
+  }, [form, semestreStr, esMateriaExistente, guardarMateria]);
 
-  const guardar = () => { guardarMateria(form); navigation.goBack(); };
+  const validarObligatorios = (): string[] => {
+    const faltantes: string[] = [];
+    if (!form.nombre.trim()) faltantes.push('Nombre');
+    const n = parseInt(semestreStr, 10);
+    if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
+    return faltantes;
+  };
+
+  const guardar = () => {
+    const faltantes = validarObligatorios();
+    if (faltantes.length > 0) {
+      setCamposError({
+        nombre: faltantes.includes('Nombre'),
+        semestre: faltantes.includes('Semestre'),
+      });
+      showAlert(
+        'Campos obligatorios',
+        `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
+      );
+      return;
+    }
+    guardarMateria(form);
+    navigation.goBack();
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      const faltantes: string[] = [];
+      if (!form.nombre.trim()) faltantes.push('Nombre');
+      const n = parseInt(semestreStr, 10);
+      if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
+      if (faltantes.length === 0) return;
+
+      e.preventDefault();
+      setCamposError({
+        nombre: faltantes.includes('Nombre'),
+        semestre: faltantes.includes('Semestre'),
+      });
+      showAlert(
+        'No podés salir',
+        `Completá los campos obligatorios antes de salir: ${faltantes.join(', ')}.`,
+      );
+    });
+    return unsubscribe;
+  }, [navigation, form.nombre, semestreStr]);
 
   const handleEliminar = () => setShowConfirmEliminar(true);
 
