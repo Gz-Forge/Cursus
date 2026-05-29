@@ -34,11 +34,11 @@ export function ImportarExportarScreen() {
     paddingVertical: 12,
     alignItems: 'center' as const,
     borderBottomWidth: 2,
-    borderBottomColor: tab === t ? tema.acento : 'transparent',
+    borderBottomColor: tab === t ? (tema.acentoLineas ?? tema.acento) : 'transparent',
   });
 
   const tabTextStyle = (t: Tab) => ({
-    color: tab === t ? tema.acento : tema.textoSecundario,
+    color: tab === t ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario,
     fontWeight: tab === t ? '700' as const : '400' as const,
     fontSize: 15,
   });
@@ -417,7 +417,7 @@ function PanelImportar() {
 
   return (
     <View>
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
         DESDE ARCHIVO .JSON
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12 }}>
@@ -427,13 +427,13 @@ function PanelImportar() {
           • <Text style={{ color: tema.texto }}>Plan completo</Text>: carrera + horarios + evaluaciones en un JSON{'\n'}
           • <Text style={{ color: tema.texto }}>Exportación completa</Text>: generada desde esta pantalla{'\n\n'}
           💡 Encontrás los prompts en{' '}
-          <Text style={{ color: tema.acento }}>Configuración → Prompts para IA</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Configuración → Prompts para IA</Text>
         </Text>
         <TouchableOpacity
           onPress={handleImportarJson}
           disabled={cargando}
           style={{
-            backgroundColor: tema.acento,
+            backgroundColor: tema.acentoFondo ?? tema.acento,
             padding: 14, borderRadius: 10,
             alignItems: 'center',
           }}
@@ -464,7 +464,7 @@ function PanelImportar() {
               {nuevoCount} nuevas · {existenteCount} ya existentes
             </Text>
             {!!pendingImport.configAplicados && (
-              <Text style={{ color: tema.acento, fontSize: 13, marginBottom: 14 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, marginBottom: 14 }}>
                 ⚙️ {pendingImport.configAplicados} campo(s) de configuración ya aplicados
               </Text>
             )}
@@ -502,7 +502,7 @@ function PanelImportar() {
 
       {Platform.OS !== 'web' && (
         <>
-          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
             ESCANEANDO QR
           </Text>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14 }}>
@@ -516,10 +516,10 @@ function PanelImportar() {
                 padding: 14, borderRadius: 10,
                 alignItems: 'center',
                 borderWidth: 1,
-                borderColor: tema.acento,
+                borderColor: tema.acentoLineas ?? tema.acento,
               }}
             >
-              <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Abrir escáner</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>📷 Abrir escáner</Text>
             </TouchableOpacity>
           </View>
           <QrScannerModal visible={mostrarScanner} onCerrar={() => setMostrarScanner(false)} />
@@ -559,7 +559,7 @@ function PanelImportar() {
                 <TouchableOpacity
                   onPress={() => ejecutarImportPerfil(perfilActivoId)}
                   style={{
-                    backgroundColor: tema.acento,
+                    backgroundColor: tema.acentoFondo ?? tema.acento,
                     padding: 14, borderRadius: 10,
                     alignItems: 'center', marginBottom: 10,
                   }}
@@ -574,10 +574,10 @@ function PanelImportar() {
                     backgroundColor: tema.fondo,
                     padding: 14, borderRadius: 10,
                     alignItems: 'center', marginBottom: 10,
-                    borderWidth: 1, borderColor: tema.acento,
+                    borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
                   }}
                 >
-                  <Text style={{ color: tema.acento, fontWeight: '700' }}>Crear perfil nuevo</Text>
+                  <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>Crear perfil nuevo</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -587,12 +587,12 @@ function PanelImportar() {
                     key={p.id}
                     onPress={() => ejecutarImportPerfil(p.id)}
                     style={{
-                      backgroundColor: p.id === perfilActivoId ? tema.acento + '22' : tema.fondo,
+                      backgroundColor: p.id === perfilActivoId ? (tema.acentoFondo ?? tema.acento) + '22' : tema.fondo,
                       padding: 14, borderRadius: 10,
                       flexDirection: 'row', alignItems: 'center',
                       marginBottom: 8,
                       borderWidth: 1,
-                      borderColor: p.id === perfilActivoId ? tema.acento : tema.borde,
+                      borderColor: p.id === perfilActivoId ? (tema.acentoLineas ?? tema.acento) : tema.borde,
                     }}
                   >
                     <Text style={{ color: tema.texto, fontWeight: p.id === perfilActivoId ? '700' : '400', flex: 1 }}>
@@ -661,8 +661,8 @@ function PanelExportar() {
     >
       <View style={{
         width: 22, height: 22, borderRadius: 6, borderWidth: 2,
-        borderColor: disabled ? tema.borde : tema.acento,
-        backgroundColor: value ? (disabled ? tema.borde : tema.acento) : 'transparent',
+        borderColor: disabled ? tema.borde : (tema.acentoLineas ?? tema.acento),
+        backgroundColor: value ? (disabled ? tema.borde : (tema.acentoFondo ?? tema.acento)) : 'transparent',
         marginRight: 10, alignItems: 'center', justifyContent: 'center',
       }}>
         {value && <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✓</Text>}
@@ -673,7 +673,7 @@ function PanelExportar() {
 
   return (
     <View>
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
         PASO 1 — ¿QUÉ EXPORTAR?
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
@@ -689,7 +689,7 @@ function PanelExportar() {
         )}
       </View>
 
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
         PERFILES A INCLUIR
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
@@ -701,8 +701,8 @@ function PanelExportar() {
           >
             <View style={{
               width: 22, height: 22, borderRadius: 6, borderWidth: 2,
-              borderColor: perfilesSelec.includes(p.id) ? tema.acento : tema.borde,
-              backgroundColor: perfilesSelec.includes(p.id) ? tema.acento : 'transparent',
+              borderColor: perfilesSelec.includes(p.id) ? (tema.acentoLineas ?? tema.acento) : tema.borde,
+              backgroundColor: perfilesSelec.includes(p.id) ? (tema.acentoFondo ?? tema.acento) : 'transparent',
               marginRight: 10, alignItems: 'center', justifyContent: 'center',
             }}>
               {perfilesSelec.includes(p.id) && <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✓</Text>}
@@ -714,7 +714,7 @@ function PanelExportar() {
         ))}
       </View>
 
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
         PASO 2 — ¿CÓMO EXPORTAR?
       </Text>
       <PanelMetodos
@@ -726,7 +726,7 @@ function PanelExportar() {
         materiasActivas={materias}
       />
 
-      <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
         CONFIGURACIÓN
       </Text>
       <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
@@ -739,10 +739,10 @@ function PanelExportar() {
             backgroundColor: tema.tarjeta,
             padding: 14, borderRadius: 10,
             alignItems: 'center',
-            borderWidth: 1, borderColor: tema.acento,
+            borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
           }}
         >
-          <Text style={{ color: tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>📷 Compartir QR</Text>
         </TouchableOpacity>
       </View>
 
@@ -784,7 +784,7 @@ function QrConfigModal({ visible, onCerrar, config }: { visible: boolean; onCerr
               <QRCode value={qrData} size={220} backgroundColor="#fff" color="#000" />
             </View>
           ) : (
-            <ActivityIndicator color={tema.acento} style={{ marginVertical: 24 }} />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} style={{ marginVertical: 24 }} />
           )}
           <TouchableOpacity onPress={onCerrar} style={{ padding: 10 }}>
             <Text style={{ color: tema.textoSecundario }}>Cerrar</Text>
@@ -917,7 +917,7 @@ function PanelMetodos({
     <>
       {cargando && (
         <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <ActivityIndicator color={tema.acento} />
+          <ActivityIndicator color={tema.acentoFondo ?? tema.acento} />
           <Text style={{ color: tema.textoSecundario, marginTop: 8 }}>Generando...</Text>
         </View>
       )}

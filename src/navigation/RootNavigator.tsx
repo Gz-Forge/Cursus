@@ -34,7 +34,7 @@ function TabNavigator() {
         tabBarStyle: Platform.OS === 'web'
           ? { display: 'none' }
           : { backgroundColor: tema.fondo, borderTopColor: tema.borde },
-        tabBarActiveTintColor: tema.acento,
+        tabBarActiveTintColor: tema.acentoFondo ?? tema.acento,
         tabBarInactiveTintColor: colorLabelsTab,
         headerStyle: { backgroundColor: tema.fondo },
         headerTintColor: tema.texto,

@@ -39,7 +39,7 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <TouchableOpacity
           onPress={() => setMostrarPaleta(v => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.acento }}
+          style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
         />
         <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
         <TextInput
@@ -61,7 +61,7 @@ function ColorInput({ value, onChange, label }: { value: string; onChange: (v: s
               style={{
                 width: 32, height: 32, borderRadius: 6, backgroundColor: c,
                 borderWidth: c.toLowerCase() === value.toLowerCase() ? 2.5 : 1,
-                borderColor: c.toLowerCase() === value.toLowerCase() ? tema.acento : tema.borde,
+                borderColor: c.toLowerCase() === value.toLowerCase() ? (tema.acentoLineas ?? tema.acento) : tema.borde,
               }}
             />
           ))}
@@ -90,7 +90,7 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
         >
           <Text style={{ fontSize: 18 }}>{t.icon}</Text>
           <Text style={{
-            color: activa === t.id ? tema.acento : tema.textoSecundario,
+            color: activa === t.id ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario,
             fontSize: 11,
             fontWeight: activa === t.id ? '700' : '400',
             marginTop: 2,
@@ -100,7 +100,7 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
           {activa === t.id && (
             <View style={{
               position: 'absolute', bottom: 0, left: 8, right: 8,
-              height: 2, backgroundColor: tema.acento, borderRadius: 1,
+              height: 2, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 1,
             }} />
           )}
         </TouchableOpacity>
@@ -209,7 +209,7 @@ export function ConfigScreen() {
             onPress={() => actualizarConfig({ [key]: !val } as any)}
             style={{
               width: 50, height: 28, borderRadius: 14,
-              backgroundColor: val ? tema.acento : tema.borde,
+              backgroundColor: val ? (tema.acentoFondo ?? tema.acento) : tema.borde,
               justifyContent: 'center',
               paddingHorizontal: 3,
             }}
@@ -250,13 +250,13 @@ export function ConfigScreen() {
 
           {tabActiva === 'app' && (
           <>
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
             {(['oscuro', 'claro', 'personalizado'] as const).map(t => (
               <TouchableOpacity
                 key={t}
                 onPress={() => actualizarConfig({ tema: t })}
-                style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: config.tema === t ? tema.acento : 'transparent' }}
+                style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: config.tema === t ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
               >
                 <Text style={{ color: config.tema === t ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 12 }}>
                   {t === 'claro' ? 'Claro' : t === 'oscuro' ? 'Oscuro' : 'Custom'}
@@ -269,20 +269,20 @@ export function ConfigScreen() {
             <TouchableOpacity
               onPress={() => navigation.navigate('TemaPersonalizado' as never)}
               style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center',
-                marginBottom: 20, borderWidth: 1, borderColor: tema.acento }}
+                marginBottom: 20, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
             >
-              <Text style={{ color: tema.acento, fontWeight: '700' }}>🎨  Entrar a personalizar →</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>🎨  Entrar a personalizar →</Text>
             </TouchableOpacity>
           )}
           {config.tema !== 'personalizado' && <View style={{ marginBottom: 20 }} />}
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('TarjetaConfig')}
             style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}
           >
             <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
           </TouchableOpacity>
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>MOTIVACIÓN</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>MOTIVACIÓN</Text>
           {toggle(
             'Felicitaciones por semestre completo',
             'mostrarFelicitaciones',
@@ -295,7 +295,7 @@ export function ConfigScreen() {
           )}
           {/* ── ESTADOS DE MATERIA ──────────────────────── */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
             <TouchableOpacity
               onPress={() => actualizarConfig({
                 estadoColoresPersonalizados: undefined,
@@ -455,7 +455,7 @@ export function ConfigScreen() {
 
           {tabActiva === 'notas' && (
           <>
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
           {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}
           {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}
 
@@ -469,18 +469,18 @@ export function ConfigScreen() {
             Modo actual: {config.modoExamen === 'manual' ? 'Manual' : 'Automático'}
           </Text>
 
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
           {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
           {config.usarEstadoAprobado && campoUmbral('Aprobación ≥', 'umbralAprobacion')}
           {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
           {campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
           {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
           {config.usarEstadoAprobado && toggle(`"${getLabel('aprobado')}" habilita previas`, 'aprobadoHabilitaPrevias', 'Si está desactivado, solo exonerado desbloquea materias siguientes')}
 
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TIPOS DE FORMACIÓN</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TIPOS DE FORMACIÓN</Text>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
             {config.tiposFormacion.length === 0 && (
               <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 8 }}>Sin tipos definidos</Text>
@@ -508,7 +508,7 @@ export function ConfigScreen() {
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <TextInput
                         autoFocus
-                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, borderWidth: 1, borderColor: tema.acento }}
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 14, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
                         value={textoEdicion}
                         onChangeText={setTextoEdicion}
                         onBlur={confirmarEdicion}
@@ -576,7 +576,7 @@ export function ConfigScreen() {
                   if (!yaExiste) actualizarConfig({ tiposFormacion: [...config.tiposFormacion, t] });
                   setNuevoTipo('');
                 }}
-                style={{ backgroundColor: tema.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}
+                style={{ backgroundColor: tema.acentoFondo ?? tema.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '700' }}>+ Agregar</Text>
               </TouchableOpacity>
@@ -587,7 +587,7 @@ export function ConfigScreen() {
 
           {tabActiva === 'horario' && (
           <>
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>TIPOS DE BLOQUE DE HORARIO</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>TIPOS DE BLOQUE DE HORARIO</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
             Editá el nombre completo y la abreviatura (máx. 3 caracteres) de cada tipo.
           </Text>
@@ -642,7 +642,7 @@ export function ConfigScreen() {
                   onPress={() => actualizarConfig({ horarioPrimerDia: opcion })}
                   style={{
                     flex: 1, paddingVertical: 10, alignItems: 'center',
-                    backgroundColor: config.horarioPrimerDia === opcion ? tema.acento : 'transparent',
+                    backgroundColor: config.horarioPrimerDia === opcion ? (tema.acentoFondo ?? tema.acento) : 'transparent',
                   }}
                 >
                   <Text style={{
@@ -658,7 +658,7 @@ export function ConfigScreen() {
 
           <View style={{ marginBottom: 14 }} />
 
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>
             CONFIGURACIÓN DE COLORES EN HORARIO
           </Text>
 
@@ -688,7 +688,7 @@ export function ConfigScreen() {
                       }}
                     >
                       <Text style={{ color: tema.texto, fontWeight: '600', flex: 1 }}>{m.nombre}</Text>
-                      <Text style={{ color: tema.acento }}>{expandida ? '▲' : '▼'}</Text>
+                      <Text style={{ color: tema.acentoTexto ?? tema.acento }}>{expandida ? '▲' : '▼'}</Text>
                     </TouchableOpacity>
 
                     {expandida && (
@@ -732,7 +732,7 @@ export function ConfigScreen() {
                                   <Text style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700', textAlign: 'center' }}>{label}</Text>
                                 </View>
                                 <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Bloque</Text>
-                                <Text style={{ color: tema.acento, fontSize: 12 }}>{bloqueExpandido ? '▲' : '▼'}</Text>
+                                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{bloqueExpandido ? '▲' : '▼'}</Text>
                               </TouchableOpacity>
                               {bloqueExpandido && (
                                 <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
@@ -777,7 +777,7 @@ export function ConfigScreen() {
                                         <Text numberOfLines={1} style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700' }}>{grupo.nombre}</Text>
                                       </View>
                                       <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Grupo</Text>
-                                      <Text style={{ color: tema.acento, fontSize: 12 }}>{grupoExpandido ? '▲' : '▼'}</Text>
+                                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoExpandido ? '▲' : '▼'}</Text>
                                     </TouchableOpacity>
                                     {grupoExpandido && (
                                       <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
@@ -827,7 +827,7 @@ export function ConfigScreen() {
                                         <Text numberOfLines={1} style={{ color: colorActual.texto, fontSize: 13, fontWeight: '700' }}>{ev.nombre}</Text>
                                       </View>
                                       <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Eval.</Text>
-                                      <Text style={{ color: tema.acento, fontSize: 12 }}>{evalExpandida ? '▲' : '▼'}</Text>
+                                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{evalExpandida ? '▲' : '▼'}</Text>
                                     </TouchableOpacity>
                                     {evalExpandida && (
                                       <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
@@ -878,7 +878,7 @@ export function ConfigScreen() {
 
           {tabActiva === 'datos' && (
           <>
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>IMPORTAR / EXPORTAR</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>IMPORTAR / EXPORTAR</Text>
 
           <TouchableOpacity
             onPress={() => navigation.navigate('ImportarExportar' as never)}
@@ -889,12 +889,12 @@ export function ConfigScreen() {
 
           <TouchableOpacity
             onPress={() => setMostrarSync(true)}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.acento }}
+            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
           >
-            <Text style={{ color: tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
           </TouchableOpacity>
 
-          <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>PROMPTS PARA IA</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>PROMPTS PARA IA</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 14 }}>
             Seleccioná qué querés generar. La IA preguntará solo lo necesario y generará un único JSON para importar.
           </Text>
@@ -915,8 +915,8 @@ export function ConfigScreen() {
             >
               <View style={{
                 width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                borderColor: tema.acento, marginRight: 10, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: modulosSeleccionados.size === TODOS_MODULOS.length ? tema.acento : 'transparent',
+                borderColor: tema.acentoLineas ?? tema.acento, marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: modulosSeleccionados.size === TODOS_MODULOS.length ? (tema.acentoFondo ?? tema.acento) : 'transparent',
               }}>
                 {modulosSeleccionados.size === TODOS_MODULOS.length && (
                   <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
@@ -944,9 +944,9 @@ export function ConfigScreen() {
                 >
                   <View style={{
                     width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                    borderColor: modulosSeleccionados.has(id) ? tema.acento : tema.textoSecundario,
+                    borderColor: modulosSeleccionados.has(id) ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
                     marginRight: 10, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: modulosSeleccionados.has(id) ? tema.acento : 'transparent',
+                    backgroundColor: modulosSeleccionados.has(id) ? (tema.acentoFondo ?? tema.acento) : 'transparent',
                   }}>
                     {modulosSeleccionados.has(id) && (
                       <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
@@ -972,11 +972,11 @@ export function ConfigScreen() {
                       >
                         <View style={{
                           width: 16, height: 16, borderRadius: 8, borderWidth: 2,
-                          borderColor: modoCarrera === valor ? tema.acento : tema.textoSecundario,
+                          borderColor: modoCarrera === valor ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
                           marginRight: 8, alignItems: 'center', justifyContent: 'center',
                         }}>
                           {modoCarrera === valor && (
-                            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tema.acento }} />
+                            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tema.acentoFondo ?? tema.acento }} />
                           )}
                         </View>
                         <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{labelRadio}</Text>
@@ -1002,7 +1002,7 @@ export function ConfigScreen() {
               </ScrollView>
               <TouchableOpacity
                 onPress={() => Clipboard.setStringAsync(generarPromptCombinado(modulosSeleccionados, config, materias, modoCarrera))}
-                style={{ marginTop: 10, backgroundColor: tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
+                style={{ marginTop: 10, backgroundColor: tema.acentoFondo ?? tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
               </TouchableOpacity>

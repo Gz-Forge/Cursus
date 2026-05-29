@@ -249,7 +249,7 @@ export function MetricsScreen() {
       .map(k => ({
         value: rangosMap[k].count,
         label: `${k}-${k + 1}`,
-        frontColor: tema.acento,
+        frontColor: tema.acentoGraficos ?? tema.acento,
         materiasList: rangosMap[k].mats,
       }));
   } else {
@@ -267,7 +267,7 @@ export function MetricsScreen() {
     barrasNotas = Array.from({ length: config.notaMaxima + 1 }, (_, i) => ({
       value: notasMap[i]?.count ?? 0,
       label: String(i),
-      frontColor: tema.acento,
+      frontColor: tema.acentoGraficos ?? tema.acento,
       materiasList: notasMap[i]?.mats ?? [],
     })).filter(b => b.value > 0);
   }
@@ -294,7 +294,7 @@ export function MetricsScreen() {
 
   // ── Helper UI ─────────────────────────────────────────────────────────────
   const seccion = (titulo: string) => (
-    <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 14, marginBottom: 10, marginTop: 16 }}>
+    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600', fontSize: 14, marginBottom: 10, marginTop: 16 }}>
       {titulo}
     </Text>
   );
@@ -349,7 +349,7 @@ export function MetricsScreen() {
         opacity: disabled ? 0.3 : 1,
       }}
     >
-      <Text style={{ color: tema.acento, fontSize: 14, fontWeight: '700' }}>
+      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '700' }}>
         {dir === 'arriba' ? '↑' : '↓'}
       </Text>
     </TouchableOpacity>
@@ -394,7 +394,7 @@ export function MetricsScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Panel General */}
-              <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 12, marginBottom: 6, letterSpacing: 0.5 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600', fontSize: 12, marginBottom: 6, letterSpacing: 0.5 }}>
                 PANEL GENERAL
               </Text>
 
@@ -413,7 +413,7 @@ export function MetricsScreen() {
                     <Switch
                       value={esVisible(m.id)}
                       onValueChange={() => toggleMetrica(m.id)}
-                      trackColor={{ false: tema.borde, true: tema.acento }}
+                      trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
                       thumbColor="#fff"
                     />
                   </View>
@@ -441,7 +441,7 @@ export function MetricsScreen() {
                           <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>−</Text>
                         </TouchableOpacity>
                         <View style={{ paddingHorizontal: 20, alignItems: 'center' }}>
-                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 24 }}>{umbralCuello}</Text>
+                          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 24 }}>{umbralCuello}</Text>
                           <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>materias</Text>
                         </View>
                         <TouchableOpacity
@@ -464,7 +464,7 @@ export function MetricsScreen() {
                         <Switch
                           value={soloSiguiente}
                           onValueChange={v => actualizarConfig({ cuelloBotellaSoloSiguiente: v })}
-                          trackColor={{ false: tema.borde, true: tema.acento }}
+                          trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
                           thumbColor="#fff"
                         />
                       </View>
@@ -474,7 +474,7 @@ export function MetricsScreen() {
               ))}
 
               {/* Panel Gráficos */}
-              <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 12, marginTop: 20, marginBottom: 6, letterSpacing: 0.5 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600', fontSize: 12, marginTop: 20, marginBottom: 6, letterSpacing: 0.5 }}>
                 PANEL GRÁFICOS
               </Text>
               {metricasGraficosOrdenadas.map((m, idx) => (
@@ -492,7 +492,7 @@ export function MetricsScreen() {
                     <Switch
                       value={esVisible(m.id)}
                       onValueChange={() => toggleMetrica(m.id)}
-                      trackColor={{ false: tema.borde, true: tema.acento }}
+                      trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
                       thumbColor="#fff"
                     />
                   </View>
@@ -514,9 +514,9 @@ export function MetricsScreen() {
                             onPress={() => actualizarConfig({ notasObtenidasModo: modo })}
                             style={{
                               flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
-                              backgroundColor: notasModo === modo ? tema.acento : tema.superficie,
+                              backgroundColor: notasModo === modo ? (tema.acentoFondo ?? tema.acento) : tema.superficie,
                               borderWidth: 1,
-                              borderColor: notasModo === modo ? tema.acento : tema.borde,
+                              borderColor: notasModo === modo ? (tema.acentoLineas ?? tema.acento) : tema.borde,
                             }}
                           >
                             <Text style={{
@@ -548,9 +548,9 @@ export function MetricsScreen() {
                                   onPress={() => actualizarConfig({ notasObtenidasRedondeo: op.val })}
                                   style={{
                                     flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
-                                    backgroundColor: activo ? tema.acento : tema.superficie,
+                                    backgroundColor: activo ? (tema.acentoFondo ?? tema.acento) : tema.superficie,
                                     borderWidth: 1,
-                                    borderColor: activo ? tema.acento : tema.borde,
+                                    borderColor: activo ? (tema.acentoLineas ?? tema.acento) : tema.borde,
                                   }}
                                 >
                                   <Text style={{
@@ -589,9 +589,9 @@ export function MetricsScreen() {
             <TouchableOpacity key={p} onPress={() => setPanelActivo(p)}
               style={{
                 flex: 1, padding: 12, alignItems: 'center',
-                borderBottomWidth: 2, borderBottomColor: panelActivo === p ? tema.acento : 'transparent',
+                borderBottomWidth: 2, borderBottomColor: panelActivo === p ? (tema.acentoLineas ?? tema.acento) : 'transparent',
               }}>
-              <Text style={{ color: panelActivo === p ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
+              <Text style={{ color: panelActivo === p ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontWeight: '600' }}>
                 {p === 'general' ? 'General' : 'Gráficos'}
               </Text>
             </TouchableOpacity>
@@ -644,7 +644,7 @@ export function MetricsScreen() {
                     </View>
                     {creditosTotal > 0 && (
                       <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, marginBottom: 10 }}>
-                        <View style={{ height: 6, borderRadius: 3, backgroundColor: tema.acento,
+                        <View style={{ height: 6, borderRadius: 3, backgroundColor: tema.acentoFondo ?? tema.acento,
                           width: `${Math.round((creditos / creditosTotal) * 100)}%` as any }} />
                       </View>
                     )}
@@ -659,12 +659,12 @@ export function MetricsScreen() {
                     {promedioEnEscala !== null && (
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Promedio ponderado</Text>
-                        <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>
+                        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '700' }}>
                           {promedioEnEscala} / {config.notaMaxima}
                         </Text>
                       </View>
                     )}
-                    <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 17, marginTop: 8 }}>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 17, marginTop: 8 }}>
                       {materias.length ? Math.round((conteo.exonerado / materias.length) * 100) : 0}% completado
                     </Text>
                   </View>
@@ -680,7 +680,7 @@ export function MetricsScreen() {
                       <View key={año} style={{ marginBottom: 12 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                           <Text style={{ color: tema.texto, fontWeight: '600' }}>Año {año}</Text>
-                          <Text style={{ color: pct === 100 ? '#4CAF50' : tema.acento, fontWeight: '700' }}>
+                          <Text style={{ color: pct === 100 ? '#4CAF50' : (tema.acentoTexto ?? tema.acento), fontWeight: '700' }}>
                             {pct}%  <Text style={{ color: tema.textoSecundario, fontWeight: '400', fontSize: 12 }}>
                               ({crObt}/{crTotal} cr)
                             </Text>
@@ -803,7 +803,7 @@ export function MetricsScreen() {
 
                             {/* Highlight siguiente semestre */}
                             {soloSiguiente && enSigSem.length > 0 && (
-                              <Text style={{ color: tema.acento, fontSize: 11, marginLeft: 18, marginTop: 2 }}>
+                              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11, marginLeft: 18, marginTop: 2 }}>
                                 {'► Sig. sem: '}{enSigSem.map(x => x.nombre).join(', ')}
                               </Text>
                             )}
@@ -844,15 +844,15 @@ export function MetricsScreen() {
                                 height={150}
                                 maxValue={lineMax}
                                 noOfSections={lineSections}
-                                color={tema.acento}
-                                dataPointsColor={tema.acento}
+                                color={tema.acentoGraficos ?? tema.acento}
+                                dataPointsColor={tema.acentoGraficos ?? tema.acento}
                                 dataPointsRadius={5}
                                 thickness={2.5}
                                 curved
                                 hideRules
                                 yAxisTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
                                 xAxisLabelTextStyle={{ color: tema.textoSecundario, fontSize: 11 }}
-                                startFillColor={tema.acento}
+                                startFillColor={tema.acentoGraficos ?? tema.acento}
                                 startOpacity={0.15}
                                 endOpacity={0}
                                 areaChart
@@ -955,13 +955,13 @@ export function MetricsScreen() {
                             <TouchableOpacity
                               onPress={() => setSemestreTorta(null)}
                               style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-                                backgroundColor: semestreTorta === null ? tema.acento : tema.superficie }}>
+                                backgroundColor: semestreTorta === null ? (tema.acentoFondo ?? tema.acento) : tema.superficie }}>
                               <Text style={{ color: semestreTorta === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Global</Text>
                             </TouchableOpacity>
                             {semestres.map(s => (
                               <TouchableOpacity key={s} onPress={() => setSemestreTorta(s)}
                                 style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-                                  backgroundColor: semestreTorta === s ? tema.acento : tema.superficie }}>
+                                  backgroundColor: semestreTorta === s ? (tema.acentoFondo ?? tema.acento) : tema.superficie }}>
                                 <Text style={{ color: semestreTorta === s ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{s}° Sem</Text>
                               </TouchableOpacity>
                             ))}
@@ -1060,7 +1060,7 @@ export function MetricsScreen() {
                 </Text>
                 <TouchableOpacity
                   onPress={() => setMateriaMapaSeleccionada(null)}
-                  style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8 }}
+                  style={{ marginTop: 20, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8 }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
                 </TouchableOpacity>
@@ -1110,7 +1110,7 @@ export function MetricsScreen() {
               </ScrollView>
               <TouchableOpacity
                 onPress={() => setNotaBarraSeleccionada(null)}
-                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
               </TouchableOpacity>
@@ -1160,7 +1160,7 @@ export function MetricsScreen() {
               </ScrollView>
               <TouchableOpacity
                 onPress={() => setTipoFormacionSeleccionado(null)}
-                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
               </TouchableOpacity>

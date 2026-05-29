@@ -367,7 +367,7 @@ export function CarreraScreen() {
               gap: 6,
             }}
           >
-            <Text style={{ color: tema.acento, fontSize: 13 }}>⚡</Text>
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13 }}>⚡</Text>
             <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600', maxWidth: 220 }} numberOfLines={1}>
               {perfiles.find(p => p.id === perfilActivoId)?.nombre ?? 'Perfil'}
             </Text>
@@ -386,7 +386,7 @@ export function CarreraScreen() {
             backgroundColor: surfaceBg,
           }}
         >
-          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
           <Text
             style={{
               color: tema.texto,
@@ -423,9 +423,9 @@ export function CarreraScreen() {
           <TouchableOpacity
             key={v}
             onPress={() => setVista(v)}
-            style={{ flex: 1, padding: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: vista === v ? tema.acento : 'transparent' }}
+            style={{ flex: 1, padding: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: vista === v ? (tema.acentoLineas ?? tema.acento) : 'transparent' }}
           >
-            <Text style={{ color: vista === v ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>{VISTA_LABELS[v]}</Text>
+            <Text style={{ color: vista === v ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontWeight: '600' }}>{VISTA_LABELS[v]}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -453,7 +453,7 @@ export function CarreraScreen() {
               onPress={toggleTodos}
               style={{ alignSelf: 'flex-end', marginBottom: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta }}
             >
-              <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>
                 {todosExpandidos ? '▲ Colapsar todo' : '▼ Expandir todo'}
               </Text>
             </TouchableOpacity>
@@ -480,11 +480,11 @@ export function CarreraScreen() {
           <>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <TouchableOpacity onPress={() => setSemestreActual(s => Math.max(1, s - 1))}>
-                <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <Text style={{ color: tema.texto, fontSize: 17, fontWeight: '700' }}>{semestreActual}° Semestre</Text>
               <TouchableOpacity onPress={() => setSemestreActual(s => Math.min(s + 1, semestres.length > 0 ? semestres[semestres.length - 1] : s))}>
-                <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
               </TouchableOpacity>
             </View>
             {renderMateriasList(materias.filter(m => m.semestre === semestreActual))}
@@ -594,7 +594,7 @@ export function CarreraScreen() {
                           key={key}
                           onPress={() => setModoBusqueda(key)}
                           style={{ flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
-                            backgroundColor: modoBusqueda === key ? tema.acento : tema.tarjeta }}
+                            backgroundColor: modoBusqueda === key ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta }}
                         >
                           <Text style={{ color: modoBusqueda === key ? '#fff' : tema.textoSecundario, fontSize: 11, fontWeight: '600' }}>
                             {label}
@@ -604,7 +604,7 @@ export function CarreraScreen() {
                     </View>
 
                     {materiaPinned && (
-                      <Text style={{ color: tema.acento, marginBottom: 4, fontSize: 12 }}>
+                      <Text style={{ color: tema.acentoTexto ?? tema.acento, marginBottom: 4, fontSize: 12 }}>
                         📌 Referencia: {materiaPinned.nombre}
                       </Text>
                     )}
@@ -633,7 +633,7 @@ export function CarreraScreen() {
                       key={key}
                       onPress={onPress}
                       style={{ flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-                        backgroundColor: active ? tema.acento : tema.tarjeta }}
+                        backgroundColor: active ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta }}
                     >
                       <Text style={{ color: active ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
                         {label}
@@ -665,7 +665,7 @@ export function CarreraScreen() {
                           )}
                           {primerSem.length > 0 && (
                             <>
-                              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>
+                              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>
                                 1° semestre del año
                               </Text>
                               {renderMateriasList(primerSem)}
@@ -673,7 +673,7 @@ export function CarreraScreen() {
                           )}
                           {segundoSem.length > 0 && (
                             <>
-                              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 13,
+                              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 13,
                                 marginBottom: 8, marginTop: primerSem.length > 0 ? 12 : 0 }}>
                                 2° semestre del año
                               </Text>
@@ -711,7 +711,7 @@ export function CarreraScreen() {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                       <TouchableOpacity
                         onPress={() => setFiltroEstado(null)}
-                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === null ? tema.acento : tema.tarjeta }}
+                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === null ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta }}
                       >
                         <Text style={{ color: filtroEstado === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
                       </TouchableOpacity>
@@ -738,7 +738,7 @@ export function CarreraScreen() {
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                           <TouchableOpacity
                             onPress={() => setFiltroTipo(null)}
-                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === null ? tema.acento : tema.tarjeta }}
+                            style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === null ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta }}
                           >
                             <Text style={{ color: filtroTipo === null ? '#fff' : tema.textoSecundario, fontSize: 12 }}>Todos</Text>
                           </TouchableOpacity>
@@ -746,7 +746,7 @@ export function CarreraScreen() {
                             <TouchableOpacity
                               key={t}
                               onPress={() => setFiltroTipo(prev => prev === t ? null : t)}
-                              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === t ? tema.acento : tema.tarjeta }}
+                              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroTipo === t ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta }}
                             >
                               <Text style={{ color: filtroTipo === t ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{t}</Text>
                             </TouchableOpacity>
