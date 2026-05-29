@@ -83,7 +83,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
       marginVertical: 4,
       borderLeftWidth: 4,
       borderLeftColor: color,
-      ...(pinned ? { borderWidth: 2, borderColor: tema.acento } : {}),
+      ...(pinned ? { borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento } : {}),
     },
     fila: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     nombre: { color: tema.texto, fontSize: 15, fontWeight: '600', flex: 1 },
@@ -93,7 +93,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
     valor: { color: tema.texto, fontSize: 13 },
     advertencia: { color: '#FF9800', fontSize: 12, marginTop: 4 },
     botonEditar: {
-      marginTop: 8, backgroundColor: tema.acento,
+      marginTop: 8, backgroundColor: tema.acentoFondo ?? tema.acento,
       padding: 8, borderRadius: 6, alignSelf: 'flex-end',
     },
   });

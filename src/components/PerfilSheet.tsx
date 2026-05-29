@@ -133,13 +133,13 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                             flex: 1,
                             color: tema.texto,
                             borderBottomWidth: 1,
-                            borderBottomColor: tema.acento,
+                            borderBottomColor: tema.acentoLineas ?? tema.acento,
                             fontSize: 15,
                             paddingVertical: 4,
                           }}
                         />
                         <TouchableOpacity onPress={() => handleConfirmarRenombrar(perfil.id)} style={{ marginLeft: 12 }}>
-                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
+                          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => { setRenombrandoId(null); setNombreEdicion(''); }} style={{ marginLeft: 10 }}>
                           <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>✕</Text>
@@ -200,13 +200,13 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                             flex: 1,
                             color: tema.texto,
                             borderBottomWidth: 1,
-                            borderBottomColor: tema.acento,
+                            borderBottomColor: tema.acentoLineas ?? tema.acento,
                             fontSize: 15,
                             paddingVertical: 4,
                           }}
                         />
                         <TouchableOpacity onPress={handleCrear} style={{ marginLeft: 12 }}>
-                          <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
+                          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={cancelarCrear} style={{ marginLeft: 10 }}>
                           <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>✕</Text>
@@ -214,7 +214,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                       </View>
                     ) : (
                       <TouchableOpacity onPress={() => setCreando(true)} style={{ paddingVertical: 10 }}>
-                        <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 15 }}>+ Nuevo perfil</Text>
+                        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600', fontSize: 15 }}>+ Nuevo perfil</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -288,7 +288,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                       flex: 1,
                       color: tema.texto,
                       borderBottomWidth: 1,
-                      borderBottomColor: tema.acento,
+                      borderBottomColor: tema.acentoLineas ?? tema.acento,
                       fontSize: 15,
                       paddingVertical: 4,
                     }}
@@ -297,7 +297,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                     onPress={() => handleConfirmarRenombrar(perfil.id)}
                     style={{ marginLeft: 12 }}
                   >
-                    <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => { setRenombrandoId(null); setNombreEdicion(''); }}
@@ -367,13 +367,13 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                       flex: 1,
                       color: tema.texto,
                       borderBottomWidth: 1,
-                      borderBottomColor: tema.acento,
+                      borderBottomColor: tema.acentoLineas ?? tema.acento,
                       fontSize: 15,
                       paddingVertical: 4,
                     }}
                   />
                   <TouchableOpacity onPress={handleCrear} style={{ marginLeft: 12 }}>
-                    <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 16 }}>✓</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={cancelarCrear} style={{ marginLeft: 10 }}>
                     <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>✕</Text>
@@ -381,7 +381,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                 </View>
               ) : (
                 <TouchableOpacity onPress={() => setCreando(true)} style={{ paddingVertical: 10 }}>
-                  <Text style={{ color: tema.acento, fontWeight: '600', fontSize: 15 }}>
+                  <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600', fontSize: 15 }}>
                     + Nuevo perfil
                   </Text>
                 </TouchableOpacity>

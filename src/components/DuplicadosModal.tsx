@@ -85,7 +85,7 @@ export function DuplicadosModal({ visible, materias, onEliminar, onNuevoId, onRe
                       }}
                       style={{
                         paddingHorizontal: 8, paddingVertical: 5,
-                        borderRadius: 6, backgroundColor: tema.acento,
+                        borderRadius: 6, backgroundColor: tema.acentoFondo ?? tema.acento,
                       }}
                     >
                       <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Nuevo ID</Text>

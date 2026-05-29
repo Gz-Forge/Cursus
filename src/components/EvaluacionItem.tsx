@@ -29,13 +29,13 @@ function HoraPicker({ value, onChange, label }: { value: number; onChange: (v: n
       <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>{label}</Text>
       <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 10, alignItems: 'center' }}>
         <TouchableOpacity onPress={() => onChange(((h + 1) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
         </TouchableOpacity>
         <Text style={{ color: tema.texto, fontSize: 26, fontWeight: '700', letterSpacing: 1, minWidth: 64, textAlign: 'center' }}>
           {h.toString().padStart(2, '0')}:{m === 0 ? '00' : '30'}
         </Text>
         <TouchableOpacity onPress={() => onChange(((h - 1 + 24) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
           {([0, 30] as const).map(min => (
@@ -43,7 +43,7 @@ function HoraPicker({ value, onChange, label }: { value: number; onChange: (v: n
               key={min}
               onPress={() => onChange(h * 60 + min)}
               style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6,
-                backgroundColor: m === min ? tema.acento : tema.tarjeta, alignItems: 'center' }}
+                backgroundColor: m === min ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta, alignItems: 'center' }}
             >
               <Text style={{ color: m === min ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
                 :{min === 0 ? '00' : '30'}
@@ -135,7 +135,7 @@ function FechaHoraPicker({
         style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
       >
         <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1 }}>{labelFecha}</Text>
-        <Text style={{ color: tema.acento, fontSize: 11 }}>{expandido ? '▲' : '▼'}</Text>
+        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{expandido ? '▲' : '▼'}</Text>
       </TouchableOpacity>
 
       {expandido && (
@@ -201,7 +201,7 @@ function FechaHoraPicker({
                 maxLength={20}
               />
               {mesStr && !isNaN(parseInt(mesStr, 10)) && parseInt(mesStr, 10) >= 1 && parseInt(mesStr, 10) <= 12 && (
-                <Text style={{ color: tema.acento, fontSize: 10, marginTop: 2 }}>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 10, marginTop: 2 }}>
                   {MESES[parseInt(mesStr, 10) - 1]}
                 </Text>
               )}
@@ -239,8 +239,8 @@ function FechaHoraPicker({
           >
             <View style={{
               width: 16, height: 16, borderRadius: 3, borderWidth: 1.5,
-              borderColor: mostrarHora ? tema.acento : tema.textoSecundario,
-              backgroundColor: mostrarHora ? tema.acento : 'transparent',
+              borderColor: mostrarHora ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
+              backgroundColor: mostrarHora ? (tema.acentoFondo ?? tema.acento) : 'transparent',
               alignItems: 'center', justifyContent: 'center',
             }}>
               {mostrarHora && <Text style={{ color: '#fff', fontSize: 10, lineHeight: 12 }}>✓</Text>}
@@ -271,7 +271,7 @@ function FechaHoraPicker({
           {/* Botón guardar fecha */}
           <TouchableOpacity
             onPress={guardar}
-            style={{ marginTop: 10, backgroundColor: tema.acento, borderRadius: 6, padding: 8, alignItems: 'center' }}
+            style={{ marginTop: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 6, padding: 8, alignItems: 'center' }}
           >
             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Guardar fecha</Text>
           </TouchableOpacity>
@@ -368,7 +368,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
     fila: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
     input: { backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, flex: 1 },
     label: { color: tema.textoSecundario, fontSize: 12 },
-    resultado: { color: tema.acento, fontSize: 12, marginTop: 4 },
+    resultado: { color: tema.acentoTexto ?? tema.acento, fontSize: 12, marginTop: 4 },
   });
 
   if (evaluacion.tipo === 'simple') {
@@ -444,7 +444,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
   // Grupo
   const grupo = evaluacion as GrupoEvaluacion;
   return (
-    <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acento }]}>
+    <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento }]}>
       <View style={estilos.fila}>
         <TextInput style={estilos.input} placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
           value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} maxLength={20} />
@@ -486,7 +486,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
               onChange={notaMaxima => actualizarSub(i, { notaMaxima: notaMaxima ?? 10 })}
             />
             <TouchableOpacity onPress={() => actualizarSub(i, { tipoNota: sub.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
-              <Text style={{ color: tema.acento, fontSize: 11 }}>{sub.tipoNota === 'numero' ? '🔢' : '%'}</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{sub.tipoNota === 'numero' ? '🔢' : '%'}</Text>
             </TouchableOpacity>
           </View>
           <FechaHoraPicker
@@ -508,7 +508,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar }: Props) {
         </View>
       ))}
       <TouchableOpacity onPress={agregarSub} style={{ padding: 6 }}>
-        <Text style={{ color: tema.acento, fontSize: 13 }}>+ Añadir prueba al grupo</Text>
+        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13 }}>+ Añadir prueba al grupo</Text>
       </TouchableOpacity>
       {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {contribucion.toFixed(2)}% a la nota final</Text>}
     </View>

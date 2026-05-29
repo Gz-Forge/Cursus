@@ -219,7 +219,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const btnStyle = (color = tema.acento) => ({
+  const btnStyle = (color = tema.acentoFondo ?? tema.acento) => ({
     backgroundColor: color,
     padding: 14, borderRadius: 10, alignItems: 'center' as const, marginBottom: 10,
   });
@@ -250,9 +250,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setEstado('receptor_escaneando')}
-              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acento }]}
+              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }]}
             >
-              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
                 Recibiré los datos del otro dispositivo
               </Text>
@@ -287,7 +287,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <TouchableOpacity
               onPress={() => iniciarEmisor(passphrase)}
               disabled={passphrase.length < 4}
-              style={btnStyle(passphrase.length >= 4 ? tema.acento : tema.borde)}
+              style={btnStyle(passphrase.length >= 4 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Continuar →</Text>
             </TouchableOpacity>
@@ -300,7 +300,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'emisor_subiendo':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Subiendo datos...</Text>
           </View>
         );
@@ -328,7 +328,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               backgroundColor: tema.tarjeta, borderRadius: 10,
               paddingVertical: 10, paddingHorizontal: 24, marginBottom: 6,
             }}>
-              <Text style={{ color: tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
                 {code}
               </Text>
             </View>
@@ -369,7 +369,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <TouchableOpacity
               onPress={() => descargarComoReceptor(codigoManual)}
               disabled={codigoManual.trim().length < 8}
-              style={btnStyle(codigoManual.trim().length >= 8 ? tema.acento : tema.borde)}
+              style={btnStyle(codigoManual.trim().length >= 8 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>Conectar</Text>
             </TouchableOpacity>
@@ -379,7 +379,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'receptor_descargando':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Descargando datos...</Text>
           </View>
         );
@@ -415,7 +415,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <TouchableOpacity
               onPress={aplicarClave}
               disabled={passphrase.length < 1 || cargandoClave}
-              style={btnStyle(passphrase.length >= 1 && !cargandoClave ? tema.acento : tema.borde)}
+              style={btnStyle(passphrase.length >= 1 && !cargandoClave ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
               {cargandoClave
                 ? <ActivityIndicator color="#fff" size="small" />
@@ -456,7 +456,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'receptor_aplicando':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Aplicando datos...</Text>
           </View>
         );
@@ -485,7 +485,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               {errorMsg}
             </Text>
             <TouchableOpacity onPress={resetear} style={{ marginTop: 16 }}>
-              <Text style={{ color: tema.acento }}>Intentar de nuevo</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Intentar de nuevo</Text>
             </TouchableOpacity>
           </View>
         );

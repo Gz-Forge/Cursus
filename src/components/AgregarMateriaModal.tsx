@@ -22,7 +22,7 @@ export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar }:
 
       <TouchableOpacity
         onPress={() => { onCerrar(); onManual(); }}
-        style={{ backgroundColor: tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 }}
+        style={{ backgroundColor: tema.acentoFondo ?? tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 }}
       >
         <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>✏️  Agregar manualmente</Text>
       </TouchableOpacity>

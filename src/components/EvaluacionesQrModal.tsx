@@ -45,7 +45,7 @@ export function EvaluacionesQrModal({ visible, evaluaciones, onCerrar }: Props) 
           </Text>
 
           {cargando ? (
-            <ActivityIndicator color={tema.acento} style={{ marginVertical: 24 }} />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} style={{ marginVertical: 24 }} />
           ) : !qrData ? (
             <Text style={{ color: tema.textoSecundario, marginVertical: 24 }}>Sin evaluaciones para compartir</Text>
           ) : (

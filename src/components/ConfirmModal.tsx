@@ -38,7 +38,7 @@ export function ConfirmModal({
             )}
             <TouchableOpacity
               onPress={onConfirmar}
-              style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: destructivo ? '#F44336' : tema.acento, alignItems: 'center' }}
+              style={{ flex: 1, padding: 12, borderRadius: 8, backgroundColor: destructivo ? '#F44336' : (tema.acentoFondo ?? tema.acento), alignItems: 'center' }}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>{labelConfirmar}</Text>
             </TouchableOpacity>

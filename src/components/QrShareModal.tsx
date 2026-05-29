@@ -85,7 +85,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
           </Text>
 
           {cargando ? (
-            <ActivityIndicator color={tema.acento} style={{ marginVertical: 24 }} />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} style={{ marginVertical: 24 }} />
           ) : chunks.length === 0 ? (
             <Text style={{ color: tema.textoSecundario, marginVertical: 24 }}>
               Sin materias para compartir
@@ -93,7 +93,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
           ) : (
             <>
               {chunks.length > 1 && (
-                <Text style={{ color: tema.acento, fontSize: 13, marginBottom: 12, textAlign: 'center' }}>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, marginBottom: 12, textAlign: 'center' }}>
                   QR {paginaActual + 1} de {chunks.length} — mostrá cada QR en orden
                 </Text>
               )}
@@ -106,7 +106,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
                       key={i}
                       style={{
                         width: 10, height: 10, borderRadius: 5,
-                        backgroundColor: i === paginaActual ? tema.acento : tema.borde,
+                        backgroundColor: i === paginaActual ? (tema.acentoFondo ?? tema.acento) : tema.borde,
                       }}
                     />
                   ))}

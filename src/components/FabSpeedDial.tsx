@@ -52,7 +52,7 @@ export function FabSpeedDial({ acciones }: Props) {
                 {accion.label}
               </Text>
               <TouchableOpacity
-                style={[s.miniBoton, { backgroundColor: tema.superficie, borderColor: tema.acento }]}
+                style={[s.miniBoton, { backgroundColor: tema.superficie, borderColor: tema.acentoLineas ?? tema.acento }]}
                 onPress={() => { animar(false); accion.onPress(); }}
                 accessibilityLabel={accion.label}
                 accessibilityRole="button"
@@ -64,7 +64,7 @@ export function FabSpeedDial({ acciones }: Props) {
         })}
 
         <TouchableOpacity
-          style={[s.fab, { backgroundColor: tema.acento }]}
+          style={[s.fab, { backgroundColor: tema.acentoFondo ?? tema.acento }]}
           onPress={() => animar(!abierto)}
           activeOpacity={0.85}
           accessibilityLabel={abierto ? 'Cerrar menú de acciones' : 'Abrir menú de acciones'}
