@@ -1054,6 +1054,14 @@ export function HorarioScreen() {
                     borderLeftColor: esHoy ? tema.acento : tema.borde,
                     backgroundColor: esHoy ? `${tema.acento}0A` : undefined,
                   }}>
+                    {/* Línea derecha del día actual */}
+                    {esHoy && (
+                      <View style={{
+                        position: 'absolute', top: 0, right: 0,
+                        width: 1, height: TOTAL_HEIGHT,
+                        backgroundColor: tema.acento, zIndex: 1,
+                      }} />
+                    )}
                     {/* Líneas de hora */}
                     {horas.map((_, i) => (
                       <View key={`hora-${i}`} style={{
