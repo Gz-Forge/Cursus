@@ -800,7 +800,7 @@ export function CarreraScreen() {
       <AgregarMateriaModal
         visible={mostrarAgregar}
         onCerrar={() => setMostrarAgregar(false)}
-        onManual={() => navigation.navigate('EditMateria', {})}
+        onManual={() => navigation.navigate('CrearMateria' as never, {} as never)}
         onImportar={handleImportar}
       />
 

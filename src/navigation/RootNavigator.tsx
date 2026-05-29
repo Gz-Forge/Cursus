@@ -11,6 +11,7 @@ import { MetricsScreen } from '../screens/MetricsScreen';
 import { ConfigScreen } from '../screens/ConfigScreen';
 import { DonacionScreen } from '../screens/DonacionScreen';
 import { EditMateriaScreen } from '../screens/EditMateriaScreen';
+import { CrearMateriaScreen } from '../screens/CrearMateriaScreen';
 import { TarjetaConfigScreen } from '../screens/TarjetaConfigScreen';
 import { HorarioScreen } from '../screens/HorarioScreen';
 import { ImportarExportarScreen } from '../screens/ImportarExportarScreen';
@@ -73,7 +74,9 @@ export function RootNavigator() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Tabs" component={TabNavigator} />
           <Stack.Screen name="EditMateria" component={EditMateriaScreen}
-            options={{ headerShown: true, title: 'Editar Materia' }} />
+            options={{ headerShown: true, title: 'Editar materia' }} />
+          <Stack.Screen name="CrearMateria" component={CrearMateriaScreen}
+            options={{ headerShown: true, title: 'Crear materia' }} />
           <Stack.Screen name="TarjetaConfig" component={TarjetaConfigScreen}
             options={{ headerShown: true, title: 'Configurar tarjetas' }} />
           <Stack.Screen

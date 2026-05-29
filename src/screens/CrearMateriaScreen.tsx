@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
-import { ConfirmModal } from '../components/ConfirmModal';
-import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
+import { calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
   exportarJSONMateria, generarEjemploCSV, generarEjemploTexto, generarEjemploJSONMateria,
@@ -100,16 +99,14 @@ function HoraPicker({ value, onChange, label }: {
   );
 }
 
-export function EditMateriaScreen() {
-  const route = useRoute<any>();
+export function CrearMateriaScreen() {
   const navigation = useNavigation();
-  const { materias, config, guardarMateria, eliminarMateria, actualizarConfig } = useStore();
+  const { materias, config, guardarMateria, actualizarConfig } = useStore();
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
   const { getLabel } = useEstadoEstilo();
 
-  const materiaOriginal = materias.find(m => m.id === route.params?.materiaId);
-  const [form, setForm] = useState<Materia>(materiaOriginal ?? {
+  const [form, setForm] = useState<Materia>({
     id: Date.now().toString(), numero: 0, nombre: '', semestre: 1,
     creditosQueDA: 0, creditosNecesarios: 0, previasNecesarias: [], esPreviaDe: [],
     cursando: false,
@@ -118,7 +115,7 @@ export function EditMateriaScreen() {
     tipoFormacion: undefined, bloques: [],
   });
   const [busquedaPrevia, setBusquedaPrevia] = useState('');
-  const [semestreStr, setSemestreStr] = useState(String(materiaOriginal?.semestre ?? 1));
+  const [semestreStr, setSemestreStr] = useState('1');
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
@@ -127,7 +124,6 @@ export function EditMateriaScreen() {
   }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
-  const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
 
   // ── Filtros de horario ──
@@ -156,15 +152,7 @@ export function EditMateriaScreen() {
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
 
   // ── Nota manual: estado de string para soportar decimales al tipear ──
-  const [notaManualStr, setNotaManualStr] = useState<string>(() => {
-    const nota = materiaOriginal?.notaManual ?? null;
-    const tipo = materiaOriginal?.tipoNotaManual ?? 'porcentaje';
-    if (nota === null) return '';
-    if (tipo === 'numero') {
-      return parseFloat(((nota / 100) * config.notaMaxima).toFixed(4)).toString();
-    }
-    return parseFloat(nota.toFixed(4)).toString();
-  });
+  const [notaManualStr, setNotaManualStr] = useState<string>('');
 
   const handleNotaManualChange = (v: string) => {
     const cleaned = v.replace(/[^0-9.]/g, '');
@@ -241,45 +229,6 @@ export function EditMateriaScreen() {
     return lista;
   }, [form.bloques, filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
 
-  const esMateriaExistente = !!materiaOriginal;
-
-  // ── Modal 😏 para materias incompletas al entrar ──
-  useEffect(() => {
-    const faltantes: string[] = [];
-    if (!form.nombre.trim()) faltantes.push('Nombre');
-    const n = parseInt(semestreStr, 10);
-    if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
-
-    const esIncompleta = route.params?.incompleta === true || (esMateriaExistente && faltantes.length > 0);
-    if (!esIncompleta || faltantes.length === 0) return;
-
-    setCamposError({
-      nombre: faltantes.includes('Nombre'),
-      semestre: faltantes.includes('Semestre'),
-    });
-
-    const t = setTimeout(() => {
-      showAlert(
-        'Ey, te quedó algo pendiente 😏',
-        `Esta materia tiene campos obligatorios sin completar: ${faltantes.join(', ')}. Completalos para continuar.`,
-      );
-    }, 300);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Auto-save para materias existentes
-  const primerRender = useRef(true);
-  useEffect(() => {
-    if (primerRender.current) { primerRender.current = false; return; }
-    if (!esMateriaExistente) return;
-    if (!form.nombre.trim()) return;
-    const n = parseInt(semestreStr, 10);
-    if (!semestreStr.trim() || isNaN(n) || n < 1) return;
-    guardarMateria(form);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, semestreStr, esMateriaExistente, guardarMateria]);
-
   const validarObligatorios = (): string[] => {
     const faltantes: string[] = [];
     if (!form.nombre.trim()) faltantes.push('Nombre');
@@ -304,29 +253,6 @@ export function EditMateriaScreen() {
     guardarMateria(form);
     navigation.goBack();
   };
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-      const faltantes: string[] = [];
-      if (!form.nombre.trim()) faltantes.push('Nombre');
-      const n = parseInt(semestreStr, 10);
-      if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
-      if (faltantes.length === 0) return;
-
-      e.preventDefault();
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
-      showAlert(
-        'No podés salir',
-        `Completá los campos obligatorios antes de salir: ${faltantes.join(', ')}.`,
-      );
-    });
-    return unsubscribe;
-  }, [navigation, form.nombre, semestreStr]);
-
-  const handleEliminar = () => setShowConfirmEliminar(true);
 
   const confirmarBloque = () => {
     const anio = new Date().getFullYear();
@@ -1707,18 +1633,10 @@ export function EditMateriaScreen() {
           </View>
         )}
 
-        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 12 }}>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Los cambios se guardan automáticamente</Text>
-        </View>
-
-        {materiaOriginal && (
-          <TouchableOpacity
-            onPress={handleEliminar}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#F44336' }}
-          >
-            <Text style={{ color: '#F44336', fontWeight: '600', fontSize: 15 }}>🗑 Eliminar materia</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={guardar}
+          style={{ backgroundColor: tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>💾 Crear materia</Text>
+        </TouchableOpacity>
 
         </View>
       </ScrollView>
@@ -1763,15 +1681,6 @@ export function EditMateriaScreen() {
         </View>
       </Modal>
 
-      <ConfirmModal
-        visible={showConfirmEliminar}
-        titulo="Eliminar materia"
-        mensaje={`¿Seguro que querés eliminar "${form.nombre}"? Esta acción no se puede deshacer.`}
-        labelConfirmar="Eliminar"
-        destructivo
-        onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id, form.numero); navigation.goBack(); }}
-        onCancelar={() => setShowConfirmEliminar(false)}
-      />
     </SafeAreaView>
   );
 }
