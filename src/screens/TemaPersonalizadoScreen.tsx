@@ -9,6 +9,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { temaOscuro } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -169,16 +170,18 @@ const COLORES_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
   config:   'coloresConfig',
 };
 
+const isValidHex = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
+
 function mergeScreenColors(draft: TemaPersonalizado, pagina: PantallaKey): TemaPersonalizado {
   const overrides = draft[COLORES_KEY[pagina]] as ColoresScreen | undefined;
   if (!overrides) return draft;
   return {
     ...draft,
-    ...(overrides.tarjeta         ? { tarjeta:         overrides.tarjeta }         : {}),
-    ...(overrides.texto           ? { texto:           overrides.texto }           : {}),
-    ...(overrides.textoSecundario ? { textoSecundario: overrides.textoSecundario } : {}),
-    ...(overrides.acento          ? { acento:          overrides.acento }          : {}),
-    ...(overrides.borde           ? { borde:           overrides.borde }           : {}),
+    ...(overrides.tarjeta         && isValidHex(overrides.tarjeta)         ? { tarjeta:         overrides.tarjeta }         : {}),
+    ...(overrides.texto           && isValidHex(overrides.texto)           ? { texto:           overrides.texto }           : {}),
+    ...(overrides.textoSecundario && isValidHex(overrides.textoSecundario) ? { textoSecundario: overrides.textoSecundario } : {}),
+    ...(overrides.acento          && isValidHex(overrides.acento)          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.borde           && isValidHex(overrides.borde)           ? { borde:           overrides.borde }           : {}),
   };
 }
 
@@ -390,6 +393,7 @@ function PreviewWrapper({
 // ── Preview fiel: Carrera ─────────────────────────────────────────────────────
 function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
+  const { getLabel } = useEstadoEstilo();
   const [tab, setTab] = useState<'carrera' | 'semestre' | 'busqueda'>('carrera');
 
   const semestresData = [
@@ -436,7 +440,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Resumen */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 10,
         borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 8 }}>
-        {[{ valor: '45', label: 'Créditos' }, { valor: '3', label: 'Exoneradas' }, { valor: '5', label: 'Disponibles' }].map(s => (
+        {[{ valor: '45', label: 'Créditos' }, { valor: '3', label: getLabel('exonerado') }, { valor: '5', label: 'Disponibles' }].map(s => (
           <View key={s.label} style={{ alignItems: 'center' }}>
             <Text style={{ color: t.texto, fontSize: 22, fontWeight: '700' }}>{s.valor}</Text>
             <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{s.label}</Text>
@@ -508,14 +512,14 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
             {[
               { label: 'Todos', bg: t.acento, color: '#fff' },
-              { label: '⭐ Exoneradas', bg: t.tarjeta, color: t.textoSecundario },
-              { label: '✅ Aprobadas',  bg: t.tarjeta, color: t.textoSecundario },
-              { label: '🔵 Cursando',   bg: t.tarjeta, color: t.textoSecundario },
-              { label: '⬜ Por cursar', bg: t.tarjeta, color: t.textoSecundario },
+              { label: `⭐ ${getLabel('exonerado')}`,  bg: t.tarjeta, color: t.textoSecundario },
+              { label: `✅ ${getLabel('aprobado')}`,   bg: t.tarjeta, color: t.textoSecundario },
+              { label: `🔵 ${getLabel('cursando')}`,   bg: t.tarjeta, color: t.textoSecundario },
+              { label: `⬜ ${getLabel('por_cursar')}`, bg: t.tarjeta, color: t.textoSecundario },
             ].map(f => (
               <View key={f.label} style={{ paddingHorizontal: 9, paddingVertical: 5,
                 borderRadius: 14, backgroundColor: f.bg }}>
-                <Text style={{ color: f.color, fontSize: 11 }}>{f.label}</Text>
+                <Text style={{ color: f.color, fontSize: 11 }} numberOfLines={1}>{f.label}</Text>
               </View>
             ))}
           </View>
@@ -631,6 +635,7 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
 // ── Preview fiel: Métricas ────────────────────────────────────────────────────
 function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
+  const { getLabel } = useEstadoEstilo();
   const [panel, setPanel] = useState<'general' | 'graficos'>('general');
 
   const EC = { exonerado: '#FFD700', aprobado: '#4CAF50', cursando: '#2196F3', por_cursar: '#9E9E9E', reprobado: '#FF9800', recursar: '#F44336' };
@@ -670,7 +675,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
               <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>83</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Exoneradas</Text>
+              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
               <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>3 / 12</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -713,10 +718,10 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
               <View style={{ flex: 6, backgroundColor: EC.por_cursar }} />
             </View>
             {[
-              { label: '⭐ Exoneradas', n: 3, pct: 25, color: EC.exonerado },
-              { label: '✅ Aprobadas',  n: 1, pct:  8, color: EC.aprobado  },
-              { label: '🔵 Cursando',   n: 2, pct: 17, color: EC.cursando  },
-              { label: '⬜ Por cursar', n: 6, pct: 50, color: EC.por_cursar },
+              { label: `⭐ ${getLabel('exonerado')}`,  n: 3, pct: 25, color: EC.exonerado },
+              { label: `✅ ${getLabel('aprobado')}`,   n: 1, pct:  8, color: EC.aprobado  },
+              { label: `🔵 ${getLabel('cursando')}`,   n: 2, pct: 17, color: EC.cursando  },
+              { label: `⬜ ${getLabel('por_cursar')}`, n: 6, pct: 50, color: EC.por_cursar },
             ].map(e => (
               <View key={e.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={{ color: t.texto, fontSize: 12 }}>{e.label}</Text>
@@ -761,10 +766,10 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
           <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 70, gap: 8, paddingLeft: 20, paddingBottom: 4 }}>
               {[
-                { h: 14, color: EC.recursar,  label: 'Recursar' },
-                { h: 24, color: EC.reprobado, label: 'Reprobado' },
-                { h: 10, color: EC.aprobado,  label: 'Aprobado' },
-                { h: 52, color: EC.exonerado, label: 'Exonerado' },
+                { h: 14, color: EC.recursar,  label: getLabel('recursar') },
+                { h: 24, color: EC.reprobado, label: getLabel('reprobado') },
+                { h: 10, color: EC.aprobado,  label: getLabel('aprobado') },
+                { h: 52, color: EC.exonerado, label: getLabel('exonerado') },
               ].map(b => (
                 <View key={b.label} style={{ flex: 1, alignItems: 'center' }}>
                   <View style={{ width: '75%', height: b.h, backgroundColor: b.color, borderRadius: 3 }} />
@@ -793,10 +798,10 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
             ))}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8,
               paddingTop: 8, borderTopWidth: 1, borderTopColor: t.borde }}>
-              {([['exonerado','Exoner.'], ['aprobado','Aprobado'], ['cursando','Cursando'], ['por_cursar','Por cur.']] as const).map(([e, lbl]) => (
+              {(['exonerado', 'aprobado', 'cursando', 'por_cursar'] as const).map(e => (
                 <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: EC[e] }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 10 }}>{lbl}</Text>
+                  <Text style={{ color: t.textoSecundario, fontSize: 10 }}>{getLabel(e)}</Text>
                 </View>
               ))}
             </View>
@@ -810,6 +815,7 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
 // ── Preview fiel: Configuración ───────────────────────────────────────────────
 function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
+  const { getLabel } = useEstadoEstilo();
 
   const SecTitulo = ({ title }: { title: string }) => (
     <Text style={{ color: t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
@@ -907,14 +913,14 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
         </View>
       ))}
       <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 14 }}>
-        ⚠️ Recursar se asigna automáticamente al resto
+        {`⚠️ ${getLabel('recursar')} se asigna automáticamente al resto`}
       </Text>
 
       {/* ESTADOS */}
       <SecTitulo title="ESTADOS" />
-      <ToggleFila label='Usar estado "Aprobado"' on={true}
+      <ToggleFila label={`Usar estado "${getLabel('aprobado')}"`} on={true}
         desc="Algunas carreras van directo a exonerado o recursar" />
-      <ToggleFila label='"Aprobado" habilita previas' on={false}
+      <ToggleFila label={`"${getLabel('aprobado')}" habilita previas`} on={false}
         desc="Si está desactivado, solo exonerado desbloquea materias siguientes" />
 
       {/* TIPOS DE FORMACIÓN */}

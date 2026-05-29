@@ -6,7 +6,7 @@ interface AlertConfig {
   titulo: string;
   mensaje: string;
   labelConfirmar: string;
-  onConfirmar: () => void;
+  onConfirmar: () => void | Promise<void>;
   onCancelar?: () => void;
   destructivo?: boolean;
   soloConfirmar: boolean;
@@ -17,7 +17,7 @@ interface AlertContextValue {
   showConfirm: (
     titulo: string,
     mensaje: string,
-    onConfirmar: () => void,
+    onConfirmar: () => void | Promise<void>,
     opciones?: { labelConfirmar?: string; destructivo?: boolean },
   ) => void;
 }
@@ -46,7 +46,7 @@ function AlertModal({ config, onClose }: { config: AlertConfig; onClose: () => v
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              onPress={() => { config.onConfirmar(); onClose(); }}
+              onPress={async () => { await config.onConfirmar(); onClose(); }}
               style={{
                 flex: 1, padding: 12, borderRadius: 8, alignItems: 'center',
                 backgroundColor: config.destructivo ? '#F44336' : tema.acento,
@@ -73,7 +73,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
   const showConfirm = useCallback((
     titulo: string,
     mensaje: string,
-    onConfirmar: () => void,
+    onConfirmar: () => void | Promise<void>,
     opciones?: { labelConfirmar?: string; destructivo?: boolean },
   ) => {
     setConfig({

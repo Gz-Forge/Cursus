@@ -1,11 +1,11 @@
 import { cargarPerfilEstado } from './perfiles';
-import { materiasAJson } from './importExport';
-import { Perfil } from '../types';
+import { obtenerNotaFinal } from './calculos';
+import { Perfil, Config, Materia } from '../types';
 
 export interface ExportPerfilPayload {
   id: string;
   nombre: string;
-  materias: ReturnType<typeof materiasAJson>;
+  materias: Materia[];
   notas?: Record<string, number | null>;
   evaluaciones?: Record<string, import('../types').Evaluacion[]>;
   horarios?: import('../types').BloqueHorario[];
@@ -15,12 +15,14 @@ export interface ExportPayload {
   version: 1;
   exportadoEn: string;
   perfiles: ExportPerfilPayload[];
+  config?: Config;
 }
 
 export interface OpcionesExport {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
+  config?: Config;
   perfilesSelec: Perfil[];
 }
 
@@ -29,17 +31,40 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
   for (const perfil of opts.perfilesSelec) {
     const estado = await cargarPerfilEstado(perfil.id);
-    const materiasJson = materiasAJson(estado.materias);
+
+    const materiasLimpias: Materia[] = estado.materias.map(m => {
+      const bloques = (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      }));
+      if (m.cursando) {
+        // Cursando: exportar con evaluaciones completas
+        return { ...m, bloques };
+      }
+      if (opts.inclNotas) {
+        // No cursando con notas habilitadas: colapsar a nota final como nota manual
+        const notaFinal = obtenerNotaFinal(m);
+        return {
+          ...m,
+          bloques,
+          evaluaciones: [],
+          usarNotaManual: notaFinal !== null,
+          notaManual: notaFinal,
+        };
+      }
+      // No cursando sin notas: solo estructura, sin datos académicos
+      return { ...m, bloques, evaluaciones: [], usarNotaManual: false, notaManual: null };
+    });
 
     const entry: ExportPerfilPayload = {
       id: perfil.id,
       nombre: perfil.nombre,
-      materias: materiasJson,
+      materias: materiasLimpias,
     };
 
     if (opts.inclNotas) {
       const notas: Record<string, number | null> = {};
-      estado.materias.forEach(m => {
+      materiasLimpias.forEach(m => {
         if (m.usarNotaManual) notas[m.id] = m.notaManual;
       });
       entry.notas = notas;
@@ -47,23 +72,28 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
     if (opts.inclEvaluaciones) {
       const evals: Record<string, import('../types').Evaluacion[]> = {};
-      estado.materias.forEach(m => {
+      materiasLimpias.forEach(m => {
         if (m.evaluaciones.length > 0) evals[m.id] = m.evaluaciones;
       });
       entry.evaluaciones = evals;
     }
 
     if (opts.inclHorarios) {
-      const bloques = estado.materias.flatMap(m => m.bloques ?? []);
-      entry.horarios = bloques;
+      entry.horarios = materiasLimpias.flatMap(m => m.bloques ?? []);
     }
 
     perfiles.push(entry);
   }
 
-  return {
+  const payload: ExportPayload = {
     version: 1,
     exportadoEn: new Date().toISOString(),
     perfiles,
   };
+
+  if (opts.config) {
+    payload.config = opts.config;
+  }
+
+  return payload;
 }

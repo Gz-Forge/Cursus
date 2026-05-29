@@ -46,7 +46,7 @@ interface Props {
 export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
-  const { getColor, getIcono } = useEstadoEstilo();
+  const { getColor, getIcono, getLabel } = useEstadoEstilo();
 
   const notaPct = obtenerNotaFinal(materia);
   const estado = calcularEstadoFinal(materia, config);
@@ -99,21 +99,22 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   });
 
   return (
-    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress}>
+    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress} activeOpacity={0.75}>
       <View style={s.fila}>
-        <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
-        <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
-      </View>
+          <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
+          <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
+        </View>
 
-      {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
-        <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
-      )}
+        {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
+          <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
+        )}
 
-      {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
-        <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
-      )}
+        {(config.tarjetaAvisoCreditos ?? true) && mostrarAvisoCreditos && (
+          <Text style={s.advertencia}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
+        )}
 
       {expandida && (
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}>
         <View style={s.detalle}>
           {(config.tarjetaAvisoCreditosExtendida ?? true) && mostrarAvisoCreditos && (
             <Text style={[s.advertencia, { marginBottom: 6 }]}>⚠️ Faltan {creditosFaltantes} créditos para cursarla</Text>
@@ -171,8 +172,8 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
                   onValueChange={onToggleCursando}
                   trackColor={{ true: getColor('cursando') }}
                 />
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                  {materia.cursando ? 'Cursando' : 'No cursando'}
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
+                  {materia.cursando ? getLabel('cursando') : `No ${getLabel('cursando').toLowerCase()}`}
                 </Text>
               </View>
             )}
@@ -181,6 +182,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
             </TouchableOpacity>
           </View>
         </View>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );

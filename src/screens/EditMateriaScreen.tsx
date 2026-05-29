@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -19,6 +19,8 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
+import { parsearMes } from '../utils/fecha';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -41,6 +43,16 @@ function parsearFecha(str: string): string | null {
   if (!m) return null;
   const [, d, mo, y] = m;
   return isNaN(Date.parse(`${y}-${mo}-${d}T00:00:00`)) ? null : `${y}-${mo}-${d}`;
+}
+
+/** Parsea "DD/MM" con el año actual → "YYYY-MM-DD" o null */
+function parsearFechaDDMM(str: string): string | null {
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const [, d, mo] = m;
+  const y = new Date().getFullYear();
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  return isNaN(Date.parse(iso + 'T00:00:00')) ? null : iso;
 }
 
 function autoFormatFechaBloque(prev: string, next: string): string {
@@ -94,6 +106,7 @@ export function EditMateriaScreen() {
   const { materias, config, guardarMateria, eliminarMateria, actualizarConfig } = useStore();
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
+  const { getLabel } = useEstadoEstilo();
 
   const materiaOriginal = materias.find(m => m.id === route.params?.materiaId);
   const [form, setForm] = useState<Materia>(materiaOriginal ?? {
@@ -114,6 +127,12 @@ export function EditMateriaScreen() {
   const [dropdownMes, setDropdownMes] = useState(false);
   const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
+
+  // ── Filtros de horario ──
+  const [filtroTipos, setFiltroTipos] = useState<TipoBloque[]>([]);
+  const [filtroFecha, setFiltroFecha] = useState<'todos' | 'futuros' | 'semana' | 'mes' | 'rango'>('todos');
+  const [filtroDesde, setFiltroDesde] = useState('');
+  const [filtroHasta, setFiltroHasta] = useState('');
 
   // Import desde tabla
   const [textoTabla, setTextoTabla] = useState('');
@@ -191,6 +210,35 @@ export function EditMateriaScreen() {
   const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones);
   const estado = calcularEstadoFinal(form, config);
 
+  const hayFiltrosActivos = filtroTipos.length > 0 || filtroFecha !== 'todos';
+
+  const bloquesFiltrados = useMemo(() => {
+    const hoy = new Date();
+    const hoyISO = hoy.toISOString().slice(0, 10);
+    let lista = [...(form.bloques ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (filtroTipos.length > 0) lista = lista.filter(b => filtroTipos.includes(b.tipo));
+    if (filtroFecha === 'futuros') {
+      lista = lista.filter(b => b.fecha >= hoyISO);
+    } else if (filtroFecha === 'semana') {
+      const lunes = new Date(hoy);
+      lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      const desdeISO = lunes.toISOString().slice(0, 10);
+      const hastaISO = domingo.toISOString().slice(0, 10);
+      lista = lista.filter(b => b.fecha >= desdeISO && b.fecha <= hastaISO);
+    } else if (filtroFecha === 'mes') {
+      const mesActual = hoyISO.slice(0, 7);
+      lista = lista.filter(b => b.fecha.startsWith(mesActual));
+    } else if (filtroFecha === 'rango') {
+      const desde = parsearFechaDDMM(filtroDesde);
+      const hasta = parsearFechaDDMM(filtroHasta);
+      if (desde) lista = lista.filter(b => b.fecha >= desde);
+      if (hasta) lista = lista.filter(b => b.fecha <= hasta);
+    }
+    return lista;
+  }, [form.bloques, filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
+
   // Auto-save para materias existentes
   const esMateriaExistente = !!materiaOriginal;
   const primerRender = useRef(true);
@@ -209,7 +257,7 @@ export function EditMateriaScreen() {
   const confirmarBloque = () => {
     const anio = new Date().getFullYear();
     const dia = parseInt(bloqueNuevo.dia, 10);
-    const mes = parseInt(bloqueNuevo.mes, 10);
+    const mes = parsearMes(bloqueNuevo.mes) ?? NaN;
 
     if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
       showAlert('Día inválido', 'Ingresá un día entre 1 y 31.');
@@ -483,7 +531,7 @@ export function EditMateriaScreen() {
 
     showAlert(
       'No cumple los requisitos',
-      `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`,
+      `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`,
       'Entendido'
     );
   };
@@ -533,10 +581,10 @@ export function EditMateriaScreen() {
         <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: tema.texto, fontWeight: '600' }}>Estoy cursando esta materia</Text>
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>{`¿Estado ${getLabel('cursando')}?`}</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
                 {form.cursando
-                  ? 'El estado se muestra como Cursando sin importar la nota'
+                  ? `El estado se muestra como ${getLabel('cursando')} sin importar la nota`
                   : 'El estado se calcula a partir de la nota'}
               </Text>
             </View>
@@ -765,14 +813,86 @@ export function EditMateriaScreen() {
         )}
 
         {/* ── HORARIO ── */}
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>HORARIO</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
+          <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
+          {hayFiltrosActivos && (
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+              {bloquesFiltrados.length} de {(form.bloques ?? []).length}
+            </Text>
+          )}
+        </View>
+
+        {/* ── Filtro tipo ── */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+          {tiposBloque.map(({ key, label }) => {
+            const activo = filtroTipos.includes(key);
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setFiltroTipos(prev => activo ? prev.filter(t => t !== key) : [...prev, key])}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: activo ? tema.acento : tema.fondo }}
+              >
+                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Filtro fecha ── */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+          {(['todos', 'futuros', 'semana', 'mes', 'rango'] as const).map(op => {
+            const labels = { todos: 'Todos', futuros: 'Futuros', semana: 'Esta sem', mes: 'Este mes', rango: 'Rango' };
+            const activo = filtroFecha === op;
+            return (
+              <TouchableOpacity
+                key={op}
+                onPress={() => setFiltroFecha(op)}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: activo ? tema.acento : tema.fondo }}
+              >
+                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{labels[op]}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Inputs de rango ── */}
+        {filtroFecha === 'rango' && (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+            <TextInput
+              style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 7, borderRadius: 6, fontSize: 12 }}
+              placeholder="Desde  DD/MM"
+              placeholderTextColor={tema.textoSecundario}
+              value={filtroDesde}
+              onChangeText={v => {
+                const digits = v.replace(/\D/g, '').slice(0, 4);
+                setFiltroDesde(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+            <TextInput
+              style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 7, borderRadius: 6, fontSize: 12 }}
+              placeholder="Hasta  DD/MM"
+              placeholderTextColor={tema.textoSecundario}
+              value={filtroHasta}
+              onChangeText={v => {
+                const digits = v.replace(/\D/g, '').slice(0, 4);
+                setFiltroHasta(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+              }}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+          </View>
+        )}
 
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: 260 }}
           contentContainerStyle={{ paddingBottom: 2 }}
         >
-          {[...(form.bloques ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha)).map((b) => (
+          {bloquesFiltrados.map((b) => (
             <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: tema.texto, fontSize: 13 }}>
@@ -831,6 +951,7 @@ export function EditMateriaScreen() {
                   value={bloqueNuevo.dia}
                   onChangeText={v => setBloqueNuevo(b => ({ ...b, dia: v.replace(/\D/g, '').slice(0, 2) }))}
                   onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
+                  onSubmitEditing={() => setDropdownDia(false)}
                   placeholder="DD"
                   placeholderTextColor={tema.textoSecundario}
                   keyboardType="number-pad"
@@ -859,12 +980,19 @@ export function EditMateriaScreen() {
                 <TextInput
                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
                   value={bloqueNuevo.mes}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v.replace(/\D/g, '').slice(0, 2) }))}
+                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v }))}
                   onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
-                  placeholder="MM"
+                  onBlur={() => {
+                    const n = parsearMes(bloqueNuevo.mes);
+                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
+                  }}
+                  onSubmitEditing={() => {
+                    const n = parsearMes(bloqueNuevo.mes);
+                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
+                  }}
+                  placeholder="MM o mes"
                   placeholderTextColor={tema.textoSecundario}
-                  keyboardType="number-pad"
-                  maxLength={2}
+                  maxLength={20}
                 />
                 {bloqueNuevo.mes && !isNaN(parseInt(bloqueNuevo.mes, 10)) &&
                   parseInt(bloqueNuevo.mes, 10) >= 1 && parseInt(bloqueNuevo.mes, 10) <= 12 && (
@@ -925,7 +1053,15 @@ export function EditMateriaScreen() {
             <TextInput
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
               value={bloqueNuevo.salon}
-              onChangeText={v => setBloqueNuevo(b => ({ ...b, salon: v }))}
+              onChangeText={v => {
+                setBloqueNuevo(b => ({ ...b, salon: v }));
+                if (bloqueEditandoId) {
+                  setForm(f => ({
+                    ...f,
+                    bloques: (f.bloques ?? []).map(b => b.id === bloqueEditandoId ? { ...b, salon: v } : b),
+                  }));
+                }
+              }}
               placeholder="Ej: Aula 3, Lab 201..."
               placeholderTextColor={tema.textoSecundario}
             />

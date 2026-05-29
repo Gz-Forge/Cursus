@@ -70,6 +70,8 @@ export function MetricsScreen() {
   const [panelActivo, setPanelActivo] = useState<Panel>('general');
   const [modalPersonalizar, setModalPersonalizar] = useState(false);
   const [materiaMapaSeleccionada, setMateriaMapaSeleccionada] = useState<Materia | null>(null);
+  const [notaBarraSeleccionada, setNotaBarraSeleccionada] = useState<{ label: string; materias: Materia[] } | null>(null);
+  const [tipoFormacionSeleccionado, setTipoFormacionSeleccionado] = useState<{ tipo: string; materias: Materia[] } | null>(null);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -227,38 +229,46 @@ export function MetricsScreen() {
       ? Math.ceil
       : Math.round;
 
-  let barrasNotas: { value: number; label: string; frontColor: string }[];
+  let barrasNotas: { value: number; label: string; frontColor: string; materiasList: Materia[] }[];
 
   if (notasModo === 'rangos') {
     // Agrupar por piso de la nota en escala (rango: floor..floor+1)
-    const rangosMap: Record<number, number> = {};
+    const rangosMap: Record<number, { count: number; mats: Materia[] }> = {};
     materias.forEach(m => {
       const n = obtenerNotaFinal(m);
       if (n !== null) {
         const k = Math.floor((n / 100) * config.notaMaxima);
-        rangosMap[k] = (rangosMap[k] ?? 0) + 1;
+        if (!rangosMap[k]) rangosMap[k] = { count: 0, mats: [] };
+        rangosMap[k].count++;
+        rangosMap[k].mats.push(m);
       }
     });
     barrasNotas = Object.keys(rangosMap)
       .map(Number)
       .sort((a, b) => a - b)
       .map(k => ({
-        value: rangosMap[k],
+        value: rangosMap[k].count,
         label: `${k}-${k + 1}`,
         frontColor: tema.acento,
+        materiasList: rangosMap[k].mats,
       }));
   } else {
     // Modo exacta: aplicar función de redondeo elegida
-    const notasMap: Record<number, number> = {};
+    const notasMap: Record<number, { count: number; mats: Materia[] }> = {};
     materias.forEach(m => {
       const n = obtenerNotaFinal(m);
       if (n !== null) {
         const k = fnRedondeo((n / 100) * config.notaMaxima);
-        notasMap[k] = (notasMap[k] ?? 0) + 1;
+        if (!notasMap[k]) notasMap[k] = { count: 0, mats: [] };
+        notasMap[k].count++;
+        notasMap[k].mats.push(m);
       }
     });
     barrasNotas = Array.from({ length: config.notaMaxima + 1 }, (_, i) => ({
-      value: notasMap[i] ?? 0, label: String(i), frontColor: tema.acento,
+      value: notasMap[i]?.count ?? 0,
+      label: String(i),
+      frontColor: tema.acento,
+      materiasList: notasMap[i]?.mats ?? [],
     })).filter(b => b.value > 0);
   }
 
@@ -271,7 +281,15 @@ export function MetricsScreen() {
   const conteoTipos: Record<string, number> = {};
   materiasTorta.forEach(m => { const t = m.tipoFormacion ?? 'Sin tipo'; conteoTipos[t] = (conteoTipos[t] ?? 0) + 1; });
   const datosTorta = Object.entries(conteoTipos).map(([tipo, cantidad], i) => ({
-    value: cantidad, color: PALETA_TIPOS[i % PALETA_TIPOS.length], label: tipo,
+    value: cantidad,
+    color: PALETA_TIPOS[i % PALETA_TIPOS.length],
+    label: tipo,
+    onPress: () => {
+      const mats = materiasTorta
+        .filter(m => (m.tipoFormacion ?? 'Sin tipo') === tipo)
+        .sort((a, b) => (a.numero ?? 0) - (b.numero ?? 0));
+      setTipoFormacionSeleccionado({ tipo, materias: mats });
+    },
   }));
 
   // ── Helper UI ─────────────────────────────────────────────────────────────
@@ -349,15 +367,23 @@ export function MetricsScreen() {
         animationType="slide"
         onRequestClose={() => setModalPersonalizar(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{
-            backgroundColor: tema.superficie,
-            borderTopLeftRadius: 20, borderTopRightRadius: 20,
-            padding: 20, paddingBottom: 36, maxHeight: '85%',
-            ...(isWeb
-              ? { maxWidth: 480, alignSelf: 'center' as const, width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
-              : {}),
-          }}>
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setModalPersonalizar(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{
+              backgroundColor: tema.superficie,
+              borderTopLeftRadius: 20, borderTopRightRadius: 20,
+              padding: 20, paddingBottom: 36, maxHeight: '85%',
+              ...(isWeb
+                ? { maxWidth: 480, alignSelf: 'center' as const, width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
+                : {}),
+            }}
+          >
             {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16 }}>Personalizar métricas</Text>
@@ -544,8 +570,8 @@ export function MetricsScreen() {
                 </View>
               ))}
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     );
   };
@@ -627,7 +653,7 @@ export function MetricsScreen() {
                       <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{creditosTotal - creditos}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Exoneradas</Text>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>{getLabel('exonerado')}</Text>
                       <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{conteo.exonerado} / {materias.length}</Text>
                     </View>
                     {promedioEnEscala !== null && (
@@ -726,7 +752,7 @@ export function MetricsScreen() {
                   <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                     <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
                       {soloSiguiente && siguienteSem !== null
-                        ? `Cursando + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
+                        ? `${getLabel('cursando')} + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
                         : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
                     </Text>
 
@@ -888,7 +914,15 @@ export function MetricsScreen() {
                             {ejeY('Materias')}
                             <View style={{ overflow: 'hidden', flex: 1 }}>
                               <BarChart
-                                data={barrasNotas}
+                                data={barrasNotas.map(b => ({
+                                  ...b,
+                                  onPress: b.materiasList.length > 0
+                                    ? () => setNotaBarraSeleccionada({
+                                        label: b.label,
+                                        materias: [...b.materiasList].sort((a, x) => (a.numero ?? 0) - (x.numero ?? 0)),
+                                      })
+                                    : undefined,
+                                }))}
                                 barWidth={barWidthNotas}
                                 height={150}
                                 width={chartWidth}
@@ -1005,9 +1039,10 @@ export function MetricsScreen() {
             const mat = materiaMapaSeleccionada;
             const estadoMat = calcularEstadoFinal(mat, config);
             return (
-              <View
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => {}}
                 style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 24, width: '100%', maxWidth: 320, alignItems: 'center' }}
-                onStartShouldSetResponder={() => true}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <View style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: getColor(estadoMat) }} />
@@ -1029,9 +1064,108 @@ export function MetricsScreen() {
                 >
                   <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             );
           })()}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Modal: materias con nota seleccionada ── */}
+      <Modal
+        visible={notaBarraSeleccionada !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotaBarraSeleccionada(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => setNotaBarraSeleccionada(null)}
+        >
+          {notaBarraSeleccionada !== null && (
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
+            >
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
+                Nota {notaBarraSeleccionada.label}
+              </Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+                {notaBarraSeleccionada.materias.length} materia{notaBarraSeleccionada.materias.length !== 1 ? 's' : ''}
+              </Text>
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {notaBarraSeleccionada.materias.map((mat, idx) => (
+                  <Text
+                    key={mat.id}
+                    style={{
+                      color: tema.texto, fontSize: 13, paddingVertical: 8,
+                      borderBottomWidth: idx < notaBarraSeleccionada.materias.length - 1 ? 1 : 0,
+                      borderBottomColor: tema.borde,
+                    }}
+                  >
+                    {mat.numero !== undefined ? `${mat.numero} - ${mat.nombre}` : mat.nombre}
+                  </Text>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setNotaBarraSeleccionada(null)}
+                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Modal: materias con tipo de formación seleccionado ── */}
+      <Modal
+        visible={tipoFormacionSeleccionado !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTipoFormacionSeleccionado(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => setTipoFormacionSeleccionado(null)}
+        >
+          {tipoFormacionSeleccionado !== null && (
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
+            >
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
+                {tipoFormacionSeleccionado.tipo}
+              </Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+                {semestreTorta !== null ? `${semestreTorta}° semestre · ` : 'Global · '}
+                {tipoFormacionSeleccionado.materias.length} materia{tipoFormacionSeleccionado.materias.length !== 1 ? 's' : ''}
+              </Text>
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {tipoFormacionSeleccionado.materias.map((mat, idx) => (
+                  <Text
+                    key={mat.id}
+                    style={{
+                      color: tema.texto, fontSize: 13, paddingVertical: 8,
+                      borderBottomWidth: idx < tipoFormacionSeleccionado.materias.length - 1 ? 1 : 0,
+                      borderBottomColor: tema.borde,
+                    }}
+                  >
+                    {mat.numero !== undefined ? `${mat.numero} - ${mat.nombre}` : mat.nombre}
+                  </Text>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setTipoFormacionSeleccionado(null)}
+                style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
         </TouchableOpacity>
       </Modal>
     </View>

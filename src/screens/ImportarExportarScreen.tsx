@@ -10,11 +10,13 @@ import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { fileIO } from '../utils/fileIO';
 import { QrScannerModal } from '../components/QrScannerModal';
-import { construirPayload } from '../utils/exportPayload';
+import { construirPayload, type ExportPerfilPayload } from '../utils/exportPayload';
+import { cargarPerfilEstado, guardarPerfilEstado, MAX_PERFILES } from '../utils/perfiles';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
+import { jsonAMaterias } from '../utils/importExport';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
@@ -66,16 +68,68 @@ export function ImportarExportarScreen() {
   );
 }
 
+function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number): Materia[] {
+  if (!Array.isArray(perfil.materias) || perfil.materias.length === 0) return [];
+  const primera = perfil.materias[0];
+  if (primera && 'cursando' in primera && 'id' in primera && 'evaluaciones' in primera) {
+    // Formato nuevo: Materia[] completa
+    return (perfil.materias as unknown as Materia[]).map(m => ({
+      ...m,
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      })),
+    }));
+  }
+  // Formato viejo: materias es carrera-format (MateriaJson)
+  // Construir mapa nombre → Materia completa desde horarios (solo las cursando que tenían bloques)
+  const mapaDesdeHorarios = new Map<string, Materia>();
+  for (const bloque of (perfil as any).horarios ?? []) {
+    const m = bloque.materia;
+    if (!m?.nombre || mapaDesdeHorarios.has(m.nombre)) continue;
+    mapaDesdeHorarios.set(m.nombre, {
+      ...m,
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+        id, fecha, horaInicio, horaFin, tipo,
+        ...(salon !== undefined ? { salon } : {}),
+      })),
+    });
+  }
+  // Convertir todas las materias carrera-format y hacer overlay con las que tienen estado completo
+  const todas = jsonAMaterias(perfil.materias as unknown as MateriaJson[], oportunidades);
+  const notasRecord = (perfil as any).notas as Record<string, number | null> | undefined;
+  const evalsRecord = (perfil as any).evaluaciones as Record<string, any[]> | undefined;
+  return todas.map(m => {
+    const desdeHorarios = mapaDesdeHorarios.get(m.nombre);
+    if (desdeHorarios) return desdeHorarios;
+    // Para materias no-cursando: aplicar notas y evaluaciones del record separado si existen
+    const nota = notasRecord?.[m.id];
+    const evals = evalsRecord?.[m.id];
+    if (nota !== undefined || evals) {
+      return {
+        ...m,
+        ...(nota !== undefined ? { usarNotaManual: true, notaManual: nota } : {}),
+        ...(evals ? { evaluaciones: evals } : {}),
+      };
+    }
+    return m;
+  });
+}
+
 function PanelImportar() {
   const tema = useTema();
   const { showAlert } = useAlert();
-  const { guardarMateria, reemplazarMaterias, materias, config, actualizarConfig } = useStore();
+  const { reemplazarMaterias, materias, config, actualizarConfig, perfiles, perfilActivoId, crearPerfil, renombrarPerfil } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
     tiposNuevos: string[];
     configAplicados?: number;
+  } | null>(null);
+  const [pendingPerfilImport, setPendingPerfilImport] = useState<{
+    nombrePerfil: string;
+    materias: Materia[];
   } | null>(null);
 
   const handleImportarJson = async () => {
@@ -103,7 +157,8 @@ function PanelImportar() {
     if (
       typeof datos === 'object' && datos !== null &&
       !Array.isArray(datos) &&
-      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales)
+      ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales ||
+       (datos as any).coloresGruposEvaluacion || (datos as any).coloresEvaluacionesSimples)
     ) {
       const d = datos as any;
       const updates: Record<string, unknown> = {};
@@ -112,6 +167,12 @@ function PanelImportar() {
       }
       if (d.coloresEvaluacionesGrupales && typeof d.coloresEvaluacionesGrupales === 'object') {
         updates.coloresEvaluacionesGrupales = d.coloresEvaluacionesGrupales;
+      }
+      if (d.coloresGruposEvaluacion && typeof d.coloresGruposEvaluacion === 'object') {
+        updates.coloresGruposEvaluacion = { ...(config.coloresGruposEvaluacion ?? {}), ...d.coloresGruposEvaluacion };
+      }
+      if (d.coloresEvaluacionesSimples && typeof d.coloresEvaluacionesSimples === 'object') {
+        updates.coloresEvaluacionesSimples = { ...(config.coloresEvaluacionesSimples ?? {}), ...d.coloresEvaluacionesSimples };
       }
       actualizarConfig(updates as Partial<typeof config>);
       showAlert('Colores importados', 'Los colores se aplicaron correctamente.');
@@ -162,10 +223,43 @@ function PanelImportar() {
       (datos as any).version === 1 &&
       Array.isArray((datos as any).perfiles)
     ) {
-      showAlert(
-        'Importar datos completos',
-        `El archivo contiene ${(datos as any).perfiles.length} perfil(es). Esta función estará disponible próximamente.`,
-      );
+      const d = datos as any;
+      const tieneConfig = d.config && typeof d.config === 'object' && !Array.isArray(d.config);
+      const primerPerfil: ExportPerfilPayload | undefined = d.perfiles[0];
+
+      // Aplicar config si existe
+      if (tieneConfig) {
+        try {
+          const { aplicarConfigJson } = await import('../utils/importExport');
+          aplicarConfigJson({ cursus_config: 1, ...d.config }, actualizarConfig);
+        } catch {
+          // ignorar errores de config
+        }
+        // aplicarConfigJson excluye deliberadamente los colores — aplicarlos directamente
+        const cd = d.config as any;
+        const colorUpdates: Partial<Config> = {};
+        if (cd.coloresHorario && typeof cd.coloresHorario === 'object') colorUpdates.coloresHorario = cd.coloresHorario;
+        if (cd.coloresGruposEvaluacion && typeof cd.coloresGruposEvaluacion === 'object') colorUpdates.coloresGruposEvaluacion = cd.coloresGruposEvaluacion;
+        if (cd.coloresEvaluacionesSimples && typeof cd.coloresEvaluacionesSimples === 'object') colorUpdates.coloresEvaluacionesSimples = cd.coloresEvaluacionesSimples;
+        if (cd.coloresEvaluacionesGrupales && typeof cd.coloresEvaluacionesGrupales === 'object') colorUpdates.coloresEvaluacionesGrupales = cd.coloresEvaluacionesGrupales;
+        if (Object.keys(colorUpdates).length > 0) actualizarConfig(colorUpdates);
+      }
+
+      if (!primerPerfil) {
+        showAlert('Error', 'El archivo no contiene perfiles.');
+        return;
+      }
+
+      const materiasImportadas = reconstruirMaterias(primerPerfil, config.oportunidadesExamenDefault);
+      if (materiasImportadas.length === 0) {
+        showAlert('Error', 'No se encontraron materias en el archivo.');
+        return;
+      }
+
+      setPendingPerfilImport({
+        nombrePerfil: primerPerfil.nombre ?? 'Perfil importado',
+        materias: materiasImportadas,
+      });
       return;
     }
 
@@ -201,6 +295,33 @@ function PanelImportar() {
   };
 
   const MAX_MATERIAS_IMPORT = 500;
+
+  const ejecutarImportPerfil = async (targetPerfilId: string | 'nuevo') => {
+    if (!pendingPerfilImport) return;
+    const { nombrePerfil, materias: nuevasMaterias } = pendingPerfilImport;
+    setCargando(true);
+    try {
+      if (targetPerfilId === 'nuevo') {
+        await crearPerfil(nombrePerfil);
+        reemplazarMaterias(nuevasMaterias);
+        showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${nuevasMaterias.length} materias`);
+      } else if (targetPerfilId === perfilActivoId) {
+        reemplazarMaterias(nuevasMaterias);
+        await renombrarPerfil(perfilActivoId, nombrePerfil);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
+      } else {
+        const estadoActual = await cargarPerfilEstado(targetPerfilId);
+        await guardarPerfilEstado(targetPerfilId, { ...estadoActual, materias: nuevasMaterias });
+        await renombrarPerfil(targetPerfilId, nombrePerfil);
+        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
+      }
+      setPendingPerfilImport(null);
+    } catch {
+      showAlert('Error', 'No se pudo importar el perfil.');
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const doImport = async (modo: ModoImport) => {
     if (!pendingImport) return;
@@ -342,6 +463,93 @@ function PanelImportar() {
         </>
       )}
 
+      <Modal
+        visible={!!pendingPerfilImport}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingPerfilImport(null)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+        }}>
+          <View style={{
+            backgroundColor: tema.tarjeta,
+            borderRadius: 14,
+            padding: 20,
+            width: '100%',
+            maxWidth: 400,
+          }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Importar perfil "{pendingPerfilImport?.nombrePerfil}"
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16 }}>
+              {pendingPerfilImport?.materias.length} materias encontradas
+              {perfiles.length >= MAX_PERFILES ? ' — elegí qué perfil reemplazar' : ''}
+            </Text>
+
+            {perfiles.length < MAX_PERFILES ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => ejecutarImportPerfil(perfilActivoId)}
+                  style={{
+                    backgroundColor: tema.acento,
+                    padding: 14, borderRadius: 10,
+                    alignItems: 'center', marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>
+                    Reemplazar "{perfiles.find(p => p.id === perfilActivoId)?.nombre ?? 'Perfil actual'}"
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => ejecutarImportPerfil('nuevo')}
+                  style={{
+                    backgroundColor: tema.fondo,
+                    padding: 14, borderRadius: 10,
+                    alignItems: 'center', marginBottom: 10,
+                    borderWidth: 1, borderColor: tema.acento,
+                  }}
+                >
+                  <Text style={{ color: tema.acento, fontWeight: '700' }}>Crear perfil nuevo</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {perfiles.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => ejecutarImportPerfil(p.id)}
+                    style={{
+                      backgroundColor: p.id === perfilActivoId ? tema.acento + '22' : tema.fondo,
+                      padding: 14, borderRadius: 10,
+                      flexDirection: 'row', alignItems: 'center',
+                      marginBottom: 8,
+                      borderWidth: 1,
+                      borderColor: p.id === perfilActivoId ? tema.acento : tema.borde,
+                    }}
+                  >
+                    <Text style={{ color: tema.texto, fontWeight: p.id === perfilActivoId ? '700' : '400', flex: 1 }}>
+                      {p.id === perfilActivoId ? '▶ ' : ''}{p.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setPendingPerfilImport(null)}
+              style={{ alignItems: 'center', marginTop: 4 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -353,6 +561,7 @@ function PanelExportar() {
   const [inclNotas, setInclNotas] = useState(false);
   const [inclEvaluaciones, setInclEvaluaciones] = useState(false);
   const [inclHorarios, setInclHorarios] = useState(false);
+  const [inclConfig, setInclConfig] = useState(false);
   const [perfilesSelec, setPerfilesSelec] = useState<string[]>([perfilActivoId]);
   const [mostrarQrConfig, setMostrarQrConfig] = useState(false);
 
@@ -391,6 +600,7 @@ function PanelExportar() {
         <Checkbox label="Notas" value={inclNotas} onChange={setInclNotas} />
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
+        <Checkbox label="Configuración" value={inclConfig} onChange={setInclConfig} />
         {(inclNotas || inclEvaluaciones) && (
           <Text style={{ color: '#FF9800', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
             ⚠️ El archivo exportado contendrá datos académicos personales (notas y/o evaluaciones). Compartilo solo con personas de confianza.
@@ -430,6 +640,7 @@ function PanelExportar() {
         inclNotas={inclNotas}
         inclEvaluaciones={inclEvaluaciones}
         inclHorarios={inclHorarios}
+        config={inclConfig ? config : undefined}
         perfilesSelec={perfiles.filter(p => perfilesSelec.includes(p.id))}
         materiasActivas={materias}
       />
@@ -507,12 +718,14 @@ interface PanelMetodosProps {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
+  config?: Config;
   perfilesSelec: Perfil[];
   materiasActivas: Materia[];
 }
 
 function PanelMetodos({
-  inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec, materiasActivas,
+  inclNotas, inclEvaluaciones, inclHorarios, config,
+  perfilesSelec, materiasActivas,
 }: PanelMetodosProps) {
   const tema = useTema();
   const { showAlert } = useAlert();
@@ -530,7 +743,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
@@ -549,7 +762,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await Clipboard.setStringAsync(contenido);
@@ -577,7 +790,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
       });
       const materias = payload.perfiles[0]?.materias ?? [];
       const encoded = encodeCarrera(materias);

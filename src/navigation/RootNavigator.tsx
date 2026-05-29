@@ -40,8 +40,8 @@ function TabNavigator() {
         headerShadowVisible: false,
       }}
     >
-      <Tab.Screen name="Carrera"       component={CarreraScreen}   options={{ tabBarIcon: () => <Text>🗺️</Text> }} />
-      <Tab.Screen name="Horario"       component={HorarioScreen}   options={{ tabBarIcon: () => <Text>📅</Text> }} />
+      <Tab.Screen name="Carrera"       component={CarreraScreen}   options={{ tabBarIcon: () => <Text>🎓</Text> }} />
+      <Tab.Screen name="Horarios"      component={HorarioScreen}   options={{ tabBarIcon: () => <Text>📅</Text> }} />
       <Tab.Screen name="Métricas"      component={MetricsScreen}   options={{ tabBarIcon: () => <Text>📊</Text> }} />
       <Tab.Screen name="Configuración" component={ConfigScreen}     options={{ tabBarIcon: () => <Text>⚙️</Text> }} />
       <Tab.Screen name="Apoyar"         component={DonacionScreen}  options={{ tabBarIcon: () => <Text>❤️</Text> }} />

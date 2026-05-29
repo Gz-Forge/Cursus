@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
 import { calcularPorcentajeEvaluacion } from '../utils/calculos';
+import { parsearMes } from '../utils/fecha';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -72,8 +73,13 @@ function FechaHoraPicker({
   // Inicializar día/mes desde ISO YYYY-MM-DD
   const parsarFechaInicial = (iso?: string): { dia: string; mes: string } => {
     if (!iso) return { dia: '', mes: '' };
-    const [, mo, d] = iso.split('-');
-    return { dia: String(parseInt(d, 10)), mes: String(parseInt(mo, 10)) };
+    const parts = iso.split('-');
+    if (parts.length !== 3) return { dia: '', mes: '' };
+    const [, mo, d] = parts;
+    const dia = parseInt(d, 10);
+    const mes = parseInt(mo, 10);
+    if (isNaN(dia) || isNaN(mes)) return { dia: '', mes: '' };
+    return { dia: String(dia), mes: String(mes) };
   };
 
   const inicial = parsarFechaInicial(fecha);
@@ -83,31 +89,37 @@ function FechaHoraPicker({
   const [mesStr, setMesStr] = useState(inicial.mes);
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
+  const [mostrarHora, setMostrarHora] = useState(hora !== undefined);
   const [horaInicio, setHoraInicio] = useState<number>(hora !== undefined ? hora : 480);
   const [horaFinVal, setHoraFinVal] = useState<number>(horaFin !== undefined ? horaFin : 600);
-  const [horaActiva, setHoraActiva] = useState(hora !== undefined);
+  // Refs para acceder al valor actual sin depender del closure del render
+  const diaRef = useRef(inicial.dia);
+  const mesRef = useRef(inicial.mes);
+  const horaInicioRef = useRef(hora !== undefined ? hora : 480);
+  const horaFinRef = useRef(horaFin !== undefined ? horaFin : 600);
+
+  const setDia = (v: string) => { diaRef.current = v; setDiaStr(v); };
+  const setMes = (v: string) => { mesRef.current = v; setMesStr(v); };
 
   const construirFechaISO = (): string | undefined => {
-    const dia = parseInt(diaStr, 10);
-    const mes = parseInt(mesStr, 10);
-    if (isNaN(dia) || isNaN(mes) || dia < 1 || dia > 31 || mes < 1 || mes > 12) return undefined;
+    const dia = parseInt(diaRef.current, 10);
+    const mes = parsearMes(mesRef.current) ?? 0;
+    if (isNaN(dia) || dia < 1 || dia > 31 || mes < 1 || mes > 12) return undefined;
     const anio = new Date().getFullYear();
-    const fecha = new Date(anio, mes - 1, dia);
-    if (fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return undefined;
+    const d = new Date(anio, mes - 1, dia);
+    if (d.getMonth() !== mes - 1 || d.getDate() !== dia) return undefined;
     return `${anio}-${mes.toString().padStart(2, '0')}-${dia.toString().padStart(2, '0')}`;
   };
 
   const guardar = () => {
     onActualizar({
       fecha: construirFechaISO(),
-      hora: horaActiva ? horaInicio : undefined,
-      horaFin: horaActiva ? horaFinVal : undefined,
+      ...(mostrarHora ? { hora: horaInicioRef.current, horaFin: horaFinRef.current } : {}),
     });
   };
 
   const limpiar = () => {
-    setDiaStr(''); setMesStr('');
-    setHoraActiva(false);
+    setDia(''); setMes('');
     onActualizar({ fecha: undefined, hora: undefined, horaFin: undefined });
   };
 
@@ -139,9 +151,10 @@ function FechaHoraPicker({
               <TextInput
                 style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
                 value={diaStr}
-                onChangeText={v => { setDiaStr(v.replace(/\D/g, '').slice(0, 2)); setDropdownMes(false); }}
+                onChangeText={v => { setDia(v.replace(/\D/g, '').slice(0, 2)); setDropdownMes(false); }}
                 onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
                 onBlur={guardar}
+                onSubmitEditing={guardar}
                 placeholder="DD"
                 placeholderTextColor={tema.textoSecundario}
                 keyboardType="number-pad"
@@ -153,7 +166,7 @@ function FechaHoraPicker({
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                       <TouchableOpacity
                         key={d}
-                        onPress={() => { setDiaStr(String(d)); setDropdownDia(false); }}
+                        onPress={() => { setDia(String(d)); setDropdownDia(false); guardar(); }}
                         style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
                       >
                         <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
@@ -170,13 +183,22 @@ function FechaHoraPicker({
               <TextInput
                 style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6 }}
                 value={mesStr}
-                onChangeText={v => { setMesStr(v.replace(/\D/g, '').slice(0, 2)); setDropdownDia(false); }}
+                onChangeText={v => { setMes(v); setDropdownDia(false); }}
                 onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
-                onBlur={guardar}
-                placeholder="MM"
+                onBlur={() => {
+                  const n = parsearMes(mesRef.current);
+                  if (n !== null) setMes(String(n));
+                  setDropdownMes(false);
+                  guardar();
+                }}
+                onSubmitEditing={() => {
+                  const n = parsearMes(mesRef.current);
+                  if (n !== null) setMes(String(n));
+                  guardar();
+                }}
+                placeholder="MM o mes"
                 placeholderTextColor={tema.textoSecundario}
-                keyboardType="number-pad"
-                maxLength={2}
+                maxLength={20}
               />
               {mesStr && !isNaN(parseInt(mesStr, 10)) && parseInt(mesStr, 10) >= 1 && parseInt(mesStr, 10) <= 12 && (
                 <Text style={{ color: tema.acento, fontSize: 10, marginTop: 2 }}>
@@ -189,7 +211,7 @@ function FechaHoraPicker({
                     {MESES.map((nombre, i) => (
                       <TouchableOpacity
                         key={i}
-                        onPress={() => { setMesStr(String(i + 1)); setDropdownMes(false); }}
+                        onPress={() => { setMes(String(i + 1)); setDropdownMes(false); guardar(); }}
                         style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
                       >
                         <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
@@ -208,31 +230,34 @@ function FechaHoraPicker({
           {/* ── Hora ── */}
           <TouchableOpacity
             onPress={() => {
-              const next = !horaActiva;
-              setHoraActiva(next);
-              onActualizar({
-                fecha: construirFechaISO(),
-                hora: next ? horaInicio : undefined,
-                horaFin: next ? horaFinVal : undefined,
-              });
+              const nuevo = !mostrarHora;
+              setMostrarHora(nuevo);
+              if (!nuevo) onActualizar({ fecha: construirFechaISO(), hora: undefined, horaFin: undefined });
+              else onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: horaFinRef.current });
             }}
-            style={{ marginBottom: horaActiva ? 8 : 6 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}
           >
-            <Text style={{ color: horaActiva ? tema.acento : tema.textoSecundario, fontSize: 12 }}>
-              {horaActiva ? '■' : '□'} Hora en horario
-            </Text>
+            <View style={{
+              width: 16, height: 16, borderRadius: 3, borderWidth: 1.5,
+              borderColor: mostrarHora ? tema.acento : tema.textoSecundario,
+              backgroundColor: mostrarHora ? tema.acento : 'transparent',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              {mostrarHora && <Text style={{ color: '#fff', fontSize: 10, lineHeight: 12 }}>✓</Text>}
+            </View>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Incluir hora en horario</Text>
           </TouchableOpacity>
-          {horaActiva && (
+          {mostrarHora && (
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
               <HoraPicker
                 label="Hora inicio"
                 value={horaInicio}
-                onChange={v => { setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinVal }); }}
+                onChange={v => { horaInicioRef.current = v; setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinRef.current }); }}
               />
               <HoraPicker
                 label="Fin"
                 value={horaFinVal}
-                onChange={v => { setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicio, horaFin: v }); }}
+                onChange={v => { horaFinRef.current = v; setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: v }); }}
               />
             </View>
           )}

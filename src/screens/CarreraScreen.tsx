@@ -174,7 +174,7 @@ export function CarreraScreen() {
         .map(p => { const mx = materias.find(x => x.numero === p); return `  - ${p}${mx ? ` · ${mx.nombre}` : ''}`; });
       faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
     }
-    showAlert('No cumple los requisitos', `No podés marcar esta materia como cursando:\n\n${faltantes.join('\n\n')}`);
+    showAlert('No cumple los requisitos', `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`);
   };
 
   useEffect(() => {
@@ -193,7 +193,7 @@ export function CarreraScreen() {
     actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });
     if (sinOportunidades.length > 0) {
       const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a ${getLabel('recursar')}:\n\n${nombres}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- corre una sola vez al montar para verificar períodos de examen pendientes
   }, []);
@@ -247,7 +247,7 @@ export function CarreraScreen() {
     const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
     const carreraAntesFaltaba = prevSems.size < totalSems;
     if (carreraCompleta && carreraAntesFaltaba) {
-      setColaFelicitaciones([{ titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
+      setColaFelicitaciones(q => [...q, { titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
       return;
     }
 
@@ -325,7 +325,7 @@ export function CarreraScreen() {
     const sinOportunidades = decrementarPeriodoExamen();
     if (sinOportunidades.length > 0) {
       const nombres = sinOportunidades.map(m => m.nombre).join(', ');
-      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a Recursar:\n\n${nombres}`);
+      showAlert('Materias sin oportunidades', `Las siguientes materias pasaron a ${getLabel('recursar')}:\n\n${nombres}`);
     }
   };
 
@@ -407,7 +407,7 @@ export function CarreraScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: surfaceBg }}>
         {[
           { valor: creditos, label: 'Créditos' },
-          { valor: exoneradas, label: 'Exoneradas' },
+          { valor: exoneradas, label: getLabel('exonerado') },
           { valor: disponibles, label: 'Disponibles' },
         ].map(({ valor, label }) => (
           <View key={label} style={{ alignItems: 'center' }}>
@@ -720,7 +720,7 @@ export function CarreraScreen() {
                             onPress={() => setFiltroEstado(prev => prev === e ? null : e)}
                             style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: filtroEstado === e ? getColor(e) : tema.tarjeta }}
                           >
-                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }}>{getIcono(e)} {getLabel(e)}</Text>
+                            <Text style={{ color: filtroEstado === e ? '#fff' : tema.textoSecundario, fontSize: 12 }} numberOfLines={1}>{getIcono(e)} {getLabel(e)}</Text>
                           </TouchableOpacity>
                         ));
                       })()}

@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 
 type SegOpt<T extends string> = { valor: T; label: string };
 
@@ -57,6 +58,7 @@ type Panel = 'colapsada' | 'extendida';
 export function TarjetaConfigScreen() {
   const { config, actualizarConfig } = useStore();
   const tema = useTema();
+  const { getLabel } = useEstadoEstilo();
   const [panel, setPanel] = useState<Panel>('colapsada');
 
   return (
@@ -216,10 +218,10 @@ export function TarjetaConfigScreen() {
                   onChange={v => actualizarConfig({ tarjetaCreditosExtendida: v })}
                 />
                 <ToggleFila
-                  label='Mostrar toggle "Estoy cursando"'
+                  label={`Mostrar toggle "Estoy ${getLabel('cursando').toLowerCase()}"`}
                   valor={config.tarjetaMostrarToggleCursando ?? true}
                   onChange={v => actualizarConfig({ tarjetaMostrarToggleCursando: v })}
-                  descripcion="Switch rápido en la tarjeta expandida para cambiar el estado de cursando"
+                  descripcion={`Switch rápido en la tarjeta expandida para cambiar el estado de ${getLabel('cursando').toLowerCase()}`}
                 />
               </View>
             </>
