@@ -113,7 +113,7 @@ const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'confi
 
 export function ConfigScreen() {
   const { config, actualizarConfig, materias, guardarMateria } = useStore();
-  const { showConfirm } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
   const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
@@ -492,7 +492,7 @@ export function ConfigScreen() {
                 const nuevo = textoEdicion.trim();
                 if (!nuevo || nuevo === tipo) { setEditandoTipo(null); return; }
                 if (config.tiposFormacion.some((t, j) => j !== i && normalizarTipo(t) === normalizarTipo(nuevo))) {
-                  setEditandoTipo(null);
+                  showAlert('Tipo duplicado', 'Ya existe un tipo con ese nombre (se compara sin mayúsculas ni acentos).');
                   return;
                 }
                 actualizarConfig({ tiposFormacion: config.tiposFormacion.map((t, j) => j === i ? nuevo : t) });

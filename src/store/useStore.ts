@@ -138,6 +138,7 @@ export const useStore = create<Store>((set, get) => ({
 
   decrementarPeriodoExamen: () => {
     const { perfilActivoId, materias, config } = get();
+    const antes = new Map(materias.map(m => [m.id, m.oportunidadesExamen]));
     const nuevas = materias.map(m => {
       const estado = calcularEstadoFinal(m, config);
       if (estado === 'aprobado' || estado === 'reprobado') {
@@ -150,10 +151,7 @@ export const useStore = create<Store>((set, get) => ({
       e => { if (__DEV__) console.error('[store] decrementarPeriodoExamen: fallo al persistir', e); },
     );
     return nuevas.filter(
-      m =>
-        m.oportunidadesExamen === 0 &&
-        (calcularEstadoFinal({ ...m, oportunidadesExamen: 1 }, config) === 'aprobado' ||
-          calcularEstadoFinal({ ...m, oportunidadesExamen: 1 }, config) === 'reprobado'),
+      m => m.oportunidadesExamen === 0 && (antes.get(m.id) ?? 0) > 0,
     );
   },
 

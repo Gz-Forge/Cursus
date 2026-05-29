@@ -170,16 +170,18 @@ const COLORES_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
   config:   'coloresConfig',
 };
 
+const isValidHex = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
+
 function mergeScreenColors(draft: TemaPersonalizado, pagina: PantallaKey): TemaPersonalizado {
   const overrides = draft[COLORES_KEY[pagina]] as ColoresScreen | undefined;
   if (!overrides) return draft;
   return {
     ...draft,
-    ...(overrides.tarjeta         ? { tarjeta:         overrides.tarjeta }         : {}),
-    ...(overrides.texto           ? { texto:           overrides.texto }           : {}),
-    ...(overrides.textoSecundario ? { textoSecundario: overrides.textoSecundario } : {}),
-    ...(overrides.acento          ? { acento:          overrides.acento }          : {}),
-    ...(overrides.borde           ? { borde:           overrides.borde }           : {}),
+    ...(overrides.tarjeta         && isValidHex(overrides.tarjeta)         ? { tarjeta:         overrides.tarjeta }         : {}),
+    ...(overrides.texto           && isValidHex(overrides.texto)           ? { texto:           overrides.texto }           : {}),
+    ...(overrides.textoSecundario && isValidHex(overrides.textoSecundario) ? { textoSecundario: overrides.textoSecundario } : {}),
+    ...(overrides.acento          && isValidHex(overrides.acento)          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.borde           && isValidHex(overrides.borde)           ? { borde:           overrides.borde }           : {}),
   };
 }
 

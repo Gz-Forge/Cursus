@@ -73,8 +73,13 @@ function FechaHoraPicker({
   // Inicializar día/mes desde ISO YYYY-MM-DD
   const parsarFechaInicial = (iso?: string): { dia: string; mes: string } => {
     if (!iso) return { dia: '', mes: '' };
-    const [, mo, d] = iso.split('-');
-    return { dia: String(parseInt(d, 10)), mes: String(parseInt(mo, 10)) };
+    const parts = iso.split('-');
+    if (parts.length !== 3) return { dia: '', mes: '' };
+    const [, mo, d] = parts;
+    const dia = parseInt(d, 10);
+    const mes = parseInt(mo, 10);
+    if (isNaN(dia) || isNaN(mes)) return { dia: '', mes: '' };
+    return { dia: String(dia), mes: String(mes) };
   };
 
   const inicial = parsarFechaInicial(fecha);
