@@ -16,7 +16,8 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
-import { jsonAMaterias } from '../utils/importExport';
+import { jsonAMaterias, detectarDuplicados } from '../utils/importExport';
+import { DuplicadosModal } from '../components/DuplicadosModal';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
@@ -131,6 +132,10 @@ function PanelImportar() {
     nombrePerfil: string;
     materias: Materia[];
   } | null>(null);
+  const [bufferImport, setBufferImport] = useState<Materia[]>([]);
+  const [mostrarDuplicadosImport, setMostrarDuplicadosImport] = useState(false);
+  // 'merge' = came from doImport path; otherwise = perfilId (string) from ejecutarImportPerfil
+  const [pendingImportTarget, setPendingImportTarget] = useState<'merge' | string | null>(null);
 
   const handleImportarJson = async () => {
     setCargando(true);
@@ -299,6 +304,13 @@ function PanelImportar() {
   const ejecutarImportPerfil = async (targetPerfilId: string | 'nuevo') => {
     if (!pendingPerfilImport) return;
     const { nombrePerfil, materias: nuevasMaterias } = pendingPerfilImport;
+    const dups = detectarDuplicados(nuevasMaterias);
+    if (dups.size > 0) {
+      setBufferImport(nuevasMaterias);
+      setPendingImportTarget(targetPerfilId);
+      setMostrarDuplicadosImport(true);
+      return;
+    }
     setCargando(true);
     try {
       if (targetPerfilId === 'nuevo') {
@@ -338,6 +350,13 @@ function PanelImportar() {
         modo,
         config.oportunidadesExamenDefault,
       );
+      const dups = detectarDuplicados(merged);
+      if (dups.size > 0) {
+        setBufferImport(merged);
+        setPendingImportTarget('merge');
+        setMostrarDuplicadosImport(true);
+        return;
+      }
       if (pendingImport.tiposNuevos.length > 0) {
         const freshConfig = useStore.getState().config;
         actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...pendingImport.tiposNuevos] });
@@ -349,6 +368,50 @@ function PanelImportar() {
       showAlert('Error', 'No se pudo completar la importación.');
     } finally {
       setCargando(false);
+    }
+  };
+
+  const onImportResolve = async () => {
+    setMostrarDuplicadosImport(false);
+    const target = pendingImportTarget;
+    setPendingImportTarget(null);
+
+    if (target === 'merge') {
+      if (pendingImport?.tiposNuevos && pendingImport.tiposNuevos.length > 0) {
+        const freshConfig = useStore.getState().config;
+        actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...pendingImport.tiposNuevos] });
+      }
+      reemplazarMaterias(bufferImport);
+      setPendingImport(null);
+      showAlert('Importación completa', `Se procesaron ${bufferImport.length} materias.`);
+    } else if (target !== null) {
+      const nombrePerfil = pendingPerfilImport?.nombrePerfil;
+      if (!nombrePerfil) {
+        setCargando(false);
+        return;
+      }
+      setCargando(true);
+      try {
+        if (target === 'nuevo') {
+          await crearPerfil(nombrePerfil);
+          reemplazarMaterias(bufferImport);
+          showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${bufferImport.length} materias`);
+        } else if (target === perfilActivoId) {
+          reemplazarMaterias(bufferImport);
+          await renombrarPerfil(perfilActivoId, nombrePerfil);
+          showAlert('✅ Perfil importado', `${bufferImport.length} materias cargadas en "${nombrePerfil}"`);
+        } else {
+          const estadoActual = await cargarPerfilEstado(target);
+          await guardarPerfilEstado(target, { ...estadoActual, materias: bufferImport });
+          await renombrarPerfil(target, nombrePerfil);
+          showAlert('✅ Perfil importado', `${bufferImport.length} materias cargadas en "${nombrePerfil}"`);
+        }
+        setPendingPerfilImport(null);
+      } catch {
+        showAlert('Error', 'No se pudo importar el perfil.');
+      } finally {
+        setCargando(false);
+      }
     }
   };
 
@@ -550,6 +613,24 @@ function PanelImportar() {
         </View>
       </Modal>
 
+      <DuplicadosModal
+        visible={mostrarDuplicadosImport}
+        materias={bufferImport}
+        onEliminar={(id, numero) =>
+          setBufferImport(prev => prev.filter(m => !(m.id === id && m.numero === numero)))
+        }
+        onNuevoId={(id, numero, nuevoId) =>
+          setBufferImport(prev => prev.map(m =>
+            m.id === id && m.numero === numero ? { ...m, id: nuevoId } : m
+          ))
+        }
+        onResolve={onImportResolve}
+        onCancel={() => {
+          setMostrarDuplicadosImport(false);
+          setPendingImportTarget(null);
+        }}
+      />
+
     </View>
   );
 }
@@ -732,14 +813,13 @@ function PanelMetodos({
   const [cargando, setCargando] = useState(false);
   const [mostrarQrModal, setMostrarQrModal] = useState(false);
   const [mostrarOpcionesQr, setMostrarOpcionesQr] = useState(false);
+  const { eliminarMateria, reemplazarMaterias, materias: storeMaterias } = useStore();
+  const [mostrarDuplicados, setMostrarDuplicados] = useState<boolean>(false);
+  const [pendingExport, setPendingExport] = useState<'json' | 'clipboard' | null>(null);
 
   const sinPerfiles = perfilesSelec.length === 0;
 
-  const handleDescargarJson = async () => {
-    if (sinPerfiles) {
-      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
-      return;
-    }
+  const _doExportJson = async () => {
     setCargando(true);
     try {
       const payload = await construirPayload({
@@ -747,18 +827,28 @@ function PanelMetodos({
       });
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
-    } catch (e) {
+    } catch {
       showAlert('Error', 'No se pudo generar el archivo.');
     } finally {
       setCargando(false);
     }
   };
 
-  const handleCopiarJson = async () => {
+  const handleDescargarJson = async () => {
     if (sinPerfiles) {
       showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
+    const dups = detectarDuplicados(materiasActivas);
+    if (dups.size > 0) {
+      setPendingExport('json');
+      setMostrarDuplicados(true);
+      return;
+    }
+    await _doExportJson();
+  };
+
+  const _doExportClipboard = async () => {
     setCargando(true);
     try {
       const payload = await construirPayload({
@@ -772,6 +862,20 @@ function PanelMetodos({
     } finally {
       setCargando(false);
     }
+  };
+
+  const handleCopiarJson = async () => {
+    if (sinPerfiles) {
+      showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
+      return;
+    }
+    const dups = detectarDuplicados(materiasActivas);
+    if (dups.size > 0) {
+      setPendingExport('clipboard');
+      setMostrarDuplicados(true);
+      return;
+    }
+    await _doExportClipboard();
   };
 
   const handleQrPantalla = () => {
@@ -909,6 +1013,30 @@ function PanelMetodos({
         visible={mostrarQrModal}
         materias={materiasActivas}
         onCerrar={() => setMostrarQrModal(false)}
+      />
+
+      <DuplicadosModal
+        visible={mostrarDuplicados}
+        materias={storeMaterias}
+        onEliminar={(id, numero) => eliminarMateria(id, numero)}
+        onNuevoId={(id, numero, nuevoId) =>
+          reemplazarMaterias(
+            useStore.getState().materias.map(m =>
+              m.id === id && m.numero === numero ? { ...m, id: nuevoId } : m
+            )
+          )
+        }
+        onResolve={async () => {
+          setMostrarDuplicados(false);
+          const tipo = pendingExport;
+          setPendingExport(null);
+          if (tipo === 'json') await _doExportJson();
+          else if (tipo === 'clipboard') await _doExportClipboard();
+        }}
+        onCancel={() => {
+          setMostrarDuplicados(false);
+          setPendingExport(null);
+        }}
       />
     </>
   );
