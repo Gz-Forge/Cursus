@@ -1091,3 +1091,18 @@ ${seccionMaterias}
 ${seccionConfig}
 ${seccionColores}`;
 }
+
+// ── Duplicate ID detection & ID generation ─────────────────────────────────
+
+export function detectarDuplicados(materias: Materia[]): Map<string, Materia[]> {
+  const grupos = new Map<string, Materia[]>();
+  for (const m of materias) {
+    const grupo = grupos.get(m.id) ?? [];
+    grupos.set(m.id, [...grupo, m]);
+  }
+  return new Map([...grupos].filter(([, v]) => v.length > 1));
+}
+
+export function generarIdUnico(): string {
+  return `mat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}

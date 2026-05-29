@@ -1,4 +1,4 @@
-import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar } from '../src/utils/importExport';
+import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar, detectarDuplicados, generarIdUnico } from '../src/utils/importExport';
 import { Materia } from '../src/types';
 
 // previas = materias que necesito para cursar ESTA materia (previasNecesarias)
@@ -340,5 +340,41 @@ describe('aplicarConfigJson', () => {
     const r = aplicarConfigJson({ cursus_config: 1, campoInventado: 'x', notaMaxima: 10 }, p => calls.push(p));
     expect(calls[0]).not.toHaveProperty('campoInventado');
     expect(r.aplicados).toEqual(['notaMaxima']);
+  });
+});
+
+describe('detectarDuplicados', () => {
+  it('devuelve mapa vacío cuando no hay duplicados', () => {
+    const materias = jsonAMaterias(jsonEjemplo, 3);
+    const result = detectarDuplicados(materias);
+    expect(result.size).toBe(0);
+  });
+
+  it('detecta dos materias con mismo id', () => {
+    const materias = jsonAMaterias(jsonEjemplo, 3);
+    // Forzar un duplicado de ID
+    const conDuplicado = [...materias, { ...materias[0], numero: 99 }];
+    const result = detectarDuplicados(conDuplicado);
+    expect(result.size).toBe(1);
+    expect(result.get(materias[0].id)?.length).toBe(2);
+  });
+
+  it('no incluye IDs únicos en el resultado', () => {
+    const materias = jsonAMaterias(jsonEjemplo, 3);
+    const conDuplicado = [...materias, { ...materias[0], numero: 99 }];
+    const result = detectarDuplicados(conDuplicado);
+    // Solo 1 ID duplicado, los otros 2 no aparecen
+    expect(result.size).toBe(1);
+  });
+});
+
+describe('generarIdUnico', () => {
+  it('genera strings únicos en cada llamada', () => {
+    const ids = new Set(Array.from({ length: 50 }, () => generarIdUnico()));
+    expect(ids.size).toBe(50);
+  });
+
+  it('genera string no vacío', () => {
+    expect(generarIdUnico().length).toBeGreaterThan(0);
   });
 });
