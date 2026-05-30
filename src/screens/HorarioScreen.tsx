@@ -31,8 +31,6 @@ import {
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-const BLOCK_FONT   = Platform.OS === 'web' ? 12 : 8;
-const BLOCK_LINE_H = Platform.OS === 'web' ? 16 : 11;
 const HORA_DEF_INICIO = 7 * 60;
 const HORA_DEF_FIN   = 22 * 60;
 const PX_POR_MIN     = 1.2;
@@ -80,6 +78,8 @@ function fmtFechaCorta(iso: string): string {
 
 export function HorarioScreen() {
   const { materias, config, actualizarConfig } = useStore();
+  const BLOCK_FONT   = config.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8);
+  const BLOCK_LINE_H = BLOCK_FONT + 4;
   const { showAlert } = useAlert();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();

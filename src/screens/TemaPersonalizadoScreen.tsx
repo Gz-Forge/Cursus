@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { temaOscuro } from '../theme/colors';
+import { temaOscuro, estadoColores } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
@@ -154,9 +154,9 @@ function FondoEditor({
 type PantallaKey = 'carrera' | 'horario' | 'metricas' | 'config';
 const PANTALLAS: { key: PantallaKey; label: string }[] = [
   { key: 'carrera',  label: 'Carrera' },
-  { key: 'horario',  label: 'Horario' },
-  { key: 'metricas', label: 'Métricas' },
-  { key: 'config',   label: 'Config' },
+  { key: 'horario',  label: 'Horarios'      },
+  { key: 'metricas', label: 'Métricas'      },
+  { key: 'config',   label: 'Configuración' },
 ];
 const FONDO_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
   carrera:  'fondoCarrera',
@@ -215,6 +215,7 @@ function PantallaEditor({
   const otras = PANTALLAS.filter(p => p.key !== pantallaKey);
 
   const materiasAll = useStore(s => s.materias);
+  const { config: appConfig, actualizarConfig } = useStore(s => ({ config: s.config, actualizarConfig: s.actualizarConfig }));
   const semestresUnicos = pantallaKey === 'carrera'
     ? [...new Set(materiasAll.map(m => m.semestre))].sort((a, b) => a - b)
     : [];
@@ -308,6 +309,55 @@ function PantallaEditor({
           </TouchableOpacity>
         ))}
       </View>
+
+      {pantallaKey === 'horario' && (
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 6 }}>
+            TAMAÑO DE TEXTO EN BLOQUES
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: Math.max(6, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) - 1) })}
+              disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                backgroundColor: tema.fondo, alignItems: 'center', justifyContent: 'center',
+                opacity: (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6 ? 0.4 : 1,
+              }}
+            >
+              <Text style={{ color: tema.texto, fontSize: 20, fontWeight: '700' }}>−</Text>
+            </TouchableOpacity>
+
+            <View style={{ minWidth: 44, alignItems: 'center' }}>
+              <Text style={{ color: tema.texto, fontSize: 18, fontWeight: '700' }}>
+                {appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: Math.min(20, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) + 1) })}
+              disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                backgroundColor: tema.fondo, alignItems: 'center', justifyContent: 'center',
+                opacity: (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20 ? 0.4 : 1,
+              }}
+            >
+              <Text style={{ color: tema.texto, fontSize: 20, fontWeight: '700' }}>+</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: undefined })}
+              style={{ marginLeft: 8 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 6 }}>
+            Por defecto: web 12 · móvil 8 · Mín 6 · Máx 20{'\n'}Se aplica de inmediato.
+          </Text>
+        </View>
+      )}
 
       {pantallaKey === 'carrera' && (
         <View style={{ marginTop: 18 }}>
@@ -410,6 +460,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
   const t = draft;
   const { getLabel } = useEstadoEstilo();
   const [tab, setTab] = useState<'carrera' | 'semestre' | 'busqueda'>('carrera');
+  const isWeb = Platform.OS === 'web';
+  const [modoSearch, setModoSearch] = useState<'nombre' | 'es_previa' | 'sus_previas'>('nombre');
 
   const semestresData = [
     {
@@ -490,7 +542,13 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
                 <Text style={{ color: sem.color, fontWeight: '700', fontSize: 13 }}>▼ {sem.num}° Semestre</Text>
                 <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{sem.materias.length} materias</Text>
               </View>
-              {sem.materias.map(m => <MCard key={m.num} m={m} />)}
+              <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+                {sem.materias.map(m => (
+                  <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                    <MCard m={m} />
+                  </View>
+                ))}
+              </View>
             </View>
           ))}
         </>
@@ -504,41 +562,94 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
             <Text style={{ color: t.texto, fontSize: 15, fontWeight: '700' }}>1° Semestre</Text>
             <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
           </View>
-          {semestresData[0].materias.map(m => <MCard key={m.num} m={m} />)}
+          <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+            {semestresData[0].materias.map(m => (
+              <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                <MCard m={m} />
+              </View>
+            ))}
+          </View>
         </>
       )}
 
       {/* Vista búsqueda */}
       {tab === 'busqueda' && (
         <>
-          <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
+          {/* Search bar */}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center',
+            backgroundColor: t.tarjeta, borderRadius: 8,
+            paddingHorizontal: 10, paddingVertical: 6,
+            marginBottom: 10, gap: 6,
+          }}>
+            <Text style={{ color: t.textoSecundario, fontSize: 13 }}>🔍</Text>
+            <Text style={{ color: t.textoSecundario, fontSize: 12, flex: 1 }}>Buscar materia...</Text>
+            <Text style={{ color: t.textoSecundario, fontSize: 13 }}>✕</Text>
+          </View>
+
+          {/* Chips de modo */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+            {([
+              { key: 'nombre'      as const, label: 'Nombre'       },
+              { key: 'es_previa'   as const, label: 'Es previa de' },
+              { key: 'sus_previas' as const, label: 'Sus previas'  },
+            ]).map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setModoSearch(key)}
+                style={{
+                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: modoSearch === key ? (t.acentoFondo ?? t.acento) : t.tarjeta,
+                }}
+              >
+                <Text style={{
+                  color: modoSearch === key ? '#fff' : t.textoSecundario,
+                  fontSize: 11,
+                }}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Indicador de referencia */}
+          {modoSearch !== 'nombre' && (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+              backgroundColor: `${t.acentoFondo ?? t.acento}22`,
+              borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+              marginBottom: 10,
+            }}>
+              <Text style={{ fontSize: 12 }}>📌</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 11 }}>Referencia: Álgebra I</Text>
+            </View>
+          )}
+
+          {/* Filtros */}
+          <Text style={{ color: t.textoSecundario, fontSize: 11, marginBottom: 4 }}>Mostrar</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
             {[
-              { label: 'Todas', active: true },
-              { label: 'Disponibles', active: false },
+              { label: 'Todas',       active: true  },
+              { label: 'Para cursar', active: false },
+              { label: 'Para examen', active: false },
             ].map(f => (
-              <View key={f.label} style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                backgroundColor: f.active ? (t.acentoFondo ?? t.acento) : t.tarjeta }}>
-                <Text style={{ color: f.active ? '#fff' : t.textoSecundario, fontSize: 12 }}>{f.label}</Text>
+              <View key={f.label} style={{
+                flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                backgroundColor: f.active ? (t.acentoFondo ?? t.acento) : t.tarjeta,
+              }}>
+                <Text style={{ color: f.active ? '#fff' : t.textoSecundario, fontSize: 11 }}>{f.label}</Text>
               </View>
             ))}
           </View>
-          <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-            {[
-              { label: 'Todos', bg: t.acentoFondo ?? t.acento, color: '#fff' },
-              { label: `⭐ ${getLabel('exonerado')}`,  bg: t.tarjeta, color: t.textoSecundario },
-              { label: `✅ ${getLabel('aprobado')}`,   bg: t.tarjeta, color: t.textoSecundario },
-              { label: `🔵 ${getLabel('cursando')}`,   bg: t.tarjeta, color: t.textoSecundario },
-              { label: `⬜ ${getLabel('por_cursar')}`, bg: t.tarjeta, color: t.textoSecundario },
-            ].map(f => (
-              <View key={f.label} style={{ paddingHorizontal: 9, paddingVertical: 5,
-                borderRadius: 14, backgroundColor: f.bg }}>
-                <Text style={{ color: f.color, fontSize: 11 }} numberOfLines={1}>{f.label}</Text>
+
+          {/* Resultados — 2 columnas en web */}
+          <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+            {semestresData.flatMap(s => s.materias).map(m => (
+              <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                <MCard m={m} />
               </View>
             ))}
           </View>
-          {semestresData.flatMap(s => s.materias).map(m => <MCard key={m.num} m={m} />)}
         </>
       )}
     </PreviewWrapper>
@@ -548,6 +659,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
 // ── Preview fiel: Horario ─────────────────────────────────────────────────────
 function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
+  const appConfig = useStore(s => s.config);
+  const blockFont = appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8);
   const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const FECHAS = ['20/04', '21/04', '22/04', '23/04', '24/04', '25/04', '26/04'];
   const HOY_IDX = 4; // Jueves = hoy en el ejemplo
@@ -578,11 +691,19 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         </View>
         <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          {['📥', '📤'].map((icono, i) => (
-            <View key={i} style={{ backgroundColor: t.tarjeta, paddingHorizontal: 7, paddingVertical: 4,
-              borderRadius: 6, borderWidth: 1, borderColor: t.acentoLineas ?? t.acento, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12 }}>{icono}</Text>
-              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 8, fontWeight: '600' }}>{i === 0 ? 'Import' : 'Export'}</Text>
+          {([
+            { label: '📦 Datos',   hasIndicator: false },
+            { label: '🔽 Filtrar', hasIndicator: true  },
+          ]).map(({ label, hasIndicator }) => (
+            <View key={label} style={{
+              backgroundColor: t.tarjeta, paddingHorizontal: 8, paddingVertical: 5,
+              borderRadius: 6, borderWidth: 1, borderColor: t.acentoLineas ?? t.acento,
+              flexDirection: 'row', alignItems: 'center', gap: 2,
+            }}>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 9, fontWeight: '600' }}>{label}</Text>
+              {hasIndicator && (
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento }} />
+              )}
             </View>
           ))}
         </View>
@@ -636,7 +757,7 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
                 left: 1, right: 1, backgroundColor: b.fondo,
                 borderRadius: 3, padding: 2, overflow: 'hidden',
               }}>
-                <Text style={{ color: b.texto, fontSize: 7, fontWeight: '700', lineHeight: 10 }}
+                <Text style={{ color: b.texto, fontSize: blockFont, fontWeight: '700', lineHeight: blockFont + 3 }}
                   numberOfLines={4}>{b.label}</Text>
               </View>
             ))}
@@ -652,8 +773,18 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
   const t = draft;
   const { getLabel } = useEstadoEstilo();
   const [panel, setPanel] = useState<'general' | 'graficos'>('general');
+  const appConfig = useStore(s => s.config);
+  const isWeb = Platform.OS === 'web';
 
-  const EC = { exonerado: '#FFD700', aprobado: '#4CAF50', cursando: '#2196F3', por_cursar: '#9E9E9E', reprobado: '#FF9800', recursar: '#F44336' };
+  // Colores de estado con override personalizado
+  const EC = {
+    exonerado: appConfig.estadoColoresPersonalizados?.exonerado ?? estadoColores.exonerado,
+    aprobado:  appConfig.estadoColoresPersonalizados?.aprobado  ?? estadoColores.aprobado,
+    cursando:  appConfig.estadoColoresPersonalizados?.cursando  ?? estadoColores.cursando,
+    por_cursar:appConfig.estadoColoresPersonalizados?.por_cursar?? estadoColores.por_cursar,
+    reprobado: appConfig.estadoColoresPersonalizados?.reprobado ?? estadoColores.reprobado,
+    recursar:  appConfig.estadoColoresPersonalizados?.recursar  ?? estadoColores.recursar,
+  };
 
   const SecTitulo = ({ title }: { title: string }) => (
     <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '600', fontSize: 12, marginBottom: 8, marginTop: 14 }}>{title}</Text>
@@ -662,166 +793,189 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
   return (
     <PreviewWrapper draft={draft} fondo={fondo}>
       {/* Tabs */}
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 2 }}>
-        {(['general', 'graficos'] as const).map(p => (
-          <TouchableOpacity key={p} onPress={() => setPanel(p)}
-            style={{ flex: 1, paddingVertical: 10, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: panel === p ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
-            <Text style={{ color: panel === p ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
-              {p === 'general' ? 'General' : 'Gráficos'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 2, alignItems: 'center' }}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {(['general', 'graficos'] as const).map(p => (
+            <TouchableOpacity key={p} onPress={() => setPanel(p)}
+              style={{ flex: 1, paddingVertical: 10, alignItems: 'center',
+                borderBottomWidth: 2, borderBottomColor: panel === p ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
+              <Text style={{ color: panel === p ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+                {p === 'general' ? 'General' : 'Gráficos'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
+          <Text style={{ fontSize: 16 }}>⚙️</Text>
+        </View>
       </View>
 
       {panel === 'general' && (
-        <>
-          <SecTitulo title="PROGRESO GENERAL" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos obtenidos</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>45 / 128 (35%)</Text>
+        <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="PROGRESO GENERAL" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos obtenidos</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>45 / 128 (35%)</Text>
+              </View>
+              <View style={{ height: 6, backgroundColor: t.borde, borderRadius: 3, marginBottom: 8 }}>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento, width: '35%' }} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos restantes</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>83</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>3 / 12</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Promedio ponderado</Text>
+                <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
+              </View>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
             </View>
-            <View style={{ height: 6, backgroundColor: t.borde, borderRadius: 3, marginBottom: 8 }}>
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento, width: '35%' }} />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos restantes</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>83</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>3 / 12</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Promedio ponderado</Text>
-              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
-            </View>
-            <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
           </View>
 
-          <SecTitulo title="AVANCE POR AÑO" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            {[
-              { año: 1, pct: 67, crObt: 16, crTotal: 24, c: { exonerado: 2, aprobado: 1, cursando: 1, por_cursar: 2, reprobado: 0, recursar: 0 } },
-              { año: 2, pct: 25, crObt:  6, crTotal: 24, c: { exonerado: 0, aprobado: 1, cursando: 1, por_cursar: 4, reprobado: 0, recursar: 0 } },
-              { año: 3, pct:  0, crObt:  0, crTotal: 24, c: { exonerado: 0, aprobado: 0, cursando: 0, por_cursar: 6, reprobado: 0, recursar: 0 } },
-            ].map(a => (
-              <View key={a.año} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ color: t.texto, fontWeight: '600', fontSize: 13 }}>Año {a.año}</Text>
-                  <Text style={{ color: a.pct === 100 ? '#4CAF50' : (t.acentoTexto ?? t.acento), fontWeight: '700', fontSize: 13 }}>
-                    {a.pct}%{'  '}
-                    <Text style={{ color: t.textoSecundario, fontWeight: '400', fontSize: 11 }}>({a.crObt}/{a.crTotal} cr)</Text>
-                  </Text>
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="AVANCE POR AÑO" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              {[
+                { año: 1, pct: 67, crObt: 16, crTotal: 24, c: { exonerado: 2, aprobado: 1, cursando: 1, por_cursar: 2, reprobado: 0, recursar: 0 } },
+                { año: 2, pct: 25, crObt:  6, crTotal: 24, c: { exonerado: 0, aprobado: 1, cursando: 1, por_cursar: 4, reprobado: 0, recursar: 0 } },
+                { año: 3, pct:  0, crObt:  0, crTotal: 24, c: { exonerado: 0, aprobado: 0, cursando: 0, por_cursar: 6, reprobado: 0, recursar: 0 } },
+              ].map(a => (
+                <View key={a.año} style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: t.texto, fontWeight: '600', fontSize: 13 }}>Año {a.año}</Text>
+                    <Text style={{ color: a.pct === 100 ? '#4CAF50' : (t.acentoTexto ?? t.acento), fontWeight: '700', fontSize: 13 }}>
+                      {a.pct}%{'  '}
+                      <Text style={{ color: t.textoSecundario, fontWeight: '400', fontSize: 11 }}>({a.crObt}/{a.crTotal} cr)</Text>
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', height: 13, borderRadius: 7, overflow: 'hidden', backgroundColor: t.borde }}>
+                    {(Object.entries(a.c) as [keyof typeof EC, number][]).map(([e, n]) =>
+                      n > 0 ? <View key={e} style={{ flex: n, backgroundColor: EC[e] }} /> : null
+                    )}
+                  </View>
                 </View>
-                <View style={{ flexDirection: 'row', height: 13, borderRadius: 7, overflow: 'hidden', backgroundColor: t.borde }}>
-                  {(Object.entries(a.c) as [keyof typeof EC, number][]).map(([e, n]) =>
-                    n > 0 ? <View key={e} style={{ flex: n, backgroundColor: EC[e] }} /> : null
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <SecTitulo title="MATERIAS POR ESTADO" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', height: 18, borderRadius: 9, overflow: 'hidden', marginBottom: 10 }}>
-              <View style={{ flex: 3, backgroundColor: EC.exonerado }} />
-              <View style={{ flex: 1, backgroundColor: EC.aprobado }} />
-              <View style={{ flex: 2, backgroundColor: EC.cursando }} />
-              <View style={{ flex: 6, backgroundColor: EC.por_cursar }} />
+              ))}
             </View>
-            {[
-              { label: `⭐ ${getLabel('exonerado')}`,  n: 3, pct: 25, color: EC.exonerado },
-              { label: `✅ ${getLabel('aprobado')}`,   n: 1, pct:  8, color: EC.aprobado  },
-              { label: `🔵 ${getLabel('cursando')}`,   n: 2, pct: 17, color: EC.cursando  },
-              { label: `⬜ ${getLabel('por_cursar')}`, n: 6, pct: 50, color: EC.por_cursar },
-            ].map(e => (
-              <View key={e.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: t.texto, fontSize: 12 }}>{e.label}</Text>
-                <Text style={{ color: e.color, fontWeight: '700', fontSize: 12 }}>{e.n}  ({e.pct}%)</Text>
-              </View>
-            ))}
           </View>
 
-          <SecTitulo title="CRÉDITOS POR SEMESTRE" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12 }}>
-            {[
-              { sem: 1, crObt: 12, crTotal: 12, icono: '✅' },
-              { sem: 2, crObt:  4, crTotal: 12, icono: '🔵' },
-              { sem: 3, crObt:  0, crTotal: 12, icono: '⬜' },
-              { sem: 4, crObt:  0, crTotal: 12, icono: '⬜' },
-            ].map(s => (
-              <View key={s.sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={{ color: t.texto, fontSize: 13 }}>{s.sem}° Semestre</Text>
-                <Text style={{ color: t.textoSecundario, fontSize: 13 }}>{s.crObt} / {s.crTotal} {s.icono}</Text>
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="MATERIAS POR ESTADO" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', height: 18, borderRadius: 9, overflow: 'hidden', marginBottom: 10 }}>
+                <View style={{ flex: 3, backgroundColor: EC.exonerado }} />
+                <View style={{ flex: 1, backgroundColor: EC.aprobado }} />
+                <View style={{ flex: 2, backgroundColor: EC.cursando }} />
+                <View style={{ flex: 6, backgroundColor: EC.por_cursar }} />
               </View>
-            ))}
+              {[
+                { label: `⭐ ${getLabel('exonerado')}`,  n: 3, pct: 25, color: EC.exonerado },
+                { label: `✅ ${getLabel('aprobado')}`,   n: 1, pct:  8, color: EC.aprobado  },
+                { label: `🔵 ${getLabel('cursando')}`,   n: 2, pct: 17, color: EC.cursando  },
+                { label: `⬜ ${getLabel('por_cursar')}`, n: 6, pct: 50, color: EC.por_cursar },
+              ].map(e => (
+                <View key={e.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ color: t.texto, fontSize: 12 }}>{e.label}</Text>
+                  <Text style={{ color: e.color, fontWeight: '700', fontSize: 12 }}>{e.n}  ({e.pct}%)</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </>
+
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="CRÉDITOS POR SEMESTRE" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12 }}>
+              {[
+                { sem: 1, crObt: 12, crTotal: 12, icono: '✅' },
+                { sem: 2, crObt:  4, crTotal: 12, icono: '🔵' },
+                { sem: 3, crObt:  0, crTotal: 12, icono: '⬜' },
+                { sem: 4, crObt:  0, crTotal: 12, icono: '⬜' },
+              ].map(s => (
+                <View key={s.sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <Text style={{ color: t.texto, fontSize: 13 }}>{s.sem}° Semestre</Text>
+                  <Text style={{ color: t.textoSecundario, fontSize: 13 }}>{s.crObt} / {s.crTotal} {s.icono}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+        </View>
       )}
 
       {panel === 'graficos' && (
-        <>
-          <SecTitulo title="PROMEDIO POR SEMESTRE" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 6, paddingLeft: 20, paddingBottom: 4 }}>
-              {[{ v: 9.5, s: '1°' }, { v: 8.2, s: '2°' }, { v: 7.8, s: '3°' }, { v: 10.1, s: '4°' }].map((d, i) => (
-                <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: '60%', height: d.v * 6, backgroundColor: t.acentoGraficos ?? t.acento, borderRadius: 2 }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 9, marginTop: 3 }}>{d.s}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={{ color: t.textoSecundario, fontSize: 10, textAlign: 'center', marginTop: 2 }}>Semestre</Text>
-          </View>
+        <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
 
-          <SecTitulo title="DISTRIBUCIÓN POR RANGO DE NOTA" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 70, gap: 8, paddingLeft: 20, paddingBottom: 4 }}>
-              {[
-                { h: 14, color: EC.recursar,  label: getLabel('recursar') },
-                { h: 24, color: EC.reprobado, label: getLabel('reprobado') },
-                { h: 10, color: EC.aprobado,  label: getLabel('aprobado') },
-                { h: 52, color: EC.exonerado, label: getLabel('exonerado') },
-              ].map(b => (
-                <View key={b.label} style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: '75%', height: b.h, backgroundColor: b.color, borderRadius: 3 }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 7, marginTop: 3 }} numberOfLines={1}>{b.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <SecTitulo title="MAPA DE LA CARRERA" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            {[
-              { sem: 1, estados: ['exonerado', 'exonerado', 'aprobado', 'cursando'] as const },
-              { sem: 2, estados: ['por_cursar', 'por_cursar', 'por_cursar'] as const },
-              { sem: 3, estados: ['por_cursar', 'por_cursar', 'por_cursar', 'por_cursar'] as const },
-              { sem: 4, estados: ['por_cursar', 'por_cursar'] as const },
-            ].map(row => (
-              <View key={row.sem} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ color: t.textoSecundario, fontSize: 10, width: 22 }}>{row.sem}°</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                  {row.estados.map((e, i) => (
-                    <View key={i} style={{ width: 18, height: 18, borderRadius: 3, backgroundColor: EC[e] }} />
-                  ))}
-                </View>
+          {/* Promedio por semestre — área chart simulada */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="PROMEDIO POR SEMESTRE" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 60, gap: 4, marginBottom: 4 }}>
+                {[{ v: 9.5, s: '1°' }, { v: 8.2, s: '2°' }, { v: 7.8, s: '3°' }, { v: 10.1, s: '4°' }].map((d, i) => (
+                  <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{
+                      width: '80%',
+                      height: d.v * 5,
+                      backgroundColor: `${t.acentoGraficos ?? t.acento}55`,
+                      borderRadius: 2,
+                      borderTopWidth: 2,
+                      borderTopColor: t.acentoGraficos ?? t.acento,
+                    }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 8, marginTop: 2 }}>{d.s}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8,
-              paddingTop: 8, borderTopWidth: 1, borderTopColor: t.borde }}>
-              {(['exonerado', 'aprobado', 'cursando', 'por_cursar'] as const).map(e => (
-                <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: EC[e] }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 10 }}>{getLabel(e)}</Text>
-                </View>
-              ))}
+              <Text style={{ color: t.textoSecundario, fontSize: 9, textAlign: 'center' }}>Promedio por semestre</Text>
             </View>
           </View>
-        </>
+
+          {/* Distribución por nota — barras */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="DISTRIBUCIÓN POR NOTA" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 60, gap: 6, paddingBottom: 4 }}>
+                {[
+                  { h: 14, color: EC.recursar,  label: getLabel('recursar')  },
+                  { h: 24, color: EC.reprobado, label: getLabel('reprobado') },
+                  { h: 10, color: EC.aprobado,  label: getLabel('aprobado')  },
+                  { h: 52, color: EC.exonerado, label: getLabel('exonerado') },
+                ].map(b => (
+                  <View key={b.label} style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ width: '75%', height: b.h, backgroundColor: b.color, borderRadius: 3 }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 7, marginTop: 3 }} numberOfLines={1}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Tipos de formación — donut */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="TIPOS DE FORMACIÓN" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2, alignItems: 'center' }}>
+              <View style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: t.acentoGraficos ?? t.acento, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.tarjeta }} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {[
+                  { label: 'Obligatoria', color: t.acentoGraficos ?? t.acento },
+                  { label: 'Optativa',    color: t.acento                     },
+                ].map(item => (
+                  <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: item.color }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 9 }}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+        </View>
       )}
     </PreviewWrapper>
   );
@@ -1208,8 +1362,8 @@ export function TemaPersonalizadoScreen() {
               </View>
             </View>
 
-            {/* ── COLORES Y FONDOS POR PANTALLA ── */}
-            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES Y FONDOS POR PANTALLA</Text>
+            {/* ── CONFIGURACIÓN POR PANTALLA ── */}
+            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>CONFIGURACIÓN POR PANTALLA</Text>
 
             {/* Tabs de selección de pantalla */}
             <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
@@ -1270,10 +1424,10 @@ export function TemaPersonalizadoScreen() {
           {/* Selector de página */}
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, padding: 8, gap: 6 }}>
             {([
-              ['carrera',  'Carrera'],
-              ['horario',  'Horario'],
-              ['metricas', 'Métricas'],
-              ['config',   'Config'],
+              ['carrera',  'Carrera'       ],
+              ['horario',  'Horarios'      ],
+              ['metricas', 'Métricas'      ],
+              ['config',   'Configuración' ],
             ] as const).map(([id, label]) => (
               <TouchableOpacity
                 key={id}
