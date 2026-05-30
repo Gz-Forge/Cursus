@@ -188,6 +188,7 @@ export interface Config {
   horarioPrimerDia: 'lunes' | 'domingo';
   horarioFiltroOcultos: TipoBloque[];        // [] = mostrar todo
   horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
+  horarioFontSize?: number;              // undefined → fallback por plataforma (web=12, móvil=8). Rango: 6–20.
   // Métricas personalizables
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
   metricasOrden?: string[];            // orden de las métricas (array de IDs); ausente = orden por defecto
