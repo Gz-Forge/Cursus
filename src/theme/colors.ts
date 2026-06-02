@@ -35,3 +35,9 @@ export type Tema = typeof temaOscuro & {
   acentoLineas?:   string;
   acentoGraficos?: string;
 };
+
+export const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+export const hexValido = (v: any, fallback: string): string =>
+  typeof v === 'string' && HEX_RE.test(v) ? v : fallback;
+export const hexOpcional = (v: string | undefined): string | undefined =>
+  v && HEX_RE.test(v) ? v : undefined;

@@ -1174,6 +1174,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
 export function TemaPersonalizadoScreen() {
   const { config, actualizarConfig } = useStore();
   const tema = useTema();
+  const { showAlert } = useAlert();
 
   const [draft, setDraft] = useState<TemaPersonalizado>(
     () => config.temaPersonalizado ?? { ...temaOscuro }
@@ -1192,6 +1193,15 @@ export function TemaPersonalizadoScreen() {
   };
 
   const guardar = () => {
+    const REQUERIDOS: (keyof TemaPersonalizado)[] = ['fondo', 'tarjeta', 'texto', 'textoSecundario', 'acento', 'borde'];
+    const invalidos = REQUERIDOS.filter(k => !/^#[0-9A-Fa-f]{6}$/.test(draft[k] as string));
+    if (invalidos.length > 0) {
+      showAlert(
+        'Colores inválidos',
+        `Los siguientes campos tienen colores incompletos o inválidos: ${invalidos.join(', ')}.\n\nUsá el formato #RRGGBB (6 dígitos hexadecimales).`,
+      );
+      return;
+    }
     actualizarConfig({ temaPersonalizado: draft });
     setCambiosSinGuardar(false);
     setGuardadoOk(true);

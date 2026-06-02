@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore';
 import { FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import { temaOscuro, temaClaro, Tema } from '../theme/colors';
+import { sanitizarTema } from '../theme/ThemeContext';
 
 export type PaginaFondo = 'carrera' | 'horario' | 'metricas' | 'config';
 
@@ -32,7 +33,7 @@ export function useTemaPantalla(pagina: PaginaFondo): Tema {
     return config.tema === 'claro' ? temaClaro : temaOscuro;
   }
   const tp = config.temaPersonalizado;
-  const base: Tema = { ...temaOscuro, ...tp } as Tema;
+  const base: Tema = sanitizarTema(tp);
   let overrides: ColoresScreen | undefined;
   switch (pagina) {
     case 'carrera':  overrides = tp.coloresCarrera;  break;
