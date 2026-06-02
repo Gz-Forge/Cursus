@@ -215,7 +215,8 @@ function PantallaEditor({
   const otras = PANTALLAS.filter(p => p.key !== pantallaKey);
 
   const materiasAll = useStore(s => s.materias);
-  const { config: appConfig, actualizarConfig } = useStore(s => ({ config: s.config, actualizarConfig: s.actualizarConfig }));
+  const appConfig = useStore(s => s.config);
+  const actualizarConfig = useStore(s => s.actualizarConfig);
   const semestresUnicos = pantallaKey === 'carrera'
     ? [...new Set(materiasAll.map(m => m.semestre))].sort((a, b) => a - b)
     : [];
