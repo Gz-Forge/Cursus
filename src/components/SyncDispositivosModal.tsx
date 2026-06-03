@@ -23,6 +23,7 @@ type Estado =
   | 'receptor_escaneando'
   | 'receptor_descargando'
   | 'receptor_ingresando_clave'
+  | 'receptor_desencriptando'
   | 'receptor_confirmando'
   | 'receptor_aplicando'
   | 'receptor_listo'
@@ -64,7 +65,6 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [errorClave, setErrorClave] = useState('');
   const [encryptedBlob, setEncryptedBlob] = useState('');
-  const [cargandoClave, setCargandoClave] = useState(false);
 
   const resetear = useCallback(() => {
     setEstado('idle');
@@ -79,7 +79,6 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setShowPass(false);
     setErrorClave('');
     setEncryptedBlob('');
-    setCargandoClave(false);
   }, []);
 
   useEffect(() => {
@@ -184,7 +183,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   const aplicarClave = async () => {
     setErrorClave('');
-    setCargandoClave(true);
+    setEstado('receptor_desencriptando');
+    // Yield al event loop para que React pinte la pantalla de carga antes de
+    // que PBKDF2 (100k iteraciones) tome el hilo JS
+    await new Promise<void>(r => setTimeout(r, 0));
     try {
       const comprimido = await decryptPayload(encryptedBlob, passphrase);
       const syncPayload = descomprimirPayload(comprimido);
@@ -192,8 +194,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       setEstado('receptor_confirmando');
     } catch (e: any) {
       setErrorClave(e?.message ?? 'Contraseña incorrecta — verificá que sea la misma que ingresó el emisor');
-    } finally {
-      setCargandoClave(false);
+      setEstado('receptor_ingresando_clave');
     }
   };
 
@@ -384,6 +385,17 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
+      case 'receptor_desencriptando':
+        return (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
+            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Desencriptando...</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+              Esto puede tomar unos segundos
+            </Text>
+          </View>
+        );
+
       case 'receptor_ingresando_clave':
         return (
           <View>
@@ -414,13 +426,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             ) : null}
             <TouchableOpacity
               onPress={aplicarClave}
-              disabled={passphrase.length < 1 || cargandoClave}
-              style={btnStyle(passphrase.length >= 1 && !cargandoClave ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
+              disabled={passphrase.length < 1}
+              style={btnStyle(passphrase.length >= 1 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
-              {cargandoClave
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
-              }
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={resetear} style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}>
               <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
