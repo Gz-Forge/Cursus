@@ -5,6 +5,7 @@ import {
   Platform, TextInput,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
 import { useStore } from '../store/useStore';
@@ -53,6 +54,7 @@ function genCode(): string {
 }
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const tema = useTema();
   const { showAlert } = useAlert();
   const { perfiles, perfilActivoId } = useStore();
@@ -564,7 +566,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             style={{
               backgroundColor: tema.superficie,
               borderTopLeftRadius: 20, borderTopRightRadius: 20,
-              padding: 24, paddingBottom: 36,
+              padding: 24, paddingBottom: Platform.OS !== 'web' ? 36 + bottomInset : 36,
               ...(Platform.OS === 'web'
                 ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
                 : {}),

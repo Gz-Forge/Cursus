@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, useWindowDimensions,
   Platform, Animated, Modal, Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
 import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
@@ -62,6 +63,7 @@ function yAxisNota(max: number): { maxValue: number; noOfSections: number } {
 }
 
 export function MetricsScreen() {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { materias, config, actualizarConfig } = useStore();
   const tema = useTemaPantalla('metricas');
   const { getColor, getLabel, getIcono } = useEstadoEstilo();
@@ -378,7 +380,7 @@ export function MetricsScreen() {
             style={{
               backgroundColor: tema.superficie,
               borderTopLeftRadius: 20, borderTopRightRadius: 20,
-              padding: 20, paddingBottom: 36, maxHeight: '85%',
+              padding: 20, paddingBottom: isWeb ? 36 : 36 + bottomInset, maxHeight: '85%',
               ...(isWeb
                 ? { maxWidth: 480, alignSelf: 'center' as const, width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
                 : {}),

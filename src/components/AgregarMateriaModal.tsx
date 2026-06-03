@@ -1,6 +1,7 @@
 // Cursus/src/components/AgregarMateriaModal.tsx
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const tema = useTema();
   const isWeb = Platform.OS === 'web';
 
@@ -61,7 +63,7 @@ export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar }:
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
-      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 }}>
+      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: isWeb ? 40 : 40 + bottomInset }}>
         {contenido}
       </View>
     </Modal>

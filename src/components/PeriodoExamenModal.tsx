@@ -1,6 +1,7 @@
 // Cursus/src/components/PeriodoExamenModal.tsx
 import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
@@ -46,6 +47,7 @@ function fechaADisplay(s: string): string {
 }
 
 export function PeriodoExamenModal({ visible, onCerrar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const tema = useTema();
   const { config, actualizarConfig } = useStore();
   const { showAlert, showConfirm } = useAlert();
@@ -228,7 +230,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
-      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 }}>
+      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 + bottomInset }}>
         <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
           Períodos de examen
         </Text>

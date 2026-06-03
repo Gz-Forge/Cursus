@@ -9,6 +9,7 @@ import {
   Platform,
   type DimensionValue,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function PerfilSheet({ visible, onCerrar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { perfiles, perfilActivoId, cambiarPerfil, crearPerfil, renombrarPerfil, eliminarPerfil } =
     useStore();
   const tema = useTema();
@@ -248,7 +250,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                 borderTopRightRadius: 20,
                 paddingHorizontal: 20,
                 paddingTop: 20,
-                paddingBottom: 32,
+                paddingBottom: 32 + bottomInset,
               }}
             >
           {/* Título */}
