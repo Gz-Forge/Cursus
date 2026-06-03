@@ -7,11 +7,13 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
+import { useStore } from '../store/useStore';
 import { supabase } from '../services/supabase';
 import {
-  capturarSnapshot, aplicarSnapshot,
+  capturarSnapshot, aplicarPerfilSync,
   comprimirPayload, descomprimirPayload,
 } from '../utils/deviceSnapshot';
+import { MAX_PERFILES } from '../utils/perfiles';
 import { QrScannerModal } from './QrScannerModal';
 import { encryptPayload, decryptPayload } from '../utils/crypto';
 
@@ -53,6 +55,7 @@ function genCode(): string {
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const tema = useTema();
   const { showAlert } = useAlert();
+  const { perfiles, perfilActivoId } = useStore();
   const [estado, setEstado] = useState<Estado>('idle');
   const [code, setCode] = useState('');
   const [expiryTs, setExpiryTs] = useState(0);
@@ -198,11 +201,11 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     }
   };
 
-  const aplicarPendingSync = async () => {
+  const aplicarPendingSync = async (target: 'nuevo' | string) => {
     if (!pendingPayload) return;
     setEstado('receptor_aplicando');
     try {
-      await aplicarSnapshot(pendingPayload);
+      await aplicarPerfilSync(pendingPayload, target);
       const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', pendingCode);
       if (deleteError && __DEV__) console.warn('[SyncDispositivosModal] No se pudo borrar la sesión de sync:', deleteError.message);
       setPendingPayload(null);
@@ -437,30 +440,71 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
-      case 'receptor_confirmando':
+      case 'receptor_confirmando': {
+        const nombreEmisor = pendingPayload?.meta.perfiles[0]?.nombre ?? 'Perfil';
+        const cantMaterias = pendingPayload?.estados[0]?.materias.length ?? 0;
+        const puedeCrearNuevo = perfiles.length < MAX_PERFILES;
         return (
           <View>
-            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
-              Confirmar sincronización
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 4 }}>
+              Sincronizar perfil
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
-              Se van a reemplazar{' '}
-              <Text style={{ color: tema.texto, fontWeight: '700' }}>TODOS</Text>
-              {' '}tus datos locales con los del dispositivo emisor
-              {pendingPayload ? ` (${pendingPayload.meta.perfiles.length} perfil(es))` : ''}.{'\n\n'}
-              Esta acción no se puede deshacer.
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
+              "{nombreEmisor}" · {cantMaterias} materia{cantMaterias !== 1 ? 's' : ''}
             </Text>
-            <TouchableOpacity onPress={aplicarPendingSync} style={btnStyle('#F44336')}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Reemplazar todo</Text>
-            </TouchableOpacity>
+
+            {perfiles.map(p => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => aplicarPendingSync(p.id)}
+                style={{
+                  backgroundColor: p.id === perfilActivoId
+                    ? (tema.acentoFondo ?? tema.acento) + '22'
+                    : tema.tarjeta,
+                  padding: 14, borderRadius: 10, marginBottom: 8,
+                  flexDirection: 'row', alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: p.id === perfilActivoId
+                    ? (tema.acentoLineas ?? tema.acento)
+                    : tema.borde,
+                }}
+              >
+                <Text style={{
+                  color: tema.texto,
+                  fontWeight: p.id === perfilActivoId ? '700' : '400',
+                  flex: 1,
+                }}>
+                  {p.id === perfilActivoId ? '▶ ' : ''}{p.nombre}
+                </Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Reemplazar</Text>
+              </TouchableOpacity>
+            ))}
+
+            {puedeCrearNuevo && (
+              <TouchableOpacity
+                onPress={() => aplicarPendingSync('nuevo')}
+                style={{
+                  backgroundColor: tema.tarjeta,
+                  padding: 14, borderRadius: 10, marginBottom: 8,
+                  alignItems: 'center',
+                  borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
+                }}
+              >
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>
+                  + Crear perfil nuevo
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               onPress={resetear}
-              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}
+              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, marginTop: 4 }]}
             >
               <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         );
+      }
 
       case 'receptor_aplicando':
         return (
