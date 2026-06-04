@@ -13,6 +13,7 @@ interface Props {
 
 export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar }: Props) {
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const tema = useTema();
   const isWeb = Platform.OS === 'web';
 
@@ -63,7 +64,7 @@ export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar }:
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
-      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: isWeb ? 40 : 40 + bottomInset }}>
+      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: isWeb ? 40 : 40 + safeBottomModal }}>
         {contenido}
       </View>
     </Modal>

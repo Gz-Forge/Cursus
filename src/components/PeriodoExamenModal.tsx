@@ -48,6 +48,7 @@ function fechaADisplay(s: string): string {
 
 export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const tema = useTema();
   const { config, actualizarConfig } = useStore();
   const { showAlert, showConfirm } = useAlert();
@@ -230,7 +231,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
-      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 + bottomInset }}>
+      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 + safeBottomModal }}>
         <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
           Períodos de examen
         </Text>

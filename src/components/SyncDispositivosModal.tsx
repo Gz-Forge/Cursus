@@ -55,6 +55,7 @@ function genCode(): string {
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const tema = useTema();
   const { showAlert } = useAlert();
   const { perfiles, perfilActivoId } = useStore();
@@ -566,7 +567,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             style={{
               backgroundColor: tema.superficie,
               borderTopLeftRadius: 20, borderTopRightRadius: 20,
-              padding: 24, paddingBottom: Platform.OS !== 'web' ? 36 + bottomInset : 36,
+              padding: 24, paddingBottom: Platform.OS !== 'web' ? 36 + safeBottomModal : 36,
               ...(Platform.OS === 'web'
                 ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
                 : {}),

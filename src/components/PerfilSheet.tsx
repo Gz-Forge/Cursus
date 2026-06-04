@@ -22,6 +22,7 @@ interface Props {
 
 export function PerfilSheet({ visible, onCerrar }: Props) {
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const { perfiles, perfilActivoId, cambiarPerfil, crearPerfil, renombrarPerfil, eliminarPerfil } =
     useStore();
   const tema = useTema();
@@ -250,7 +251,7 @@ export function PerfilSheet({ visible, onCerrar }: Props) {
                 borderTopRightRadius: 20,
                 paddingHorizontal: 20,
                 paddingTop: 20,
-                paddingBottom: 32 + bottomInset,
+                paddingBottom: 32 + safeBottomModal,
               }}
             >
           {/* Título */}
