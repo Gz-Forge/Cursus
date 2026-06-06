@@ -1351,15 +1351,27 @@ export function HorarioScreen() {
                                   </PanGestureHandler>
                                 </>
                               ) : (
-                                <View style={{ padding: 2, flex: 1 }}>
-                                  <Text
-                                    style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                  </Text>
-                                </View>
+                                <TapGestureHandler
+                                  numberOfTaps={2}
+                                  onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                    if (e.nativeEvent.state === State.ACTIVE) {
+                                      const [, mesStr, diaStr] = b.fecha.split('-');
+                                      setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
+                                      setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+                                      setModalSalonStr(b.salon ?? '');
+                                    }
+                                  }}
+                                >
+                                  <View style={{ padding: 2, flex: 1 }}>
+                                    <Text
+                                      style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    </Text>
+                                  </View>
+                                </TapGestureHandler>
                               )}
                             </View>
                           </LongPressGestureHandler>
@@ -1676,15 +1688,28 @@ export function HorarioScreen() {
                                   </PanGestureHandler>
                                 </>
                               ) : (
-                                <View style={{ flex: 1, padding: 2 }}>
-                                  <Text
-                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {labelBloque}
-                                  </Text>
-                                </View>
+                                <TapGestureHandler
+                                  numberOfTaps={2}
+                                  onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                    if (e.nativeEvent.state === State.ACTIVE) {
+                                      const fecha = ev.fecha ?? '';
+                                      const [, mesStr, diaStr] = fecha.split('-');
+                                      setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
+                                      setModalFechaStr(diaStr && mesStr ? `${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}` : '');
+                                      setModalSalonStr(ev.salon ?? '');
+                                    }
+                                  }}
+                                >
+                                  <View style={{ flex: 1, padding: 2 }}>
+                                    <Text
+                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {labelBloque}
+                                    </Text>
+                                  </View>
+                                </TapGestureHandler>
                               )}
                             </View>
                           </LongPressGestureHandler>
