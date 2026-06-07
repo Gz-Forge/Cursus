@@ -89,7 +89,6 @@ function FechaHoraPicker({
   const [mesStr, setMesStr] = useState(inicial.mes);
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
-  const [mostrarHora, setMostrarHora] = useState(hora !== undefined);
   const [horaInicio, setHoraInicio] = useState<number>(hora !== undefined ? hora : 480);
   const [horaFinVal, setHoraFinVal] = useState<number>(horaFin !== undefined ? horaFin : 600);
   // Refs para acceder al valor actual sin depender del closure del render
@@ -114,7 +113,8 @@ function FechaHoraPicker({
   const guardar = () => {
     onActualizar({
       fecha: construirFechaISO(),
-      ...(mostrarHora ? { hora: horaInicioRef.current, horaFin: horaFinRef.current } : {}),
+      hora: horaInicioRef.current,
+      horaFin: horaFinRef.current,
     });
   };
 
@@ -228,39 +228,33 @@ function FechaHoraPicker({
           </Text>
 
           {/* ── Hora ── */}
-          <TouchableOpacity
-            onPress={() => {
-              const nuevo = !mostrarHora;
-              setMostrarHora(nuevo);
-              if (!nuevo) onActualizar({ fecha: construirFechaISO(), hora: undefined, horaFin: undefined });
-              else onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: horaFinRef.current });
-            }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}
-          >
-            <View style={{
-              width: 16, height: 16, borderRadius: 3, borderWidth: 1.5,
-              borderColor: mostrarHora ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
-              backgroundColor: mostrarHora ? (tema.acentoFondo ?? tema.acento) : 'transparent',
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              {mostrarHora && <Text style={{ color: '#fff', fontSize: 10, lineHeight: 12 }}>✓</Text>}
-            </View>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Incluir hora en horario</Text>
-          </TouchableOpacity>
-          {mostrarHora && (
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-              <HoraPicker
-                label="Hora inicio"
-                value={horaInicio}
-                onChange={v => { horaInicioRef.current = v; setHoraInicio(v); onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: horaFinRef.current }); }}
-              />
-              <HoraPicker
-                label="Fin"
-                value={horaFinVal}
-                onChange={v => { horaFinRef.current = v; setHoraFinVal(v); onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: v }); }}
-              />
-            </View>
-          )}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <HoraPicker
+              label="Hora inicio"
+              value={horaInicio}
+              onChange={v => {
+                horaInicioRef.current = v;
+                setHoraInicio(v);
+                let fin = horaFinRef.current;
+                if (fin < v + 30) {
+                  fin = v + 30;
+                  horaFinRef.current = fin;
+                  setHoraFinVal(fin);
+                }
+                onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: fin });
+              }}
+            />
+            <HoraPicker
+              label="Fin"
+              value={horaFinVal}
+              onChange={v => {
+                if (v <= horaInicioRef.current) return;
+                horaFinRef.current = v;
+                setHoraFinVal(v);
+                onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: v });
+              }}
+            />
+          </View>
 
           {(fecha || hora !== undefined) && (
             <TouchableOpacity onPress={limpiar} style={{ marginTop: 8, alignItems: 'center' }}>

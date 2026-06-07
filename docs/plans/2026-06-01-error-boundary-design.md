@@ -59,7 +59,7 @@ Fondo negro `#000`, texto blanco. Layout:
 │  [↑ Compartir log]              │  ← solo móvil
 │  [✉ Enviar a soporte]           │  ← ambos (mailto:)
 │                                 │
-│  v1.2.1 · web · 2026-06-01      │  ← versión / plataforma / fecha
+│  v1.2.2 · web · 2026-06-01      │  ← versión / plataforma / fecha
 └─────────────────────────────────┘
 ```
 
@@ -74,7 +74,7 @@ Fondo negro `#000`, texto blanco. Layout:
 ```
 Cursus — Error Report
 Fecha: 2026-06-01T14:23:00.000Z
-Versión: 1.2.1
+Versión: 1.2.2
 Plataforma: web
 ---
 TypeError: Cannot read properties of undefined (reading 'fondo')
@@ -86,7 +86,7 @@ Stack:
 ```
 
 Nombre de archivo de descarga: `cursus-error-YYYY-MM-DD.txt`
-Asunto mailto: `[Cursus] Error Report v1.2.1`
+Asunto mailto: `[Cursus] Error Report v1.2.2`
 
 ---
 
