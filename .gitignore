@@ -49,3 +49,10 @@ src-tauri/target/
 # Google Service Account key (never commit)
 google-service-account.json
 .idea/
+
+# Internal docs (plans, audits, notes — not for public repo)
+docs/plans/
+docs/tests/
+docs/PENDIENTE.md
+docs/auditoria-*.md
+docs/2026-*

@@ -7,7 +7,7 @@ import { temaOscuro, temaClaro } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
 
 // ── Reemplazá estas URLs cuando estén disponibles ──────────────────────────
-const PAYPAL_URL        = 'https://www.paypal.com/donate/?hosted_button_id=9TCFLYW98H8JA';
+const PAYPAL_URL        = 'https://www.paypal.com/donate/?hosted_button_id=VNC65GKZYCJWL';
 const GITHUB_SPONSORS_URL = 'https://github.com/sponsors/Gz-Forge';
 const PLAY_STORE_URL    = 'https://play.google.com/store/apps/details?id=TU_APP_ID';
 const APP_STORE_URL     = 'https://apps.apple.com/app/id/TU_APP_ID';
