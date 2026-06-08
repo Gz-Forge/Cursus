@@ -16,9 +16,15 @@ export function FabSpeedDial({ acciones }: Props) {
   const [abierto, setAbierto] = useState(false);
   const tema = useTema();
   const rotacion = useRef(new Animated.Value(0)).current;
-  // Un ref de Animated.Value por acción
-  const escalas = useRef(acciones.map(() => new Animated.Value(0))).current;
-  const traducciones = useRef(acciones.map(() => new Animated.Value(0))).current;
+  // Refs que crecen si acciones.length aumenta entre renders
+  const escalasRef = useRef<Animated.Value[]>([]);
+  const traduccionesRef = useRef<Animated.Value[]>([]);
+  while (escalasRef.current.length < acciones.length) {
+    escalasRef.current.push(new Animated.Value(0));
+    traduccionesRef.current.push(new Animated.Value(0));
+  }
+  const escalas = escalasRef.current;
+  const traducciones = traduccionesRef.current;
 
   const animar = (abrir: boolean) => {
     setAbierto(abrir);
