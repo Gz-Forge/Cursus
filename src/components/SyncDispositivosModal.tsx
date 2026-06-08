@@ -5,13 +5,16 @@ import {
   Platform, TextInput,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
+import { useStore } from '../store/useStore';
 import { supabase } from '../services/supabase';
 import {
-  capturarSnapshot, aplicarSnapshot,
+  capturarSnapshot, aplicarPerfilSync,
   comprimirPayload, descomprimirPayload,
 } from '../utils/deviceSnapshot';
+import { MAX_PERFILES } from '../utils/perfiles';
 import { QrScannerModal } from './QrScannerModal';
 import { encryptPayload, decryptPayload } from '../utils/crypto';
 
@@ -23,6 +26,7 @@ type Estado =
   | 'receptor_escaneando'
   | 'receptor_descargando'
   | 'receptor_ingresando_clave'
+  | 'receptor_desencriptando'
   | 'receptor_confirmando'
   | 'receptor_aplicando'
   | 'receptor_listo'
@@ -50,8 +54,11 @@ function genCode(): string {
 }
 
 export function SyncDispositivosModal({ visible, onCerrar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const tema = useTema();
   const { showAlert } = useAlert();
+  const { perfiles, perfilActivoId } = useStore();
   const [estado, setEstado] = useState<Estado>('idle');
   const [code, setCode] = useState('');
   const [expiryTs, setExpiryTs] = useState(0);
@@ -64,7 +71,6 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [errorClave, setErrorClave] = useState('');
   const [encryptedBlob, setEncryptedBlob] = useState('');
-  const [cargandoClave, setCargandoClave] = useState(false);
 
   const resetear = useCallback(() => {
     setEstado('idle');
@@ -79,7 +85,6 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setShowPass(false);
     setErrorClave('');
     setEncryptedBlob('');
-    setCargandoClave(false);
   }, []);
 
   useEffect(() => {
@@ -184,7 +189,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   const aplicarClave = async () => {
     setErrorClave('');
-    setCargandoClave(true);
+    setEstado('receptor_desencriptando');
+    // Yield al event loop para que React pinte la pantalla de carga antes de
+    // que PBKDF2 (100k iteraciones) tome el hilo JS
+    await new Promise<void>(r => setTimeout(r, 0));
     try {
       const comprimido = await decryptPayload(encryptedBlob, passphrase);
       const syncPayload = descomprimirPayload(comprimido);
@@ -192,16 +200,15 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       setEstado('receptor_confirmando');
     } catch (e: any) {
       setErrorClave(e?.message ?? 'Contraseña incorrecta — verificá que sea la misma que ingresó el emisor');
-    } finally {
-      setCargandoClave(false);
+      setEstado('receptor_ingresando_clave');
     }
   };
 
-  const aplicarPendingSync = async () => {
+  const aplicarPendingSync = async (target: 'nuevo' | string) => {
     if (!pendingPayload) return;
     setEstado('receptor_aplicando');
     try {
-      await aplicarSnapshot(pendingPayload);
+      await aplicarPerfilSync(pendingPayload, target);
       const { error: deleteError } = await supabase.from('sync_temporal').delete().eq('code', pendingCode);
       if (deleteError && __DEV__) console.warn('[SyncDispositivosModal] No se pudo borrar la sesión de sync:', deleteError.message);
       setPendingPayload(null);
@@ -219,7 +226,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const btnStyle = (color = tema.acento) => ({
+  const btnStyle = (color = tema.acentoFondo ?? tema.acento) => ({
     backgroundColor: color,
     padding: 14, borderRadius: 10, alignItems: 'center' as const, marginBottom: 10,
   });
@@ -250,9 +257,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setEstado('receptor_escaneando')}
-              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acento }]}
+              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }]}
             >
-              <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
                 Recibiré los datos del otro dispositivo
               </Text>
@@ -287,7 +294,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <TouchableOpacity
               onPress={() => iniciarEmisor(passphrase)}
               disabled={passphrase.length < 4}
-              style={btnStyle(passphrase.length >= 4 ? tema.acento : tema.borde)}
+              style={btnStyle(passphrase.length >= 4 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Continuar →</Text>
             </TouchableOpacity>
@@ -300,7 +307,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'emisor_subiendo':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Subiendo datos...</Text>
           </View>
         );
@@ -328,7 +335,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               backgroundColor: tema.tarjeta, borderRadius: 10,
               paddingVertical: 10, paddingHorizontal: 24, marginBottom: 6,
             }}>
-              <Text style={{ color: tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 28, fontWeight: '700', letterSpacing: 4 }}>
                 {code}
               </Text>
             </View>
@@ -369,7 +376,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             <TouchableOpacity
               onPress={() => descargarComoReceptor(codigoManual)}
               disabled={codigoManual.trim().length < 8}
-              style={btnStyle(codigoManual.trim().length >= 8 ? tema.acento : tema.borde)}
+              style={btnStyle(codigoManual.trim().length >= 8 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>Conectar</Text>
             </TouchableOpacity>
@@ -379,8 +386,19 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'receptor_descargando':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Descargando datos...</Text>
+          </View>
+        );
+
+      case 'receptor_desencriptando':
+        return (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
+            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Desencriptando...</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+              Esto puede tomar unos segundos
+            </Text>
           </View>
         );
 
@@ -414,13 +432,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             ) : null}
             <TouchableOpacity
               onPress={aplicarClave}
-              disabled={passphrase.length < 1 || cargandoClave}
-              style={btnStyle(passphrase.length >= 1 && !cargandoClave ? tema.acento : tema.borde)}
+              disabled={passphrase.length < 1}
+              style={btnStyle(passphrase.length >= 1 ? (tema.acentoFondo ?? tema.acento) : tema.borde)}
             >
-              {cargandoClave
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
-              }
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Desencriptar</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={resetear} style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}>
               <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
@@ -428,35 +443,76 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
           </View>
         );
 
-      case 'receptor_confirmando':
+      case 'receptor_confirmando': {
+        const nombreEmisor = pendingPayload?.meta.perfiles[0]?.nombre ?? 'Perfil';
+        const cantMaterias = pendingPayload?.estados[0]?.materias.length ?? 0;
+        const puedeCrearNuevo = perfiles.length < MAX_PERFILES;
         return (
           <View>
-            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
-              Confirmar sincronización
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 4 }}>
+              Sincronizar perfil
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
-              Se van a reemplazar{' '}
-              <Text style={{ color: tema.texto, fontWeight: '700' }}>TODOS</Text>
-              {' '}tus datos locales con los del dispositivo emisor
-              {pendingPayload ? ` (${pendingPayload.meta.perfiles.length} perfil(es))` : ''}.{'\n\n'}
-              Esta acción no se puede deshacer.
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
+              "{nombreEmisor}" · {cantMaterias} materia{cantMaterias !== 1 ? 's' : ''}
             </Text>
-            <TouchableOpacity onPress={aplicarPendingSync} style={btnStyle('#F44336')}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Reemplazar todo</Text>
-            </TouchableOpacity>
+
+            {perfiles.map(p => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => aplicarPendingSync(p.id)}
+                style={{
+                  backgroundColor: p.id === perfilActivoId
+                    ? (tema.acentoFondo ?? tema.acento) + '22'
+                    : tema.tarjeta,
+                  padding: 14, borderRadius: 10, marginBottom: 8,
+                  flexDirection: 'row', alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: p.id === perfilActivoId
+                    ? (tema.acentoLineas ?? tema.acento)
+                    : tema.borde,
+                }}
+              >
+                <Text style={{
+                  color: tema.texto,
+                  fontWeight: p.id === perfilActivoId ? '700' : '400',
+                  flex: 1,
+                }}>
+                  {p.id === perfilActivoId ? '▶ ' : ''}{p.nombre}
+                </Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Reemplazar</Text>
+              </TouchableOpacity>
+            ))}
+
+            {puedeCrearNuevo && (
+              <TouchableOpacity
+                onPress={() => aplicarPendingSync('nuevo')}
+                style={{
+                  backgroundColor: tema.tarjeta,
+                  padding: 14, borderRadius: 10, marginBottom: 8,
+                  alignItems: 'center',
+                  borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
+                }}
+              >
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>
+                  + Crear perfil nuevo
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               onPress={resetear}
-              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde }]}
+              style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, marginTop: 4 }]}
             >
               <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         );
+      }
 
       case 'receptor_aplicando':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acento} size="large" />
+            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
             <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Aplicando datos...</Text>
           </View>
         );
@@ -485,7 +541,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               {errorMsg}
             </Text>
             <TouchableOpacity onPress={resetear} style={{ marginTop: 16 }}>
-              <Text style={{ color: tema.acento }}>Intentar de nuevo</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Intentar de nuevo</Text>
             </TouchableOpacity>
           </View>
         );
@@ -511,7 +567,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             style={{
               backgroundColor: tema.superficie,
               borderTopLeftRadius: 20, borderTopRightRadius: 20,
-              padding: 24, paddingBottom: 36,
+              padding: 24, paddingBottom: Platform.OS !== 'web' ? 36 + safeBottomModal : 36,
               ...(Platform.OS === 'web'
                 ? { maxWidth: 480, alignSelf: 'center', width: '100%', borderRadius: 16, marginBottom: 'auto', marginTop: 'auto' }
                 : {}),

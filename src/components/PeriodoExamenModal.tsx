@@ -1,6 +1,7 @@
 // Cursus/src/components/PeriodoExamenModal.tsx
 import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
@@ -46,6 +47,8 @@ function fechaADisplay(s: string): string {
 }
 
 export function PeriodoExamenModal({ visible, onCerrar }: Props) {
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const tema = useTema();
   const { config, actualizarConfig } = useStore();
   const { showAlert, showConfirm } = useAlert();
@@ -91,7 +94,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
           <TouchableOpacity
             key={m}
             onPress={() => setModo(m)}
-            style={{ flex: 1, padding: 10, alignItems: 'center', backgroundColor: modo === m ? tema.acento : 'transparent' }}
+            style={{ flex: 1, padding: 10, alignItems: 'center', backgroundColor: modo === m ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
           >
             <Text style={{ color: modo === m ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
               {m === 'manual' ? '✋ Manual' : '🗓️ Automático'}
@@ -143,11 +146,11 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
                   { labelConfirmar: 'Cambiar', destructivo: true },
                 );
               }}
-              trackColor={{ true: tema.acento }}
+              trackColor={{ true: tema.acentoFondo ?? tema.acento }}
             />
           </View>
 
-          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
             Fechas límite de período ({fechas.length})
           </Text>
 
@@ -190,7 +193,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
             />
             <TouchableOpacity
               onPress={agregarFecha}
-              style={{ backgroundColor: tema.acento, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 }}
+              style={{ backgroundColor: tema.acentoFondo ?? tema.acento, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 }}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>+ Agregar</Text>
             </TouchableOpacity>
@@ -228,7 +231,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
       <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
-      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 }}>
+      <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 + safeBottomModal }}>
         <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
           Períodos de examen
         </Text>

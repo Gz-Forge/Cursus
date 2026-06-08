@@ -119,7 +119,7 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
   const nombreANumero = new Map<string, number>();
   conNumero.forEach(d => nombreANumero.set(d.nombre.trim(), d.numero!));
 
-  const materias: Materia[] = conNumero.map(d => {
+  const materias: Materia[] = conNumero.map((d, i) => {
     const bloques: BloqueHorario[] = Array.isArray(d.bloques)
       ? d.bloques.map((b, i) => ({
           id: `importada_${d.numero}_b${i}`,
@@ -157,7 +157,7 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       : [];
 
     return {
-      id: `importada_${d.numero}`,
+      id: `importada_${d.numero}_${i}`,
       numero: d.numero!,
       nombre: d.nombre.trim(),
       semestre: d.semestre,
@@ -1090,4 +1090,19 @@ ${estructuraRaiz}
 ${seccionMaterias}
 ${seccionConfig}
 ${seccionColores}`;
+}
+
+// ── Duplicate ID detection & ID generation ─────────────────────────────────
+
+export function detectarDuplicados(materias: Materia[]): Map<string, Materia[]> {
+  const grupos = new Map<string, Materia[]>();
+  for (const m of materias) {
+    const grupo = grupos.get(m.id) ?? [];
+    grupos.set(m.id, [...grupo, m]);
+  }
+  return new Map([...grupos].filter(([, v]) => v.length > 1));
+}
+
+export function generarIdUnico(): string {
+  return `mat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }

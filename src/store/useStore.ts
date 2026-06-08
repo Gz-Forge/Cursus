@@ -71,7 +71,7 @@ interface Store extends AppState {
   cargar: () => Promise<void>;
   guardarMateria: (m: Materia) => void;
   reemplazarMaterias: (nuevas: Materia[]) => void;
-  eliminarMateria: (id: string) => void;
+  eliminarMateria: (id: string, numero: number) => void;
   actualizarConfig: (c: Partial<Config>) => void;
   decrementarPeriodoExamen: () => Materia[];
 
@@ -118,9 +118,9 @@ export const useStore = create<Store>((set, get) => ({
     );
   },
 
-  eliminarMateria: (id) => {
+  eliminarMateria: (id, numero) => {
     const { perfilActivoId, config, materias } = get();
-    const nuevas = materias.filter(m => m.id !== id);
+    const nuevas = materias.filter(m => !(m.id === id && m.numero === numero));
     set({ materias: nuevas });
     guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
       e => { if (__DEV__) console.error('[store] eliminarMateria: fallo al persistir', e); },

@@ -176,7 +176,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
             El escaneo QR no está disponible en la versión web.{'\n'}Usá la app móvil para escanear.
           </Text>
           <TouchableOpacity onPress={onCerrar}
-            style={{ backgroundColor: tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10 }}>
+            style={{ backgroundColor: tema.acentoFondo ?? tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10 }}>
             <Text style={{ color: '#fff', fontWeight: '700' }}>Cerrar</Text>
           </TouchableOpacity>
         </View>
@@ -205,7 +205,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           </Text>
           <TouchableOpacity
             onPress={requestPermission}
-            style={{ backgroundColor: tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10, marginBottom: 12 }}
+            style={{ backgroundColor: tema.acentoFondo ?? tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10, marginBottom: 12 }}
           >
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Dar permiso</Text>
           </TouchableOpacity>
@@ -241,7 +241,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
                       key={i}
                       style={{
                         width: 18, height: 18, borderRadius: 9,
-                        backgroundColor: chunksRef.current[i] !== undefined ? tema.acento : 'rgba(255,255,255,0.25)',
+                        backgroundColor: chunksRef.current[i] !== undefined ? (tema.acentoFondo ?? tema.acento) : 'rgba(255,255,255,0.25)',
                       }}
                     />
                   ))}
@@ -259,7 +259,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
         </View>
 
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }} pointerEvents="none">
-          <View style={{ width: 220, height: 220, borderRadius: 12, borderWidth: 2, borderColor: tema.acento, opacity: 0.7 }} />
+          <View style={{ width: 220, height: 220, borderRadius: 12, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento, opacity: 0.7 }} />
         </View>
 
         <View style={{ position: 'absolute', bottom: 48, left: 0, right: 0, alignItems: 'center' }}>

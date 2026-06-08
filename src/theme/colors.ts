@@ -29,4 +29,15 @@ export const temaClaro = {
   semestres: ['#3F51B5','#4CAF50','#F44336','#FF9800','#9C27B0','#00BCD4'],
 };
 
-export type Tema = typeof temaOscuro;
+export type Tema = typeof temaOscuro & {
+  acentoTexto?:    string;
+  acentoFondo?:    string;
+  acentoLineas?:   string;
+  acentoGraficos?: string;
+};
+
+export const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+export const hexValido = (v: any, fallback: string): string =>
+  typeof v === 'string' && HEX_RE.test(v) ? v : fallback;
+export const hexOpcional = (v: string | undefined): string | undefined =>
+  v && HEX_RE.test(v) ? v : undefined;

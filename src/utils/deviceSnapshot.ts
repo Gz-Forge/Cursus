@@ -22,24 +22,19 @@ export interface DeviceSyncPayload {
 export async function capturarSnapshot(): Promise<DeviceSyncPayload> {
   try {
     const meta = await cargarMeta();
-    const estados = await Promise.all(
-      meta.perfiles.map(async (p) => {
-        const estado = await cargarPerfilEstado(p.id);
-        // Excluir temaPersonalizado: es apariencia local, no se sincroniza
-        const configParaSync: Config = { ...estado.config, temaPersonalizado: undefined };
-        return {
-          perfilId: p.id,
-          materias: estado.materias,
-          config: configParaSync,
-        };
-      })
-    );
+    const perfilActivo = meta.perfiles.find(p => p.id === meta.activoId);
+    if (!perfilActivo) throw new Error('No se encontró el perfil activo');
+
+    const estado = await cargarPerfilEstado(meta.activoId);
+    // Excluir temaPersonalizado: es apariencia local, no se sincroniza
+    const configParaSync: Config = { ...estado.config, temaPersonalizado: undefined };
+
     return {
       version: 2,
       type: 'cursus-device-sync',
       creadoEn: new Date().toISOString(),
-      meta: { activoId: meta.activoId, perfiles: meta.perfiles },
-      estados,
+      meta: { activoId: meta.activoId, perfiles: [perfilActivo] },
+      estados: [{ perfilId: meta.activoId, materias: estado.materias, config: configParaSync }],
     };
   } catch (e) {
     if (__DEV__) console.error('[deviceSnapshot] capturarSnapshot falló:', e);
@@ -73,6 +68,55 @@ export async function aplicarSnapshot(payload: DeviceSyncPayload): Promise<void>
 
 export function comprimirPayload(payload: DeviceSyncPayload): string {
   return LZString.compressToBase64(JSON.stringify(payload));
+}
+
+/**
+ * Aplica el perfil activo del payload al receptor.
+ * target = 'nuevo'  → crea un perfil nuevo y lo activa
+ * target = <id>     → reemplaza ese perfil existente (preserva temaPersonalizado local)
+ */
+export async function aplicarPerfilSync(
+  payload: DeviceSyncPayload,
+  target: 'nuevo' | string,
+): Promise<void> {
+  try {
+    const estadoEmisor = payload.estados[0];
+    const perfilEmisor = payload.meta.perfiles[0];
+    if (!estadoEmisor || !perfilEmisor) throw new Error('Payload de sincronización inválido');
+
+    const meta = await cargarMeta();
+
+    if (target === 'nuevo') {
+      const usados = new Set(meta.perfiles.map(p => p.id));
+      const nuevoId = `p${Date.now()}`;
+      if (usados.has(nuevoId)) throw new Error('Colisión de ID de perfil, reintentá');
+
+      const configFinal: Config = { ...estadoEmisor.config, temaPersonalizado: undefined };
+      await guardarPerfilEstado(nuevoId, { materias: estadoEmisor.materias, config: configFinal });
+      await guardarMeta({
+        activoId: nuevoId,
+        perfiles: [...meta.perfiles, { id: nuevoId, nombre: perfilEmisor.nombre }],
+      });
+    } else {
+      const estadoActual = await cargarPerfilEstado(target);
+      const configFinal: Config = {
+        ...estadoEmisor.config,
+        temaPersonalizado: estadoActual.config.temaPersonalizado,
+      };
+      await guardarPerfilEstado(target, { materias: estadoEmisor.materias, config: configFinal });
+      await guardarMeta({
+        ...meta,
+        perfiles: meta.perfiles.map(p =>
+          p.id === target ? { ...p, nombre: perfilEmisor.nombre } : p
+        ),
+      });
+    }
+
+    await useStore.getState().cargar();
+  } catch (e) {
+    if (__DEV__) console.error('[deviceSnapshot] aplicarPerfilSync falló:', e);
+    throw e;
+  }
 }
 
 export function descomprimirPayload(compressed: string): DeviceSyncPayload {

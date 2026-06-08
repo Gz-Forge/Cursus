@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, ScrollView, TouchableOpacity, Pressable, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
@@ -31,8 +32,6 @@ import {
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-const BLOCK_FONT   = Platform.OS === 'web' ? 12 : 8;
-const BLOCK_LINE_H = Platform.OS === 'web' ? 16 : 11;
 const HORA_DEF_INICIO = 7 * 60;
 const HORA_DEF_FIN   = 22 * 60;
 const PX_POR_MIN     = 1.2;
@@ -80,6 +79,13 @@ function fmtFechaCorta(iso: string): string {
 
 export function HorarioScreen() {
   const { materias, config, actualizarConfig } = useStore();
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  // En pantallas dentro de un tab navigator, bottomInset puede ser 0 porque el
+  // navigator ya consumió el inset. Los modales se renderizan sobre la pantalla
+  // completa, así que necesitamos un mínimo seguro para la barra de navegación Android.
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
+  const BLOCK_FONT   = config.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8);
+  const BLOCK_LINE_H = BLOCK_FONT + 4;
   const { showAlert } = useAlert();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
@@ -854,20 +860,20 @@ export function HorarioScreen() {
             {/* Nav: ocupa el espacio disponible y centra su contenido */}
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
               <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)}>
-                <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
                 <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
                   {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
                 </Text>
                 <TouchableOpacity onPress={() => setWeekOffset(0)}>
-                  <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
+                  <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                     {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
                   </Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)}>
-                <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
               </TouchableOpacity>
             </View>
 
@@ -875,23 +881,23 @@ export function HorarioScreen() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => setModalDatos(true)}
-                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acento,
+                style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
                   paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>📦</Text>
-                <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600' }}>Datos</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
               <View>
                 <TouchableOpacity
                   onPress={() => setModalFiltro(true)}
                   style={{ backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1,
-                    borderColor: filtroActivo ? tema.acento : tema.borde,
+                    borderColor: filtroActivo ? (tema.acentoLineas ?? tema.acento) : tema.borde,
                     paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={{ fontSize: 16 }}>🔽</Text>
-                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>Filtrar</Text>
+                  <Text style={{ color: filtroActivo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>Filtrar</Text>
                 </TouchableOpacity>
                 {filtroActivo && (
                   <View style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10,
-                    borderRadius: 5, backgroundColor: tema.acento }} />
+                    borderRadius: 5, backgroundColor: tema.acentoFondo ?? tema.acento }} />
                 )}
               </View>
             </View>
@@ -900,29 +906,29 @@ export function HorarioScreen() {
           <>
             {/* Móvil: layout original */}
             <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={{ color: tema.acento, fontSize: 22 }}>◀</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
                 {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
               </Text>
               <TouchableOpacity onPress={() => setWeekOffset(0)}>
-                <Text style={{ color: weekOffset === 0 ? tema.acento : tema.textoSecundario, fontSize: 11 }}>
+                <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                   {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
                 </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={{ color: tema.acento, fontSize: 22 }}>▶</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
             </TouchableOpacity>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <TouchableOpacity
                 onPress={() => setModalDatos(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
-                  borderRadius: 8, borderWidth: 1, borderColor: tema.acento, alignItems: 'center' }}>
+                  borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento, alignItems: 'center' }}>
                 <Text style={{ fontSize: 15 }}>📦</Text>
-                <Text style={{ color: tema.acento, fontSize: 9, fontWeight: '600' }}>Datos</Text>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 9, fontWeight: '600' }}>Datos</Text>
               </TouchableOpacity>
               <View>
                 <TouchableOpacity
@@ -930,13 +936,13 @@ export function HorarioScreen() {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={{ backgroundColor: tema.tarjeta, paddingHorizontal: 10, paddingVertical: 5,
                     borderRadius: 8, borderWidth: 1,
-                    borderColor: filtroActivo ? tema.acento : tema.borde, alignItems: 'center' }}>
+                    borderColor: filtroActivo ? (tema.acentoLineas ?? tema.acento) : tema.borde, alignItems: 'center' }}>
                   <Text style={{ fontSize: 15 }}>🔽</Text>
-                  <Text style={{ color: filtroActivo ? tema.acento : tema.textoSecundario, fontSize: 9, fontWeight: '600' }}>Filtrar</Text>
+                  <Text style={{ color: filtroActivo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 9, fontWeight: '600' }}>Filtrar</Text>
                 </TouchableOpacity>
                 {filtroActivo && (
                   <View style={{ position: 'absolute', top: -3, right: -3, width: 8, height: 8,
-                    borderRadius: 4, backgroundColor: tema.acento }} />
+                    borderRadius: 4, backgroundColor: tema.acentoFondo ?? tema.acento }} />
                 )}
               </View>
             </View>
@@ -960,14 +966,14 @@ export function HorarioScreen() {
               const esHoy = fecha === hoyIso;
               return (
                 <View key={fecha} style={{ width: dayColWidths[i], alignItems: 'center' }}>
-                  <Text style={{ color: esHoy ? tema.acento : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
+                  <Text style={{ color: esHoy ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 10, fontWeight: '700' }}>
                     {Platform.OS === 'web'
                       ? DIAS_LARGO[new Date(fecha + 'T12:00:00').getDay()]
                       : DIAS_CORTO[new Date(fecha + 'T12:00:00').getDay()]}
                   </Text>
                   <Text style={{
                     color: esHoy ? '#fff' : tema.textoSecundario, fontSize: 9,
-                    backgroundColor: esHoy ? tema.acento : undefined,
+                    backgroundColor: esHoy ? (tema.acentoFondo ?? tema.acento) : undefined,
                     borderRadius: 8, paddingHorizontal: 3,
                   }}>
                     {fmtFechaCorta(fecha)}
@@ -1051,9 +1057,17 @@ export function HorarioScreen() {
                   <View key={fecha} style={{
                     width: colW, height: TOTAL_HEIGHT, position: 'relative',
                     borderLeftWidth: 1,
-                    borderLeftColor: esHoy ? tema.acento : tema.borde,
-                    backgroundColor: esHoy ? `${tema.acento}0A` : undefined,
+                    borderLeftColor: esHoy ? (tema.acentoLineas ?? tema.acento) : tema.borde,
+                    backgroundColor: esHoy ? `${tema.acentoFondo ?? tema.acento}0A` : undefined,
                   }}>
+                    {/* Línea derecha del día actual */}
+                    {esHoy && (
+                      <View style={{
+                        position: 'absolute', top: 0, right: 0,
+                        width: 1, height: TOTAL_HEIGHT,
+                        backgroundColor: tema.acentoLineas ?? tema.acento, zIndex: 1,
+                      }} />
+                    )}
                     {/* Líneas de hora */}
                     {horas.map((_, i) => (
                       <View key={`hora-${i}`} style={{
@@ -1076,7 +1090,7 @@ export function HorarioScreen() {
                       .filter(b => b.fecha === fecha)
                       .map(b => {
                         const lyt        = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
-                        const subColW    = colW / lyt.totalSubCols;
+                        const subColW    = BASE_DAY_COL_W;
                         const bloqueDraft = cardEnEdicion === b.id && draftBloque ? draftBloque : b;
                         const effectiveSalon = salonOverride?.id === b.id ? salonOverride.salon : bloqueDraft.salon;
                         const top        = (bloqueDraft.horaInicio - horaInicio) * PX_POR_MIN;
@@ -1251,7 +1265,7 @@ export function HorarioScreen() {
                                       if (!ghostOriginRef.current) return;
                                       const { x: cx, y: cy } = ghostOriginRef.current;
                                       const lyt = layoutDia.get(b.id) ?? { subCol: 0, totalSubCols: 1 };
-                                      const subColW = colW / lyt.totalSubCols;
+                                      const subColW = BASE_DAY_COL_W;
                                       const bh = Math.max((bloqueDraft.horaFin - bloqueDraft.horaInicio) * PX_POR_MIN, 36);
                                       setGhostPos({
                                         x: cx - outerOriginRef.current.x,
@@ -1337,15 +1351,27 @@ export function HorarioScreen() {
                                   </PanGestureHandler>
                                 </>
                               ) : (
-                                <View style={{ padding: 2, flex: 1 }}>
-                                  <Text
-                                    style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                  </Text>
-                                </View>
+                                <TapGestureHandler
+                                  numberOfTaps={2}
+                                  onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                    if (e.nativeEvent.state === State.ACTIVE) {
+                                      const [, mesStr, diaStr] = b.fecha.split('-');
+                                      setModalEdicionRapida({ bloqueId: b.id, tipo: 'regular' });
+                                      setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+                                      setModalSalonStr(b.salon ?? '');
+                                    }
+                                  }}
+                                >
+                                  <View style={{ padding: 2, flex: 1 }}>
+                                    <Text
+                                      style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
+                                    </Text>
+                                  </View>
+                                </TapGestureHandler>
                               )}
                             </View>
                           </LongPressGestureHandler>
@@ -1428,7 +1454,7 @@ export function HorarioScreen() {
 
                         // Posición basada en layout (igual que bloques de horario)
                         const lytEval    = layoutDia.get(ev.id) ?? { subCol: 0, totalSubCols: 1 };
-                        const evalSubColW = colW / lytEval.totalSubCols;
+                        const evalSubColW = BASE_DAY_COL_W;
                         const evalLeft   = 1 + lytEval.subCol * evalSubColW;
                         const evalWidth  = evalSubColW - 2;
 
@@ -1662,15 +1688,28 @@ export function HorarioScreen() {
                                   </PanGestureHandler>
                                 </>
                               ) : (
-                                <View style={{ flex: 1, padding: 2 }}>
-                                  <Text
-                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {labelBloque}
-                                  </Text>
-                                </View>
+                                <TapGestureHandler
+                                  numberOfTaps={2}
+                                  onHandlerStateChange={(e: TapGestureHandlerStateChangeEvent) => {
+                                    if (e.nativeEvent.state === State.ACTIVE) {
+                                      const fecha = ev.fecha ?? '';
+                                      const [, mesStr, diaStr] = fecha.split('-');
+                                      setModalEdicionRapida({ bloqueId: ev.id, tipo: 'eval', materiaId: ev.materia.id });
+                                      setModalFechaStr(diaStr && mesStr ? `${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}` : '');
+                                      setModalSalonStr(ev.salon ?? '');
+                                    }
+                                  }}
+                                >
+                                  <View style={{ flex: 1, padding: 2 }}>
+                                    <Text
+                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
+                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      ellipsizeMode="tail"
+                                    >
+                                      {labelBloque}
+                                    </Text>
+                                  </View>
+                                </TapGestureHandler>
                               )}
                             </View>
                           </LongPressGestureHandler>
@@ -1686,7 +1725,7 @@ export function HorarioScreen() {
 
       <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => cerrarModal()}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, maxHeight: '80%', width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: Platform.OS !== 'web' ? 16 + safeBottomModal : 16, maxHeight: '80%', width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
               Exportar horarios
             </Text>
@@ -1699,8 +1738,8 @@ export function HorarioScreen() {
               onPress={toggleTodas}
               style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
               <View style={{
-                width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
-                backgroundColor: seleccionadas.size === materias.length ? tema.acento : undefined,
+                width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento,
+                backgroundColor: seleccionadas.size === materias.length ? (tema.acentoFondo ?? tema.acento) : undefined,
                 alignItems: 'center', justifyContent: 'center',
               }}>
                 {seleccionadas.size === materias.length && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
@@ -1719,8 +1758,8 @@ export function HorarioScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
                     borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 10 }}>
                   <View style={{
-                    width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
-                    backgroundColor: seleccionadas.has(m.id) ? tema.acento : undefined,
+                    width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento,
+                    backgroundColor: seleccionadas.has(m.id) ? (tema.acentoFondo ?? tema.acento) : undefined,
                     alignItems: 'center', justifyContent: 'center',
                   }}>
                     {seleccionadas.has(m.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
@@ -1757,15 +1796,15 @@ export function HorarioScreen() {
                 style={{ flex: 1, padding: 10,
                   backgroundColor: seleccionadas.size > 0 ? tema.tarjeta : tema.tarjeta,
                   borderRadius: 8, alignItems: 'center',
-                  borderWidth: 1, borderColor: seleccionadas.size > 0 ? tema.acento : tema.borde }}>
-                <Text style={{ color: seleccionadas.size > 0 ? tema.acento : tema.textoSecundario, fontWeight: '600' }}>
+                  borderWidth: 1, borderColor: seleccionadas.size > 0 ? (tema.acentoLineas ?? tema.acento) : tema.borde }}>
+                <Text style={{ color: seleccionadas.size > 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontWeight: '600' }}>
                   📋 Copiar
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={exportarSeleccionadas}
                 disabled={seleccionadas.size === 0}
-                style={{ flex: 1, padding: 10, backgroundColor: seleccionadas.size > 0 ? tema.acento : tema.tarjeta,
+                style={{ flex: 1, padding: 10, backgroundColor: seleccionadas.size > 0 ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
                   borderRadius: 8, alignItems: 'center' }}>
                 <Text style={{ color: '#fff', fontWeight: '700' }}>
                   ↑ Exportar
@@ -1779,7 +1818,7 @@ export function HorarioScreen() {
       {/* Modal Datos — punto de entrada unificado para Importar/Exportar */}
       <Modal visible={modalDatos} transparent animationType="fade" onRequestClose={() => setModalDatos(false)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalDatos(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, paddingBottom: Platform.OS !== 'web' ? 20 + safeBottomModal : 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 16 }}>
               Datos de horario
             </Text>
@@ -1824,6 +1863,7 @@ export function HorarioScreen() {
           >
             <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0,
               borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20,
+              paddingBottom: Platform.OS !== 'web' ? 20 + safeBottomModal : 20,
               width: Platform.OS === 'web' ? '100%' : undefined,
               maxWidth: Platform.OS === 'web' ? 540 : undefined }}>
 
@@ -1896,7 +1936,7 @@ export function HorarioScreen() {
                           showAlert('Importado', `Se procesaron ${importadas.length} materia(s).`);
                         } catch (e: any) { showAlert('Error al importar', e.message); }
                       }}
-                      style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                      style={{ flex: 2, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}>
                       <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir archivo</Text>
                     </TouchableOpacity>
                   </View>
@@ -1923,8 +1963,8 @@ export function HorarioScreen() {
                         style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
                           borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 10 }}>
                         <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                          borderColor: importMateriasSelec.has(m.id) ? tema.acento : tema.borde,
-                          backgroundColor: importMateriasSelec.has(m.id) ? tema.acento : 'transparent',
+                          borderColor: importMateriasSelec.has(m.id) ? (tema.acentoLineas ?? tema.acento) : tema.borde,
+                          backgroundColor: importMateriasSelec.has(m.id) ? (tema.acentoFondo ?? tema.acento) : 'transparent',
                           alignItems: 'center', justifyContent: 'center' }}>
                           {importMateriasSelec.has(m.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
                         </View>
@@ -1947,7 +1987,7 @@ export function HorarioScreen() {
                       }}
                       disabled={importMateriasSelec.size === 0}
                       style={{ flex: 2, padding: 12,
-                        backgroundColor: importMateriasSelec.size > 0 ? tema.acento : tema.tarjeta,
+                        backgroundColor: importMateriasSelec.size > 0 ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
                         borderRadius: 8, alignItems: 'center' }}>
                       <Text style={{ color: '#fff', fontWeight: '700' }}>
                         Continuar ({importMateriasSelec.size})
@@ -1967,8 +2007,8 @@ export function HorarioScreen() {
                     onPress={() => setImportAcordeon(v => !v)}
                     style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                       backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ color: tema.acento, fontSize: 12 }}>¿Cómo formatear?</Text>
-                    <Text style={{ color: tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>¿Cómo formatear?</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
                   {importAcordeon && (
                     <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, padding: 10, marginBottom: 8 }}>
@@ -1982,14 +2022,14 @@ export function HorarioScreen() {
                             try { await compartirArchivo('ejemplo.csv', generarEjemploTexto(), 'text/csv'); }
                             catch (e: any) { showAlert('Error', e.message); }
                           }}
-                          style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                          style={{ flex: 1, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={async () => { await Clipboard.setStringAsync(generarEjemploTexto()); showAlert('Copiado', ''); }}
                           style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
-                            borderWidth: 1, borderColor: tema.acento }}>
-                          <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
+                            borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}>
+                          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>📋 Copiar</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2037,7 +2077,7 @@ export function HorarioScreen() {
                       }}
                       disabled={importFilas.filter(f => !f.error).length === 0}
                       style={{ flex: 2, padding: 12,
-                        backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? tema.acento : tema.tarjeta,
+                        backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
                         borderRadius: 8, alignItems: 'center' }}>
                       <Text style={{ color: '#fff', fontWeight: '700' }}>
                         Importar {importFilas.filter(f=>!f.error).length} válidos
@@ -2057,8 +2097,8 @@ export function HorarioScreen() {
                     onPress={() => setImportAcordeon(v => !v)}
                     style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                       backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, marginBottom: 8 }}>
-                    <Text style={{ color: tema.acento, fontSize: 12 }}>¿Cómo armar el CSV?</Text>
-                    <Text style={{ color: tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>¿Cómo armar el CSV?</Text>
+                    <Text style={{ color: tema.acentoTexto ?? tema.acento }}>{importAcordeon ? '▲' : '▼'}</Text>
                   </TouchableOpacity>
                   {importAcordeon && (
                     <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, padding: 10, marginBottom: 8 }}>
@@ -2069,14 +2109,14 @@ export function HorarioScreen() {
                       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                         <TouchableOpacity
                           onPress={async () => { try { await compartirArchivo('ejemplo.csv', generarEjemploCSV(), 'text/csv'); } catch (e: any) { showAlert('Error', e.message); } }}
-                          style={{ flex: 1, backgroundColor: tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
+                          style={{ flex: 1, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 6, padding: 7, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontSize: 11 }}>⬇ Descargar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={async () => { await Clipboard.setStringAsync(generarEjemploCSV()); showAlert('Copiado', ''); }}
                           style={{ flex: 1, backgroundColor: tema.fondo, borderRadius: 6, padding: 7, alignItems: 'center',
-                            borderWidth: 1, borderColor: tema.acento }}>
-                          <Text style={{ color: tema.acento, fontSize: 11 }}>📋 Copiar</Text>
+                            borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}>
+                          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>📋 Copiar</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2105,7 +2145,7 @@ export function HorarioScreen() {
                             setImportFilas(parsearCSV(texto));
                           } catch (e: any) { showAlert('Error', e.message); }
                         }}
-                        style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                        style={{ flex: 2, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}>
                         <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir CSV</Text>
                       </TouchableOpacity>
                     ) : (
@@ -2122,7 +2162,7 @@ export function HorarioScreen() {
                         }}
                         disabled={importFilas.filter(f => !f.error).length === 0}
                         style={{ flex: 2, padding: 12,
-                          backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? tema.acento : tema.tarjeta,
+                          backgroundColor: importFilas.filter(f=>!f.error).length > 0 ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
                           borderRadius: 8, alignItems: 'center' }}>
                         <Text style={{ color: '#fff', fontWeight: '700' }}>
                           Importar {importFilas.filter(f=>!f.error).length} válidos
@@ -2160,7 +2200,7 @@ export function HorarioScreen() {
                               setImportEventosICS(eventos);
                             } catch (e: any) { showAlert('Error', e.message); }
                           }}
-                          style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                          style={{ flex: 2, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Abrir ICS</Text>
                         </TouchableOpacity>
                       </View>
@@ -2193,7 +2233,7 @@ export function HorarioScreen() {
                             setModalImport(false); resetImport();
                             showAlert('Importado', `${total} bloque(s) agregados.`);
                           }}
-                          style={{ flex: 2, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+                          style={{ flex: 2, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}>
                           <Text style={{ color: '#fff', fontWeight: '700' }}>Importar</Text>
                         </TouchableOpacity>
                       </View>
@@ -2210,7 +2250,7 @@ export function HorarioScreen() {
       {/* Modal Filtro de bloques */}
       <Modal visible={modalFiltro} transparent animationType="fade" onRequestClose={() => setModalFiltro(false)}>
         <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalFiltro(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, paddingBottom: Platform.OS !== 'web' ? 20 + safeBottomModal : 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
               Mostrar en horario
             </Text>
@@ -2240,8 +2280,8 @@ export function HorarioScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
                     borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 12 }}>
                   <View style={{
-                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
-                    backgroundColor: !oculto ? tema.acento : undefined,
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento,
+                    backgroundColor: !oculto ? (tema.acentoFondo ?? tema.acento) : undefined,
                     alignItems: 'center', justifyContent: 'center',
                   }}>
                     {!oculto && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
@@ -2258,8 +2298,8 @@ export function HorarioScreen() {
                   onPress={() => actualizarConfig({ horarioFiltroOcultarEvaluaciones: !config.horarioFiltroOcultarEvaluaciones })}
                   style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 }}>
                   <View style={{
-                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acento,
-                    backgroundColor: !config.horarioFiltroOcultarEvaluaciones ? tema.acento : undefined,
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento,
+                    backgroundColor: !config.horarioFiltroOcultarEvaluaciones ? (tema.acentoFondo ?? tema.acento) : undefined,
                     alignItems: 'center', justifyContent: 'center',
                   }}>
                     {!config.horarioFiltroOcultarEvaluaciones && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
@@ -2271,7 +2311,7 @@ export function HorarioScreen() {
 
             <TouchableOpacity
               onPress={() => setModalFiltro(false)}
-              style={{ marginTop: 16, padding: 12, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}>
+              style={{ marginTop: 16, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}>
               <Text style={{ color: '#fff', fontWeight: '700' }}>Listo</Text>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -2444,7 +2484,7 @@ export function HorarioScreen() {
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ flex: 1, padding: 10, backgroundColor: tema.acento, borderRadius: 8, alignItems: 'center' }}
+                style={{ flex: 1, padding: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
                 onPress={() => {
                   if (!modalEdicionRapida) return;
                   const m = modalFechaStr.match(/^(\d{1,2})\/(\d{1,2})$/);

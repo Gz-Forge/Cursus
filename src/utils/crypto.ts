@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 const KEY_BYTES = 32;
-const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_ITERATIONS = 20_000;
 const PREFIX = 'E1:';
 
 function uint8ToBase64(arr: Uint8Array): string {
@@ -24,6 +24,24 @@ function base64ToUint8(b64: string): Uint8Array {
 
 async function deriveKey(passphrase: string, salt: Uint8Array): Promise<Uint8Array> {
   const pass = new TextEncoder().encode(passphrase);
+
+  // Web Crypto API corre en C++ nativo — mucho más rápido que la implementación JS
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw', pass, 'PBKDF2', false, ['deriveBits'],
+      );
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+        keyMaterial,
+        KEY_BYTES * 8,
+      );
+      return new Uint8Array(bits);
+    } catch {
+      // Fallback a la implementación JS si el entorno no soporta crypto.subtle
+    }
+  }
+
   return pbkdf2Async(sha256, pass, salt, { c: PBKDF2_ITERATIONS, dkLen: KEY_BYTES });
 }
 

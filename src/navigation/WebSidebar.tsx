@@ -80,13 +80,13 @@ export function WebSidebar({ navRef }: Props) {
               padding: 12,
               borderRadius: 10,
               marginBottom: 4,
-              backgroundColor: isActive ? tema.acento + '33' : 'transparent',
+              backgroundColor: isActive ? (tema.acentoFondo ?? tema.acento) + '33' : 'transparent',
             }}
           >
             <Text style={{ fontSize: 22, marginRight: collapsed ? 0 : 12 }}>{tab.icon}</Text>
             {!collapsed && (
               <Text style={{
-                color: isActive ? tema.acento : tema.textoSecundario,
+                color: isActive ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario,
                 fontWeight: isActive ? '700' : '400',
                 fontSize: 15,
               }}>

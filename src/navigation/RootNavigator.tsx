@@ -11,6 +11,7 @@ import { MetricsScreen } from '../screens/MetricsScreen';
 import { ConfigScreen } from '../screens/ConfigScreen';
 import { DonacionScreen } from '../screens/DonacionScreen';
 import { EditMateriaScreen } from '../screens/EditMateriaScreen';
+import { CrearMateriaScreen } from '../screens/CrearMateriaScreen';
 import { TarjetaConfigScreen } from '../screens/TarjetaConfigScreen';
 import { HorarioScreen } from '../screens/HorarioScreen';
 import { ImportarExportarScreen } from '../screens/ImportarExportarScreen';
@@ -33,7 +34,7 @@ function TabNavigator() {
         tabBarStyle: Platform.OS === 'web'
           ? { display: 'none' }
           : { backgroundColor: tema.fondo, borderTopColor: tema.borde },
-        tabBarActiveTintColor: tema.acento,
+        tabBarActiveTintColor: tema.acentoFondo ?? tema.acento,
         tabBarInactiveTintColor: colorLabelsTab,
         headerStyle: { backgroundColor: tema.fondo },
         headerTintColor: tema.texto,
@@ -51,15 +52,31 @@ function TabNavigator() {
 
 export function RootNavigator() {
   const navRef = useNavigationContainerRef();
+  const materias = useStore(s => s.materias);
 
   return (
     <View style={{ flex: 1, flexDirection: Platform.OS === 'web' ? 'row' : 'column' }}>
       {Platform.OS === 'web' && <WebSidebar navRef={navRef} />}
-      <NavigationContainer ref={navRef}>
+      <NavigationContainer
+        ref={navRef}
+        onReady={() => {
+          const incompleta = materias.find(
+            m => !m.nombre.trim() || !(m.semestre >= 1)
+          );
+          if (incompleta) {
+            navRef.navigate('EditMateria' as never, {
+              materiaId: incompleta.id,
+              incompleta: true,
+            } as never);
+          }
+        }}
+      >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Tabs" component={TabNavigator} />
           <Stack.Screen name="EditMateria" component={EditMateriaScreen}
-            options={{ headerShown: true, title: 'Editar Materia' }} />
+            options={{ headerShown: true, title: 'Editar materia' }} />
+          <Stack.Screen name="CrearMateria" component={CrearMateriaScreen}
+            options={{ headerShown: true, title: 'Crear materia' }} />
           <Stack.Screen name="TarjetaConfig" component={TarjetaConfigScreen}
             options={{ headerShown: true, title: 'Configurar tarjetas' }} />
           <Stack.Screen

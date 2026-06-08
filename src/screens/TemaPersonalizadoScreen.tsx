@@ -7,7 +7,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
-import { temaOscuro } from '../theme/colors';
+import { temaOscuro, estadoColores } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
@@ -15,15 +15,16 @@ import * as ImagePicker from 'expo-image-picker';
 
 // ── Color picker ──────────────────────────────────────────────────────────────
 function ColorInput({
-  value, onChange, label,
-}: { value: string; onChange: (v: string) => void; label: string }) {
+  value, onChange, label, fallbackColor,
+}: { value: string; onChange: (v: string) => void; label: string; fallbackColor?: string }) {
   const tema = useTema();
   const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
+  const swatchColor = isValidHex ? value : (fallbackColor ?? tema.borde);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
       <View style={{
         width: 32, height: 32, borderRadius: 8,
-        backgroundColor: isValidHex ? value : tema.borde,
+        backgroundColor: swatchColor,
         borderWidth: 1, borderColor: tema.borde,
       }} />
       <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 120 }}>{label}</Text>
@@ -34,7 +35,7 @@ function ColorInput({
         }}
         value={value}
         onChangeText={onChange}
-        placeholder="#RRGGBB"
+        placeholder={fallbackColor ?? '#RRGGBB'}
         placeholderTextColor={tema.textoSecundario}
         maxLength={7}
         autoCapitalize="characters"
@@ -153,9 +154,9 @@ function FondoEditor({
 type PantallaKey = 'carrera' | 'horario' | 'metricas' | 'config';
 const PANTALLAS: { key: PantallaKey; label: string }[] = [
   { key: 'carrera',  label: 'Carrera' },
-  { key: 'horario',  label: 'Horario' },
-  { key: 'metricas', label: 'Métricas' },
-  { key: 'config',   label: 'Config' },
+  { key: 'horario',  label: 'Horarios'      },
+  { key: 'metricas', label: 'Métricas'      },
+  { key: 'config',   label: 'Configuración' },
 ];
 const FONDO_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
   carrera:  'fondoCarrera',
@@ -181,6 +182,10 @@ function mergeScreenColors(draft: TemaPersonalizado, pagina: PantallaKey): TemaP
     ...(overrides.texto           && isValidHex(overrides.texto)           ? { texto:           overrides.texto }           : {}),
     ...(overrides.textoSecundario && isValidHex(overrides.textoSecundario) ? { textoSecundario: overrides.textoSecundario } : {}),
     ...(overrides.acento          && isValidHex(overrides.acento)          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.acentoTexto     && isValidHex(overrides.acentoTexto)     ? { acentoTexto:     overrides.acentoTexto }     : {}),
+    ...(overrides.acentoFondo     && isValidHex(overrides.acentoFondo)     ? { acentoFondo:     overrides.acentoFondo }     : {}),
+    ...(overrides.acentoLineas    && isValidHex(overrides.acentoLineas)    ? { acentoLineas:    overrides.acentoLineas }    : {}),
+    ...(overrides.acentoGraficos  && isValidHex(overrides.acentoGraficos)  ? { acentoGraficos:  overrides.acentoGraficos }  : {}),
     ...(overrides.borde           && isValidHex(overrides.borde)           ? { borde:           overrides.borde }           : {}),
   };
 }
@@ -210,6 +215,8 @@ function PantallaEditor({
   const otras = PANTALLAS.filter(p => p.key !== pantallaKey);
 
   const materiasAll = useStore(s => s.materias);
+  const appConfig = useStore(s => s.config);
+  const actualizarConfig = useStore(s => s.actualizarConfig);
   const semestresUnicos = pantallaKey === 'carrera'
     ? [...new Set(materiasAll.map(m => m.semestre))].sort((a, b) => a - b)
     : [];
@@ -243,20 +250,30 @@ function PantallaEditor({
       </Text>
       {(
         [
-          { campo: 'tarjeta'         as const, label: 'Tarjeta / panel'   },
-          { campo: 'texto'           as const, label: 'Texto principal'   },
-          { campo: 'textoSecundario' as const, label: 'Texto secundario'  },
-          { campo: 'acento'          as const, label: 'Acento (botones)'  },
-          { campo: 'borde'           as const, label: 'Borde / separador' },
-        ] as { campo: keyof ColoresScreen; label: string }[]
-      ).map(({ campo, label }) => {
+          { campo: 'tarjeta',         label: 'Tarjeta / panel'   },
+          { campo: 'texto',           label: 'Texto principal'   },
+          { campo: 'textoSecundario', label: 'Texto secundario'  },
+          { campo: 'borde',           label: 'Borde / separador' },
+          { campo: 'acento',          label: 'Acento base'       },
+          { campo: 'acentoTexto',     label: '↳ Texto',    indentado: true },
+          { campo: 'acentoFondo',     label: '↳ Rellenos', indentado: true },
+          { campo: 'acentoLineas',    label: '↳ Líneas',   indentado: true },
+          { campo: 'acentoGraficos',  label: '↳ Gráficos', indentado: true },
+        ] as { campo: keyof ColoresScreen; label: string; indentado?: boolean }[]
+      ).map(({ campo, label, indentado }) => {
         const val = colores?.[campo] ?? '';
         const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(val);
+        // Para el swatch: usar el valor global del campo si existe, sino acento global
+        const globalVal = (draft[campo as keyof TemaPersonalizado] as string | undefined)
+          ?? draft.acento;
         return (
-          <View key={campo} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <View key={campo} style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8,
+            paddingLeft: indentado ? 16 : 0,
+          }}>
             <View style={{
               width: 28, height: 28, borderRadius: 6,
-              backgroundColor: isValidHex ? val : (draft[campo as keyof TemaPersonalizado] as string ?? tema.borde),
+              backgroundColor: isValidHex ? val : globalVal,
               borderWidth: 1, borderColor: tema.borde,
             }} />
             <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 118 }}>{label}</Text>
@@ -267,7 +284,7 @@ function PantallaEditor({
               }}
               value={val}
               onChangeText={v => v === '' ? limpiarColor(campo) : setColor(campo, v)}
-              placeholder={`global: ${draft[campo as keyof TemaPersonalizado] as string ?? ''}`}
+              placeholder={`global: ${globalVal}`}
               placeholderTextColor={tema.textoSecundario}
               maxLength={7}
               autoCapitalize="characters"
@@ -293,6 +310,55 @@ function PantallaEditor({
           </TouchableOpacity>
         ))}
       </View>
+
+      {pantallaKey === 'horario' && (
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 6 }}>
+            TAMAÑO DE TEXTO EN BLOQUES
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: Math.max(6, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) - 1) })}
+              disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                backgroundColor: tema.fondo, alignItems: 'center', justifyContent: 'center',
+                opacity: (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6 ? 0.4 : 1,
+              }}
+            >
+              <Text style={{ color: tema.texto, fontSize: 20, fontWeight: '700' }}>−</Text>
+            </TouchableOpacity>
+
+            <View style={{ minWidth: 44, alignItems: 'center' }}>
+              <Text style={{ color: tema.texto, fontSize: 18, fontWeight: '700' }}>
+                {appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: Math.min(20, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) + 1) })}
+              disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                backgroundColor: tema.fondo, alignItems: 'center', justifyContent: 'center',
+                opacity: (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20 ? 0.4 : 1,
+              }}
+            >
+              <Text style={{ color: tema.texto, fontSize: 20, fontWeight: '700' }}>+</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => actualizarConfig({ horarioFontSize: undefined })}
+              style={{ marginLeft: 8 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 6 }}>
+            Por defecto: web 12 · móvil 8 · Mín 6 · Máx 20{'\n'}Se aplica de inmediato.
+          </Text>
+        </View>
+      )}
 
       {pantallaKey === 'carrera' && (
         <View style={{ marginTop: 18 }}>
@@ -395,6 +461,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
   const t = draft;
   const { getLabel } = useEstadoEstilo();
   const [tab, setTab] = useState<'carrera' | 'semestre' | 'busqueda'>('carrera');
+  const isWeb = Platform.OS === 'web';
+  const [modoSearch, setModoSearch] = useState<'nombre' | 'es_previa' | 'sus_previas'>('nombre');
 
   const semestresData = [
     {
@@ -433,7 +501,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Selector de perfil */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: 8,
         borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 8 }}>
-        <Text style={{ color: t.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 13, fontWeight: '700' }}>⚡</Text>
         <Text style={{ color: t.texto, fontSize: 13, fontWeight: '600', marginLeft: 4 }}>Ing. Informática</Text>
         <Text style={{ color: t.textoSecundario, fontSize: 11, marginLeft: 4 }}>▼</Text>
       </View>
@@ -452,8 +520,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         {(['carrera', 'semestre', 'busqueda'] as const).map(v => (
           <TouchableOpacity key={v} onPress={() => setTab(v)}
             style={{ flex: 1, paddingVertical: 8, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: tab === v ? t.acento : 'transparent' }}>
-            <Text style={{ color: tab === v ? t.acento : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>
+              borderBottomWidth: 2, borderBottomColor: tab === v ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
+            <Text style={{ color: tab === v ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>
               {v === 'carrera' ? 'Carrera' : v === 'semestre' ? 'Semestre' : 'Búsqueda'}
             </Text>
           </TouchableOpacity>
@@ -465,7 +533,7 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         <>
           <View style={{ alignSelf: 'flex-end', backgroundColor: t.tarjeta,
             paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginBottom: 8 }}>
-            <Text style={{ color: t.acento, fontSize: 11 }}>▲ Colapsar todo</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 11 }}>▲ Colapsar todo</Text>
           </View>
           {semestresData.map(sem => (
             <View key={sem.num} style={{ marginBottom: 8 }}>
@@ -475,7 +543,13 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
                 <Text style={{ color: sem.color, fontWeight: '700', fontSize: 13 }}>▼ {sem.num}° Semestre</Text>
                 <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{sem.materias.length} materias</Text>
               </View>
-              {sem.materias.map(m => <MCard key={m.num} m={m} />)}
+              <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+                {sem.materias.map(m => (
+                  <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                    <MCard m={m} />
+                  </View>
+                ))}
+              </View>
             </View>
           ))}
         </>
@@ -485,45 +559,98 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {tab === 'semestre' && (
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <Text style={{ color: t.acento, fontSize: 20 }}>◀</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>◀</Text>
             <Text style={{ color: t.texto, fontSize: 15, fontWeight: '700' }}>1° Semestre</Text>
-            <Text style={{ color: t.acento, fontSize: 20 }}>▶</Text>
+            <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
           </View>
-          {semestresData[0].materias.map(m => <MCard key={m.num} m={m} />)}
+          <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+            {semestresData[0].materias.map(m => (
+              <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                <MCard m={m} />
+              </View>
+            ))}
+          </View>
         </>
       )}
 
       {/* Vista búsqueda */}
       {tab === 'busqueda' && (
         <>
-          <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 4 }}>Mostrar</Text>
+          {/* Search bar */}
+          <View style={{
+            flexDirection: 'row', alignItems: 'center',
+            backgroundColor: t.tarjeta, borderRadius: 8,
+            paddingHorizontal: 10, paddingVertical: 6,
+            marginBottom: 10, gap: 6,
+          }}>
+            <Text style={{ color: t.textoSecundario, fontSize: 13 }}>🔍</Text>
+            <Text style={{ color: t.textoSecundario, fontSize: 12, flex: 1 }}>Buscar materia...</Text>
+            <Text style={{ color: t.textoSecundario, fontSize: 13 }}>✕</Text>
+          </View>
+
+          {/* Chips de modo */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+            {([
+              { key: 'nombre'      as const, label: 'Nombre'       },
+              { key: 'es_previa'   as const, label: 'Es previa de' },
+              { key: 'sus_previas' as const, label: 'Sus previas'  },
+            ]).map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setModoSearch(key)}
+                style={{
+                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: modoSearch === key ? (t.acentoFondo ?? t.acento) : t.tarjeta,
+                }}
+              >
+                <Text style={{
+                  color: modoSearch === key ? '#fff' : t.textoSecundario,
+                  fontSize: 11,
+                }}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Indicador de referencia */}
+          {modoSearch !== 'nombre' && (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+              backgroundColor: `${t.acentoFondo ?? t.acento}22`,
+              borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+              marginBottom: 10,
+            }}>
+              <Text style={{ fontSize: 12 }}>📌</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 11 }}>Referencia: Álgebra I</Text>
+            </View>
+          )}
+
+          {/* Filtros */}
+          <Text style={{ color: t.textoSecundario, fontSize: 11, marginBottom: 4 }}>Mostrar</Text>
           <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
             {[
-              { label: 'Todas', active: true },
-              { label: 'Disponibles', active: false },
+              { label: 'Todas',       active: true  },
+              { label: 'Para cursar', active: false },
+              { label: 'Para examen', active: false },
             ].map(f => (
-              <View key={f.label} style={{ flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
-                backgroundColor: f.active ? t.acento : t.tarjeta }}>
-                <Text style={{ color: f.active ? '#fff' : t.textoSecundario, fontSize: 12 }}>{f.label}</Text>
+              <View key={f.label} style={{
+                flex: 1, paddingVertical: 7, borderRadius: 16, alignItems: 'center',
+                backgroundColor: f.active ? (t.acentoFondo ?? t.acento) : t.tarjeta,
+              }}>
+                <Text style={{ color: f.active ? '#fff' : t.textoSecundario, fontSize: 11 }}>{f.label}</Text>
               </View>
             ))}
           </View>
-          <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 4 }}>Estado</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-            {[
-              { label: 'Todos', bg: t.acento, color: '#fff' },
-              { label: `⭐ ${getLabel('exonerado')}`,  bg: t.tarjeta, color: t.textoSecundario },
-              { label: `✅ ${getLabel('aprobado')}`,   bg: t.tarjeta, color: t.textoSecundario },
-              { label: `🔵 ${getLabel('cursando')}`,   bg: t.tarjeta, color: t.textoSecundario },
-              { label: `⬜ ${getLabel('por_cursar')}`, bg: t.tarjeta, color: t.textoSecundario },
-            ].map(f => (
-              <View key={f.label} style={{ paddingHorizontal: 9, paddingVertical: 5,
-                borderRadius: 14, backgroundColor: f.bg }}>
-                <Text style={{ color: f.color, fontSize: 11 }} numberOfLines={1}>{f.label}</Text>
+
+          {/* Resultados — 2 columnas en web */}
+          <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+            {semestresData.flatMap(s => s.materias).map(m => (
+              <View key={m.num} style={isWeb ? { width: '50%' } : {}}>
+                <MCard m={m} />
               </View>
             ))}
           </View>
-          {semestresData.flatMap(s => s.materias).map(m => <MCard key={m.num} m={m} />)}
         </>
       )}
     </PreviewWrapper>
@@ -533,6 +660,8 @@ function CarreraPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
 // ── Preview fiel: Horario ─────────────────────────────────────────────────────
 function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
+  const appConfig = useStore(s => s.config);
+  const blockFont = appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8);
   const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const FECHAS = ['20/04', '21/04', '22/04', '23/04', '24/04', '25/04', '26/04'];
   const HOY_IDX = 4; // Jueves = hoy en el ejemplo
@@ -556,18 +685,26 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
       {/* Navegación de semana */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 6 }}>
-        <Text style={{ color: t.acento, fontSize: 20 }}>◀</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>◀</Text>
         <View style={{ alignItems: 'center' }}>
           <Text style={{ color: t.texto, fontWeight: '700', fontSize: 13 }}>21/04 — 27/04</Text>
-          <Text style={{ color: t.acento, fontSize: 10 }}>Esta semana</Text>
+          <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 10 }}>Esta semana</Text>
         </View>
-        <Text style={{ color: t.acento, fontSize: 20 }}>▶</Text>
+        <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 20 }}>▶</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          {['📥', '📤'].map((icono, i) => (
-            <View key={i} style={{ backgroundColor: t.tarjeta, paddingHorizontal: 7, paddingVertical: 4,
-              borderRadius: 6, borderWidth: 1, borderColor: t.acento, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12 }}>{icono}</Text>
-              <Text style={{ color: t.acento, fontSize: 8, fontWeight: '600' }}>{i === 0 ? 'Import' : 'Export'}</Text>
+          {([
+            { label: '📦 Datos',   hasIndicator: false },
+            { label: '🔽 Filtrar', hasIndicator: true  },
+          ]).map(({ label, hasIndicator }) => (
+            <View key={label} style={{
+              backgroundColor: t.tarjeta, paddingHorizontal: 8, paddingVertical: 5,
+              borderRadius: 6, borderWidth: 1, borderColor: t.acentoLineas ?? t.acento,
+              flexDirection: 'row', alignItems: 'center', gap: 2,
+            }}>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 9, fontWeight: '600' }}>{label}</Text>
+              {hasIndicator && (
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento }} />
+              )}
             </View>
           ))}
         </View>
@@ -578,10 +715,10 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
         <View style={{ width: TIME_COL_W }} />
         {DIAS.map((dia, i) => (
           <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ color: i === HOY_IDX ? t.acento : t.textoSecundario, fontSize: 9, fontWeight: '700' }}>
+            <Text style={{ color: i === HOY_IDX ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontSize: 9, fontWeight: '700' }}>
               {dia}
             </Text>
-            <View style={{ backgroundColor: i === HOY_IDX ? t.acento : undefined,
+            <View style={{ backgroundColor: i === HOY_IDX ? (t.acentoFondo ?? t.acento) : undefined,
               borderRadius: 7, paddingHorizontal: 2 }}>
               <Text style={{ color: i === HOY_IDX ? '#fff' : t.textoSecundario, fontSize: 8 }}>
                 {FECHAS[i]}
@@ -608,8 +745,8 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
           <View key={diaIdx} style={{
             flex: 1, height: HORA_PX * horas.length, position: 'relative',
             borderLeftWidth: 1,
-            borderLeftColor: diaIdx === HOY_IDX ? t.acento : t.borde,
-            backgroundColor: diaIdx === HOY_IDX ? `${t.acento}12` : undefined,
+            borderLeftColor: diaIdx === HOY_IDX ? (t.acentoLineas ?? t.acento) : t.borde,
+            backgroundColor: diaIdx === HOY_IDX ? `${t.acentoFondo ?? t.acento}12` : undefined,
           }}>
             {horas.map((_, i) => (
               <View key={i} style={{ position: 'absolute', top: i * HORA_PX,
@@ -621,7 +758,7 @@ function HorarioPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fon
                 left: 1, right: 1, backgroundColor: b.fondo,
                 borderRadius: 3, padding: 2, overflow: 'hidden',
               }}>
-                <Text style={{ color: b.texto, fontSize: 7, fontWeight: '700', lineHeight: 10 }}
+                <Text style={{ color: b.texto, fontSize: blockFont, fontWeight: '700', lineHeight: blockFont + 3 }}
                   numberOfLines={4}>{b.label}</Text>
               </View>
             ))}
@@ -637,176 +774,209 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
   const t = draft;
   const { getLabel } = useEstadoEstilo();
   const [panel, setPanel] = useState<'general' | 'graficos'>('general');
+  const appConfig = useStore(s => s.config);
+  const isWeb = Platform.OS === 'web';
 
-  const EC = { exonerado: '#FFD700', aprobado: '#4CAF50', cursando: '#2196F3', por_cursar: '#9E9E9E', reprobado: '#FF9800', recursar: '#F44336' };
+  // Colores de estado con override personalizado
+  const EC = {
+    exonerado: appConfig.estadoColoresPersonalizados?.exonerado ?? estadoColores.exonerado,
+    aprobado:  appConfig.estadoColoresPersonalizados?.aprobado  ?? estadoColores.aprobado,
+    cursando:  appConfig.estadoColoresPersonalizados?.cursando  ?? estadoColores.cursando,
+    por_cursar:appConfig.estadoColoresPersonalizados?.por_cursar?? estadoColores.por_cursar,
+    reprobado: appConfig.estadoColoresPersonalizados?.reprobado ?? estadoColores.reprobado,
+    recursar:  appConfig.estadoColoresPersonalizados?.recursar  ?? estadoColores.recursar,
+  };
 
   const SecTitulo = ({ title }: { title: string }) => (
-    <Text style={{ color: t.acento, fontWeight: '600', fontSize: 12, marginBottom: 8, marginTop: 14 }}>{title}</Text>
+    <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '600', fontSize: 12, marginBottom: 8, marginTop: 14 }}>{title}</Text>
   );
 
   return (
     <PreviewWrapper draft={draft} fondo={fondo}>
       {/* Tabs */}
-      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 2 }}>
-        {(['general', 'graficos'] as const).map(p => (
-          <TouchableOpacity key={p} onPress={() => setPanel(p)}
-            style={{ flex: 1, paddingVertical: 10, alignItems: 'center',
-              borderBottomWidth: 2, borderBottomColor: panel === p ? t.acento : 'transparent' }}>
-            <Text style={{ color: panel === p ? t.acento : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
-              {p === 'general' ? 'General' : 'Gráficos'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: t.borde, marginBottom: 2, alignItems: 'center' }}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {(['general', 'graficos'] as const).map(p => (
+            <TouchableOpacity key={p} onPress={() => setPanel(p)}
+              style={{ flex: 1, paddingVertical: 10, alignItems: 'center',
+                borderBottomWidth: 2, borderBottomColor: panel === p ? (t.acentoLineas ?? t.acento) : 'transparent' }}>
+              <Text style={{ color: panel === p ? (t.acentoTexto ?? t.acento) : t.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+                {p === 'general' ? 'General' : 'Gráficos'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
+          <Text style={{ fontSize: 16 }}>⚙️</Text>
+        </View>
       </View>
 
       {panel === 'general' && (
-        <>
-          <SecTitulo title="PROGRESO GENERAL" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos obtenidos</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>45 / 128 (35%)</Text>
+        <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
+
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="PROGRESO GENERAL" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos obtenidos</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>45 / 128 (35%)</Text>
+              </View>
+              <View style={{ height: 6, backgroundColor: t.borde, borderRadius: 3, marginBottom: 8 }}>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acentoFondo ?? t.acento, width: '35%' }} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos restantes</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>83</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
+                <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>3 / 12</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Promedio ponderado</Text>
+                <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
+              </View>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
             </View>
-            <View style={{ height: 6, backgroundColor: t.borde, borderRadius: 3, marginBottom: 8 }}>
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: t.acento, width: '35%' }} />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Créditos restantes</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>83</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
-              <Text style={{ color: t.texto, fontSize: 12, fontWeight: '600' }}>3 / 12</Text>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Promedio ponderado</Text>
-              <Text style={{ color: t.acento, fontSize: 12, fontWeight: '700' }}>8.5 / 12</Text>
-            </View>
-            <Text style={{ color: t.acento, fontWeight: '700', fontSize: 16, marginTop: 8 }}>25% completado</Text>
           </View>
 
-          <SecTitulo title="AVANCE POR AÑO" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            {[
-              { año: 1, pct: 67, crObt: 16, crTotal: 24, c: { exonerado: 2, aprobado: 1, cursando: 1, por_cursar: 2, reprobado: 0, recursar: 0 } },
-              { año: 2, pct: 25, crObt:  6, crTotal: 24, c: { exonerado: 0, aprobado: 1, cursando: 1, por_cursar: 4, reprobado: 0, recursar: 0 } },
-              { año: 3, pct:  0, crObt:  0, crTotal: 24, c: { exonerado: 0, aprobado: 0, cursando: 0, por_cursar: 6, reprobado: 0, recursar: 0 } },
-            ].map(a => (
-              <View key={a.año} style={{ marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ color: t.texto, fontWeight: '600', fontSize: 13 }}>Año {a.año}</Text>
-                  <Text style={{ color: a.pct === 100 ? '#4CAF50' : t.acento, fontWeight: '700', fontSize: 13 }}>
-                    {a.pct}%{'  '}
-                    <Text style={{ color: t.textoSecundario, fontWeight: '400', fontSize: 11 }}>({a.crObt}/{a.crTotal} cr)</Text>
-                  </Text>
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="AVANCE POR AÑO" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              {[
+                { año: 1, pct: 67, crObt: 16, crTotal: 24, c: { exonerado: 2, aprobado: 1, cursando: 1, por_cursar: 2, reprobado: 0, recursar: 0 } },
+                { año: 2, pct: 25, crObt:  6, crTotal: 24, c: { exonerado: 0, aprobado: 1, cursando: 1, por_cursar: 4, reprobado: 0, recursar: 0 } },
+                { año: 3, pct:  0, crObt:  0, crTotal: 24, c: { exonerado: 0, aprobado: 0, cursando: 0, por_cursar: 6, reprobado: 0, recursar: 0 } },
+              ].map(a => (
+                <View key={a.año} style={{ marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={{ color: t.texto, fontWeight: '600', fontSize: 13 }}>Año {a.año}</Text>
+                    <Text style={{ color: a.pct === 100 ? '#4CAF50' : (t.acentoTexto ?? t.acento), fontWeight: '700', fontSize: 13 }}>
+                      {a.pct}%{'  '}
+                      <Text style={{ color: t.textoSecundario, fontWeight: '400', fontSize: 11 }}>({a.crObt}/{a.crTotal} cr)</Text>
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', height: 13, borderRadius: 7, overflow: 'hidden', backgroundColor: t.borde }}>
+                    {(Object.entries(a.c) as [keyof typeof EC, number][]).map(([e, n]) =>
+                      n > 0 ? <View key={e} style={{ flex: n, backgroundColor: EC[e] }} /> : null
+                    )}
+                  </View>
                 </View>
-                <View style={{ flexDirection: 'row', height: 13, borderRadius: 7, overflow: 'hidden', backgroundColor: t.borde }}>
-                  {(Object.entries(a.c) as [keyof typeof EC, number][]).map(([e, n]) =>
-                    n > 0 ? <View key={e} style={{ flex: n, backgroundColor: EC[e] }} /> : null
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <SecTitulo title="MATERIAS POR ESTADO" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', height: 18, borderRadius: 9, overflow: 'hidden', marginBottom: 10 }}>
-              <View style={{ flex: 3, backgroundColor: EC.exonerado }} />
-              <View style={{ flex: 1, backgroundColor: EC.aprobado }} />
-              <View style={{ flex: 2, backgroundColor: EC.cursando }} />
-              <View style={{ flex: 6, backgroundColor: EC.por_cursar }} />
+              ))}
             </View>
-            {[
-              { label: `⭐ ${getLabel('exonerado')}`,  n: 3, pct: 25, color: EC.exonerado },
-              { label: `✅ ${getLabel('aprobado')}`,   n: 1, pct:  8, color: EC.aprobado  },
-              { label: `🔵 ${getLabel('cursando')}`,   n: 2, pct: 17, color: EC.cursando  },
-              { label: `⬜ ${getLabel('por_cursar')}`, n: 6, pct: 50, color: EC.por_cursar },
-            ].map(e => (
-              <View key={e.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: t.texto, fontSize: 12 }}>{e.label}</Text>
-                <Text style={{ color: e.color, fontWeight: '700', fontSize: 12 }}>{e.n}  ({e.pct}%)</Text>
-              </View>
-            ))}
           </View>
 
-          <SecTitulo title="CRÉDITOS POR SEMESTRE" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12 }}>
-            {[
-              { sem: 1, crObt: 12, crTotal: 12, icono: '✅' },
-              { sem: 2, crObt:  4, crTotal: 12, icono: '🔵' },
-              { sem: 3, crObt:  0, crTotal: 12, icono: '⬜' },
-              { sem: 4, crObt:  0, crTotal: 12, icono: '⬜' },
-            ].map(s => (
-              <View key={s.sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                <Text style={{ color: t.texto, fontSize: 13 }}>{s.sem}° Semestre</Text>
-                <Text style={{ color: t.textoSecundario, fontSize: 13 }}>{s.crObt} / {s.crTotal} {s.icono}</Text>
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="MATERIAS POR ESTADO" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', height: 18, borderRadius: 9, overflow: 'hidden', marginBottom: 10 }}>
+                <View style={{ flex: 3, backgroundColor: EC.exonerado }} />
+                <View style={{ flex: 1, backgroundColor: EC.aprobado }} />
+                <View style={{ flex: 2, backgroundColor: EC.cursando }} />
+                <View style={{ flex: 6, backgroundColor: EC.por_cursar }} />
               </View>
-            ))}
+              {[
+                { label: `⭐ ${getLabel('exonerado')}`,  n: 3, pct: 25, color: EC.exonerado },
+                { label: `✅ ${getLabel('aprobado')}`,   n: 1, pct:  8, color: EC.aprobado  },
+                { label: `🔵 ${getLabel('cursando')}`,   n: 2, pct: 17, color: EC.cursando  },
+                { label: `⬜ ${getLabel('por_cursar')}`, n: 6, pct: 50, color: EC.por_cursar },
+              ].map(e => (
+                <View key={e.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ color: t.texto, fontSize: 12 }}>{e.label}</Text>
+                  <Text style={{ color: e.color, fontWeight: '700', fontSize: 12 }}>{e.n}  ({e.pct}%)</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </>
+
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="CRÉDITOS POR SEMESTRE" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12 }}>
+              {[
+                { sem: 1, crObt: 12, crTotal: 12, icono: '✅' },
+                { sem: 2, crObt:  4, crTotal: 12, icono: '🔵' },
+                { sem: 3, crObt:  0, crTotal: 12, icono: '⬜' },
+                { sem: 4, crObt:  0, crTotal: 12, icono: '⬜' },
+              ].map(s => (
+                <View key={s.sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <Text style={{ color: t.texto, fontSize: 13 }}>{s.sem}° Semestre</Text>
+                  <Text style={{ color: t.textoSecundario, fontSize: 13 }}>{s.crObt} / {s.crTotal} {s.icono}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+        </View>
       )}
 
       {panel === 'graficos' && (
-        <>
-          <SecTitulo title="PROMEDIO POR SEMESTRE" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 6, paddingLeft: 20, paddingBottom: 4 }}>
-              {[{ v: 9.5, s: '1°' }, { v: 8.2, s: '2°' }, { v: 7.8, s: '3°' }, { v: 10.1, s: '4°' }].map((d, i) => (
-                <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: '60%', height: d.v * 6, backgroundColor: t.acento, borderRadius: 2 }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 9, marginTop: 3 }}>{d.s}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={{ color: t.textoSecundario, fontSize: 10, textAlign: 'center', marginTop: 2 }}>Semestre</Text>
-          </View>
+        <View style={isWeb ? { flexDirection: 'row', flexWrap: 'wrap' } : {}}>
 
-          <SecTitulo title="DISTRIBUCIÓN POR RANGO DE NOTA" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 70, gap: 8, paddingLeft: 20, paddingBottom: 4 }}>
-              {[
-                { h: 14, color: EC.recursar,  label: getLabel('recursar') },
-                { h: 24, color: EC.reprobado, label: getLabel('reprobado') },
-                { h: 10, color: EC.aprobado,  label: getLabel('aprobado') },
-                { h: 52, color: EC.exonerado, label: getLabel('exonerado') },
-              ].map(b => (
-                <View key={b.label} style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: '75%', height: b.h, backgroundColor: b.color, borderRadius: 3 }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 7, marginTop: 3 }} numberOfLines={1}>{b.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <SecTitulo title="MAPA DE LA CARRERA" />
-          <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
-            {[
-              { sem: 1, estados: ['exonerado', 'exonerado', 'aprobado', 'cursando'] as const },
-              { sem: 2, estados: ['por_cursar', 'por_cursar', 'por_cursar'] as const },
-              { sem: 3, estados: ['por_cursar', 'por_cursar', 'por_cursar', 'por_cursar'] as const },
-              { sem: 4, estados: ['por_cursar', 'por_cursar'] as const },
-            ].map(row => (
-              <View key={row.sem} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ color: t.textoSecundario, fontSize: 10, width: 22 }}>{row.sem}°</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                  {row.estados.map((e, i) => (
-                    <View key={i} style={{ width: 18, height: 18, borderRadius: 3, backgroundColor: EC[e] }} />
-                  ))}
-                </View>
+          {/* Promedio por semestre — área chart simulada */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="PROMEDIO POR SEMESTRE" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 60, gap: 4, marginBottom: 4 }}>
+                {[{ v: 9.5, s: '1°' }, { v: 8.2, s: '2°' }, { v: 7.8, s: '3°' }, { v: 10.1, s: '4°' }].map((d, i) => (
+                  <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{
+                      width: '80%',
+                      height: d.v * 5,
+                      backgroundColor: `${t.acentoGraficos ?? t.acento}55`,
+                      borderRadius: 2,
+                      borderTopWidth: 2,
+                      borderTopColor: t.acentoGraficos ?? t.acento,
+                    }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 8, marginTop: 2 }}>{d.s}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8,
-              paddingTop: 8, borderTopWidth: 1, borderTopColor: t.borde }}>
-              {(['exonerado', 'aprobado', 'cursando', 'por_cursar'] as const).map(e => (
-                <View key={e} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: EC[e] }} />
-                  <Text style={{ color: t.textoSecundario, fontSize: 10 }}>{getLabel(e)}</Text>
-                </View>
-              ))}
+              <Text style={{ color: t.textoSecundario, fontSize: 9, textAlign: 'center' }}>Promedio por semestre</Text>
             </View>
           </View>
-        </>
+
+          {/* Distribución por nota — barras */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="DISTRIBUCIÓN POR NOTA" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 60, gap: 6, paddingBottom: 4 }}>
+                {[
+                  { h: 14, color: EC.recursar,  label: getLabel('recursar')  },
+                  { h: 24, color: EC.reprobado, label: getLabel('reprobado') },
+                  { h: 10, color: EC.aprobado,  label: getLabel('aprobado')  },
+                  { h: 52, color: EC.exonerado, label: getLabel('exonerado') },
+                ].map(b => (
+                  <View key={b.label} style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ width: '75%', height: b.h, backgroundColor: b.color, borderRadius: 3 }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 7, marginTop: 3 }} numberOfLines={1}>{b.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Tipos de formación — donut */}
+          <View style={isWeb ? { width: '50%', paddingHorizontal: 4 } : {}}>
+            <SecTitulo title="TIPOS DE FORMACIÓN" />
+            <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 12, marginBottom: 2, alignItems: 'center' }}>
+              <View style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: t.acentoGraficos ?? t.acento, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.tarjeta }} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {[
+                  { label: 'Obligatoria', color: t.acentoGraficos ?? t.acento },
+                  { label: 'Optativa',    color: t.acento                     },
+                ].map(item => (
+                  <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: item.color }} />
+                    <Text style={{ color: t.textoSecundario, fontSize: 9 }}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+        </View>
       )}
     </PreviewWrapper>
   );
@@ -818,7 +988,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
   const { getLabel } = useEstadoEstilo();
 
   const SecTitulo = ({ title }: { title: string }) => (
-    <Text style={{ color: t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
+    <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
   );
   const CampoFake = ({ label, value, ancho }: { label: string; value: string; ancho?: number }) => (
     <View style={{ marginBottom: 12 }}>
@@ -835,7 +1005,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
           <Text style={{ color: t.texto, fontSize: 13 }}>{label}</Text>
           {desc && <Text style={{ color: t.textoSecundario, fontSize: 11, marginTop: 2 }}>{desc}</Text>}
         </View>
-        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? t.acento : t.borde,
+        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? (t.acentoFondo ?? t.acento) : t.borde,
           justifyContent: 'center', paddingHorizontal: 3 }}>
           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff',
             alignSelf: on ? 'flex-end' : 'flex-start' }} />
@@ -845,8 +1015,8 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
   );
   const BotonFila = ({ label, acento }: { label: string; acento?: boolean }) => (
     <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, alignItems: 'center',
-      marginBottom: 16, borderWidth: 1, borderColor: acento ? t.acento : t.borde }}>
-      <Text style={{ color: acento ? t.acento : t.texto, fontWeight: acento ? '700' : '600', fontSize: 13 }}>{label}</Text>
+      marginBottom: 16, borderWidth: 1, borderColor: acento ? (t.acentoLineas ?? t.acento) : t.borde }}>
+      <Text style={{ color: acento ? (t.acentoTexto ?? t.acento) : t.texto, fontWeight: acento ? '700' : '600', fontSize: 13 }}>{label}</Text>
     </View>
   );
   const Acordeon = ({ titulo, subtitulo }: { titulo: string; subtitulo: string }) => (
@@ -856,7 +1026,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
         <Text style={{ color: t.texto, fontWeight: '700', fontSize: 13 }}>{titulo}</Text>
         <Text style={{ color: t.textoSecundario, fontSize: 12, marginTop: 2 }}>{subtitulo}</Text>
       </View>
-      <Text style={{ color: t.acento, fontSize: 15 }}>▼</Text>
+      <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 15 }}>▼</Text>
     </View>
   );
 
@@ -868,7 +1038,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
         <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 10 }}>
           Iniciá sesión para sincronizar tus perfiles entre dispositivos.
         </Text>
-        <View style={{ backgroundColor: t.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}>
+        <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Iniciar sesión / Registrarse</Text>
         </View>
       </View>
@@ -878,7 +1048,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
       <View style={{ flexDirection: 'row', backgroundColor: t.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
         {(['Oscuro', 'Claro', 'Custom'] as const).map((op, i) => (
           <View key={op} style={{ flex: 1, padding: 12, alignItems: 'center',
-            backgroundColor: i === 2 ? t.acento : 'transparent' }}>
+            backgroundColor: i === 2 ? (t.acentoFondo ?? t.acento) : 'transparent' }}>
             <Text style={{ color: i === 2 ? '#fff' : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>{op}</Text>
           </View>
         ))}
@@ -931,7 +1101,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
           <View style={{ flex: 1, backgroundColor: t.fondo, borderRadius: 8, padding: 8 }}>
             <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Nuevo tipo...</Text>
           </View>
-          <View style={{ backgroundColor: t.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}>
+          <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>+ Agregar</Text>
           </View>
         </View>
@@ -972,7 +1142,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
               backgroundColor: t.tarjeta, borderRadius: 10, padding: 14 }}>
               <Text style={{ color: t.texto, fontWeight: '600', flex: 1, fontSize: 13 }}>{nombre}</Text>
-              <Text style={{ color: t.acento, fontSize: 14 }}>▼</Text>
+              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 14 }}>▼</Text>
             </View>
           </View>
         ))}
@@ -1005,6 +1175,7 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
 export function TemaPersonalizadoScreen() {
   const { config, actualizarConfig } = useStore();
   const tema = useTema();
+  const { showAlert } = useAlert();
 
   const [draft, setDraft] = useState<TemaPersonalizado>(
     () => config.temaPersonalizado ?? { ...temaOscuro }
@@ -1023,6 +1194,15 @@ export function TemaPersonalizadoScreen() {
   };
 
   const guardar = () => {
+    const REQUERIDOS: (keyof TemaPersonalizado)[] = ['fondo', 'tarjeta', 'texto', 'textoSecundario', 'acento', 'borde'];
+    const invalidos = REQUERIDOS.filter(k => !/^#[0-9A-Fa-f]{6}$/.test(draft[k] as string));
+    if (invalidos.length > 0) {
+      showAlert(
+        'Colores inválidos',
+        `Los siguientes campos tienen colores incompletos o inválidos: ${invalidos.join(', ')}.\n\nUsá el formato #RRGGBB (6 dígitos hexadecimales).`,
+      );
+      return;
+    }
     actualizarConfig({ temaPersonalizado: draft });
     setCambiosSinGuardar(false);
     setGuardadoOk(true);
@@ -1100,16 +1280,53 @@ export function TemaPersonalizadoScreen() {
             {/* ── COLORES GLOBALES ── */}
             <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES GLOBALES</Text>
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <ColorInput label="Tarjeta / panel"   value={draft.tarjeta}          onChange={v => actualizarDraft({ tarjeta: v })} />
-              <ColorInput label="Texto principal"   value={draft.texto}            onChange={v => actualizarDraft({ texto: v })} />
-              <ColorInput label="Texto secundario"  value={draft.textoSecundario}  onChange={v => actualizarDraft({ textoSecundario: v })} />
-              <ColorInput label="Acento (botones)"  value={draft.acento}           onChange={v => actualizarDraft({ acento: v })} />
-              <ColorInput label="Borde / separador" value={draft.borde}            onChange={v => actualizarDraft({ borde: v })} />
+              <ColorInput label="Tarjeta / panel"   value={draft.tarjeta}         onChange={v => actualizarDraft({ tarjeta: v })} />
+              <ColorInput label="Texto principal"   value={draft.texto}           onChange={v => actualizarDraft({ texto: v })} />
+              <ColorInput label="Texto secundario"  value={draft.textoSecundario} onChange={v => actualizarDraft({ textoSecundario: v })} />
+              <ColorInput label="Borde / separador" value={draft.borde}           onChange={v => actualizarDraft({ borde: v })} />
               <ColorInput
                 label="Labels tab bar"
                 value={draft.colorLabelsTab ?? draft.textoSecundario}
                 onChange={v => actualizarDraft({ colorLabelsTab: v })}
               />
+
+              {/* Grupo acento */}
+              <View style={{ borderTopWidth: 1, borderTopColor: tema.borde, marginTop: 6, paddingTop: 10 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 8 }}>
+                  ACENTO — los sub-campos sobrescriben al base cuando están llenos
+                </Text>
+                <ColorInput
+                  label="Acento base"
+                  value={draft.acento}
+                  onChange={v => actualizarDraft({ acento: v })}
+                />
+                <View style={{ paddingLeft: 16 }}>
+                  <ColorInput
+                    label="↳ Texto"
+                    value={draft.acentoTexto ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoTexto: undefined }) : actualizarDraft({ acentoTexto: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Rellenos"
+                    value={draft.acentoFondo ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoFondo: undefined }) : actualizarDraft({ acentoFondo: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Líneas"
+                    value={draft.acentoLineas ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoLineas: undefined }) : actualizarDraft({ acentoLineas: v })}
+                    fallbackColor={draft.acento}
+                  />
+                  <ColorInput
+                    label="↳ Gráficos"
+                    value={draft.acentoGraficos ?? ''}
+                    onChange={v => v === '' ? actualizarDraft({ acentoGraficos: undefined }) : actualizarDraft({ acentoGraficos: v })}
+                    fallbackColor={draft.acento}
+                  />
+                </View>
+              </View>
             </View>
 
             {/* ── OPACIDAD DE SUPERFICIE ── */}
@@ -1156,8 +1373,8 @@ export function TemaPersonalizadoScreen() {
               </View>
             </View>
 
-            {/* ── COLORES Y FONDOS POR PANTALLA ── */}
-            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>COLORES Y FONDOS POR PANTALLA</Text>
+            {/* ── CONFIGURACIÓN POR PANTALLA ── */}
+            <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '700', marginBottom: 10 }}>CONFIGURACIÓN POR PANTALLA</Text>
 
             {/* Tabs de selección de pantalla */}
             <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
@@ -1218,10 +1435,10 @@ export function TemaPersonalizadoScreen() {
           {/* Selector de página */}
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, padding: 8, gap: 6 }}>
             {([
-              ['carrera',  'Carrera'],
-              ['horario',  'Horario'],
-              ['metricas', 'Métricas'],
-              ['config',   'Config'],
+              ['carrera',  'Carrera'       ],
+              ['horario',  'Horarios'      ],
+              ['metricas', 'Métricas'      ],
+              ['config',   'Configuración' ],
             ] as const).map(([id, label]) => (
               <TouchableOpacity
                 key={id}

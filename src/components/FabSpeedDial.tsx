@@ -16,9 +16,15 @@ export function FabSpeedDial({ acciones }: Props) {
   const [abierto, setAbierto] = useState(false);
   const tema = useTema();
   const rotacion = useRef(new Animated.Value(0)).current;
-  // Un ref de Animated.Value por acción
-  const escalas = useRef(acciones.map(() => new Animated.Value(0))).current;
-  const traducciones = useRef(acciones.map(() => new Animated.Value(0))).current;
+  // Refs que crecen si acciones.length aumenta entre renders
+  const escalasRef = useRef<Animated.Value[]>([]);
+  const traduccionesRef = useRef<Animated.Value[]>([]);
+  while (escalasRef.current.length < acciones.length) {
+    escalasRef.current.push(new Animated.Value(0));
+    traduccionesRef.current.push(new Animated.Value(0));
+  }
+  const escalas = escalasRef.current;
+  const traducciones = traduccionesRef.current;
 
   const animar = (abrir: boolean) => {
     setAbierto(abrir);
@@ -52,7 +58,7 @@ export function FabSpeedDial({ acciones }: Props) {
                 {accion.label}
               </Text>
               <TouchableOpacity
-                style={[s.miniBoton, { backgroundColor: tema.superficie, borderColor: tema.acento }]}
+                style={[s.miniBoton, { backgroundColor: tema.superficie, borderColor: tema.acentoLineas ?? tema.acento }]}
                 onPress={() => { animar(false); accion.onPress(); }}
                 accessibilityLabel={accion.label}
                 accessibilityRole="button"
@@ -64,7 +70,7 @@ export function FabSpeedDial({ acciones }: Props) {
         })}
 
         <TouchableOpacity
-          style={[s.fab, { backgroundColor: tema.acento }]}
+          style={[s.fab, { backgroundColor: tema.acentoFondo ?? tema.acento }]}
           onPress={() => animar(!abierto)}
           activeOpacity={0.85}
           accessibilityLabel={abierto ? 'Cerrar menú de acciones' : 'Abrir menú de acciones'}

@@ -49,7 +49,7 @@ function AlertModal({ config, onClose }: { config: AlertConfig; onClose: () => v
               onPress={async () => { await config.onConfirmar(); onClose(); }}
               style={{
                 flex: 1, padding: 12, borderRadius: 8, alignItems: 'center',
-                backgroundColor: config.destructivo ? '#F44336' : tema.acento,
+                backgroundColor: config.destructivo ? '#F44336' : (tema.acentoFondo ?? tema.acento),
               }}
             >
               <Text style={{ color: '#fff', fontWeight: '700' }}>{config.labelConfirmar}</Text>

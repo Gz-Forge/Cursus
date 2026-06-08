@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore';
 import { FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import { temaOscuro, temaClaro, Tema } from '../theme/colors';
+import { sanitizarTema } from '../theme/ThemeContext';
 
 export type PaginaFondo = 'carrera' | 'horario' | 'metricas' | 'config';
 
@@ -15,14 +16,24 @@ export function useFondoPantalla(pagina: PaginaFondo): FondoPantalla | undefined
   }
 }
 
-/** Retorna el tema base + overrides de colores específicos de la pantalla. */
+/**
+ * Retorna el tema base + overrides de colores específicos de la pantalla.
+ *
+ * Los sub-campos de acento (`acentoTexto`, `acentoFondo`, `acentoLineas`, `acentoGraficos`)
+ * pueden ser `undefined` si el usuario no los configuró.
+ * En los puntos de consumo usar siempre el patrón de fallback:
+ *   color: tema.acentoTexto ?? tema.acento
+ *   backgroundColor: tema.acentoFondo ?? tema.acento
+ *   borderColor: tema.acentoLineas ?? tema.acento
+ *   frontColor: tema.acentoGraficos ?? tema.acento
+ */
 export function useTemaPantalla(pagina: PaginaFondo): Tema {
   const config = useStore(s => s.config);
   if (config.tema !== 'personalizado' || !config.temaPersonalizado) {
     return config.tema === 'claro' ? temaClaro : temaOscuro;
   }
   const tp = config.temaPersonalizado;
-  const base: Tema = { ...temaOscuro, ...tp } as Tema;
+  const base: Tema = sanitizarTema(tp);
   let overrides: ColoresScreen | undefined;
   switch (pagina) {
     case 'carrera':  overrides = tp.coloresCarrera;  break;
@@ -37,6 +48,10 @@ export function useTemaPantalla(pagina: PaginaFondo): Tema {
     ...(overrides.texto           ? { texto:           overrides.texto }           : {}),
     ...(overrides.textoSecundario ? { textoSecundario: overrides.textoSecundario } : {}),
     ...(overrides.acento          ? { acento:          overrides.acento }          : {}),
+    ...(overrides.acentoTexto     ? { acentoTexto:     overrides.acentoTexto }     : {}),
+    ...(overrides.acentoFondo     ? { acentoFondo:     overrides.acentoFondo }     : {}),
+    ...(overrides.acentoLineas    ? { acentoLineas:    overrides.acentoLineas }    : {}),
+    ...(overrides.acentoGraficos  ? { acentoGraficos:  overrides.acentoGraficos }  : {}),
     ...(overrides.borde           ? { borde:           overrides.borde }           : {}),
   };
 }
