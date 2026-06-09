@@ -56,7 +56,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
           New-Item -ItemType Directory -Force -Path "$staging\Assets" | Out-Null
 
-          Copy-Item "src-tauri\target\release\cursus.exe" "$staging\cursus.exe"
+          Copy-Item "src-tauri\target\release\app.exe" "$staging\cursus.exe"
           Copy-Item "src-tauri\msix\AppxManifest.xml" "$staging\AppxManifest.xml"
           Copy-Item "src-tauri\msix\Assets\*" "$staging\Assets\" -Recurse
 
