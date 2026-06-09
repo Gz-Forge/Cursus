@@ -3,13 +3,13 @@ name: Build Windows — MSIX
 on:
   workflow_dispatch:
 
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,19 +35,82 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Build Tauri app (MSIX)
-        uses: tauri-apps/tauri-action@v0
-        with:
-          args: --bundles msix
+      - name: Build Tauri binary
+        run: npm run tauri build -- --bundles nsis
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_ENV: production
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Upload MSIX package
+      - name: Decode certificate
+        shell: pwsh
+        run: |
+          $pfxBytes = [Convert]::FromBase64String("${{ secrets.MSIX_CERT_PFX }}")
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cursus-cert.pfx", $pfxBytes)
+          Write-Host "Certificate decoded to $env:RUNNER_TEMP\cursus-cert.pfx"
+
+      - name: Create MSIX staging directory
+        shell: pwsh
+        run: |
+          $staging = "$env:RUNNER_TEMP\msix_staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          New-Item -ItemType Directory -Force -Path "$staging\Assets" | Out-Null
+
+          Copy-Item "src-tauri\target\release\cursus.exe" "$staging\cursus.exe"
+          Copy-Item "src-tauri\msix\AppxManifest.xml" "$staging\AppxManifest.xml"
+          Copy-Item "src-tauri\msix\Assets\*" "$staging\Assets\" -Recurse
+
+          Write-Host "Staging directory contents:"
+          Get-ChildItem $staging -Recurse | Select-Object FullName
+
+      - name: Pack MSIX
+        shell: pwsh
+        run: |
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "x64" } |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $makeappx) {
+            throw "makeappx.exe not found. Windows SDK may not be installed."
+          }
+
+          Write-Host "Using makeappx: $makeappx"
+
+          $staging = "$env:RUNNER_TEMP\msix_staging"
+          $output  = "$env:RUNNER_TEMP\cursus.msix"
+
+          & $makeappx pack /d $staging /p $output /overwrite
+          if ($LASTEXITCODE -ne 0) { throw "makeappx failed with exit code $LASTEXITCODE" }
+
+          Write-Host "MSIX created: $output"
+
+      - name: Sign MSIX
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "x64" } |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $signtool) {
+            throw "signtool.exe not found."
+          }
+
+          Write-Host "Using signtool: $signtool"
+
+          $pfx    = "$env:RUNNER_TEMP\cursus-cert.pfx"
+          $msix   = "$env:RUNNER_TEMP\cursus.msix"
+          $passwd = "${{ secrets.MSIX_CERT_PASSWORD }}"
+
+          & $signtool sign /fd SHA256 /f $pfx /p $passwd $msix
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+
+          Write-Host "MSIX signed successfully"
+
+      - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
         with:
           name: cursus-windows-msix
-          path: src-tauri/target/release/bundle/msix/*.msix
+          path: ${{ runner.temp }}\cursus.msix
           if-no-files-found: error
