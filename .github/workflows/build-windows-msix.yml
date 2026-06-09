@@ -56,10 +56,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $staging | Out-Null
           New-Item -ItemType Directory -Force -Path "$staging\Assets" | Out-Null
 
-          # Copiar binario
-          Copy-Item "src-tauri\target\release\cursus.exe" "$staging\cursus.exe"
-
-          # Copiar manifiesto y assets
+          Copy-Item "src-tauri\target\release\app.exe" "$staging\cursus.exe"
           Copy-Item "src-tauri\msix\AppxManifest.xml" "$staging\AppxManifest.xml"
           Copy-Item "src-tauri\msix\Assets\*" "$staging\Assets\" -Recurse
 
@@ -69,7 +66,6 @@ jobs:
       - name: Pack MSIX
         shell: pwsh
         run: |
-          # Localizar makeappx.exe del Windows SDK
           $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
             -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match "x64" } |
@@ -92,7 +88,6 @@ jobs:
       - name: Sign MSIX
         shell: pwsh
         run: |
-          # Localizar signtool.exe del Windows SDK
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
             -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match "x64" } |
