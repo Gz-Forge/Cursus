@@ -189,6 +189,7 @@ export interface Config {
   horarioFiltroOcultos: TipoBloque[];        // [] = mostrar todo
   horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
   horarioFontSize?: number;              // undefined → fallback por plataforma (web=12, móvil=8). Rango: 6–20.
+  horariosPorPagina?: number;            // entradas por página en la lista de horarios de editar materia (10/20/40/60/80/100, default 20)
   // Métricas personalizables
   metricasOcultas?: string[];          // IDs de métricas ocultas (undefined/[] = todas visibles)
   metricasOrden?: string[];            // orden de las métricas (array de IDs); ausente = orden por defecto

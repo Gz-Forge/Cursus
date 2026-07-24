@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -100,6 +100,78 @@ function HoraPicker({ value, onChange, label }: {
   );
 }
 
+// ── Fila de bloque de horario (memoizada: evita re-renders masivos al tipear) ──
+const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, onEliminar }: {
+  bloque: BloqueHorario;
+  tipoLabel: string;
+  onEditar: (b: BloqueHorario) => void;
+  onEliminar: (id: string) => void;
+}) {
+  const tema = useTema();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: tema.texto, fontSize: 13 }}>
+          {fmtFechaBloque(bloque.fecha)}  {fmtHora(bloque.horaInicio)}–{fmtHora(bloque.horaFin)}
+        </Text>
+        <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
+          {tipoLabel}{bloque.salon ? ` · ${bloque.salon}` : ''}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+        onPress={() => onEditar(bloque)}
+      >
+        <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+        onPress={() => onEliminar(bloque.id)}
+      >
+        <Text style={{ color: '#F44336' }}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+const OPCIONES_POR_PAGINA = [10, 20, 40, 60, 80, 100] as const;
+
+// ── Tab bar de editar materia ────────────────────────────────────────
+type TabEdit = 'general' | 'horarios' | 'asistencia';
+
+function TabBarEdit({ activa, onCambiar, tema }: { activa: TabEdit; onCambiar: (t: TabEdit) => void; tema: any }) {
+  const tabs: { id: TabEdit; icon: string; label: string }[] = [
+    { id: 'general',    icon: '📋', label: 'General'    },
+    { id: 'horarios',   icon: '📅', label: 'Horarios'   },
+    { id: 'asistencia', icon: '🙋', label: 'Asistencia' },
+  ];
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+      {tabs.map(t => (
+        <TouchableOpacity
+          key={t.id}
+          onPress={() => onCambiar(t.id)}
+          style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+        >
+          <Text style={{ fontSize: 18 }}>{t.icon}</Text>
+          <Text style={{
+            color: activa === t.id ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario,
+            fontSize: 11,
+            fontWeight: activa === t.id ? '700' : '400',
+            marginTop: 2,
+          }}>{t.label}</Text>
+          {activa === t.id && (
+            <View style={{
+              position: 'absolute', bottom: 0, left: 8, right: 8,
+              height: 2, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 1,
+            }} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 export function EditMateriaScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
@@ -129,6 +201,7 @@ export function EditMateriaScreen() {
   const [dropdownMes, setDropdownMes] = useState(false);
   const [showConfirmEliminar, setShowConfirmEliminar] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
+  const [tabActiva, setTabActiva] = useState<TabEdit>('general');
 
   // ── Filtros de horario ──
   const [filtroTipos, setFiltroTipos] = useState<TipoBloque[]>([]);
@@ -240,6 +313,41 @@ export function EditMateriaScreen() {
     }
     return lista;
   }, [form.bloques, filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
+
+  // ── Paginación de horarios ──
+  const [paginaHorario, setPaginaHorario] = useState(0);
+  const porPagina = config.horariosPorPagina ?? 20;
+  const totalPaginas = Math.max(1, Math.ceil(bloquesFiltrados.length / porPagina));
+  const paginaActual = Math.min(paginaHorario, totalPaginas - 1);
+  const bloquesPagina = useMemo(
+    () => bloquesFiltrados.slice(paginaActual * porPagina, (paginaActual + 1) * porPagina),
+    [bloquesFiltrados, paginaActual, porPagina]
+  );
+
+  // Al cambiar cualquier filtro se vuelve a la página 1
+  useEffect(() => {
+    setPaginaHorario(0);
+  }, [filtroTipos, filtroFecha, filtroDesde, filtroHasta]);
+
+  const handleEditarBloque = useCallback((b: BloqueHorario) => {
+    const [, mesStr, diaStr] = b.fecha.split('-');
+    setBloqueNuevo({
+      dia: String(parseInt(diaStr, 10)),
+      mes: String(parseInt(mesStr, 10)),
+      horaInicio: b.horaInicio,
+      horaFin: b.horaFin,
+      tipo: b.tipo,
+      salon: b.salon ?? '',
+    });
+    setBloqueEditandoId(b.id);
+    setMostrarFormBloque(true);
+    setDropdownDia(false);
+    setDropdownMes(false);
+  }, []);
+
+  const handleEliminarBloque = useCallback((id: string) => {
+    setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== id) }));
+  }, []);
 
   const esMateriaExistente = !!materiaOriginal;
 
@@ -677,6 +785,11 @@ export function EditMateriaScreen() {
           </View>
         </View>
 
+        <TabBarEdit activa={tabActiva} onCambiar={setTabActiva} tema={tema} />
+
+        {/* ── TAB: GENERAL ── */}
+        {tabActiva === 'general' && (<>
+
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
         {campo('Nombre', form.nombre, v => {
           setForm(f => ({ ...f, nombre: v }));
@@ -903,7 +1016,11 @@ export function EditMateriaScreen() {
           </View>
         )}
 
-        {/* ── HORARIO ── */}
+        </>)}
+
+        {/* ── TAB: HORARIOS ── */}
+        {tabActiva === 'horarios' && (<>
+
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
           <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
           {hayFiltrosActivos && (
@@ -911,6 +1028,27 @@ export function EditMateriaScreen() {
               {bloquesFiltrados.length} de {(form.bloques ?? []).length}
             </Text>
           )}
+        </View>
+
+        {/* ── Entradas por página ── */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginRight: 2 }}>Por página:</Text>
+          {OPCIONES_POR_PAGINA.map(n => {
+            const activo = porPagina === n;
+            return (
+              <TouchableOpacity
+                key={n}
+                onPress={() => {
+                  actualizarConfig({ horariosPorPagina: n });
+                  setPaginaHorario(0);
+                }}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+                  backgroundColor: activo ? tema.acento : tema.fondo }}
+              >
+                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{n}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* ── Filtro tipo ── */}
@@ -983,45 +1121,41 @@ export function EditMateriaScreen() {
           style={{ maxHeight: 260 }}
           contentContainerStyle={{ paddingBottom: 2 }}
         >
-          {bloquesFiltrados.map((b) => (
-            <View key={b.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.texto, fontSize: 13 }}>
-                  {fmtFechaBloque(b.fecha)}  {fmtHora(b.horaInicio)}–{fmtHora(b.horaFin)}
-                </Text>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                  {tiposBloque.find(t => t.key === b.tipo)?.label}{b.salon ? ` · ${b.salon}` : ''}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={{ paddingHorizontal: 10, paddingVertical: 4 }}
-                onPress={() => {
-                  const [, mesStr, diaStr] = b.fecha.split('-');
-                  setBloqueNuevo({
-                    dia: String(parseInt(diaStr, 10)),
-                    mes: String(parseInt(mesStr, 10)),
-                    horaInicio: b.horaInicio,
-                    horaFin: b.horaFin,
-                    tipo: b.tipo,
-                    salon: b.salon ?? '',
-                  });
-                  setBloqueEditandoId(b.id);
-                  setMostrarFormBloque(true);
-                  setDropdownDia(false);
-                  setDropdownMes(false);
-                }}
-              >
-                <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
-                onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}
-              >
-                <Text style={{ color: '#F44336' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
+          {bloquesPagina.map((b) => (
+            <BloqueRow
+              key={b.id}
+              bloque={b}
+              tipoLabel={tiposBloque.find(t => t.key === b.tipo)?.label ?? ''}
+              onEditar={handleEditarBloque}
+              onEliminar={handleEliminarBloque}
+            />
           ))}
         </ScrollView>
+
+        {/* ── Navegación de páginas ── */}
+        {totalPaginas > 1 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 6, marginBottom: 4 }}>
+            <TouchableOpacity
+              disabled={paginaActual === 0}
+              onPress={() => setPaginaHorario(paginaActual - 1)}
+              style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8,
+                backgroundColor: tema.tarjeta, opacity: paginaActual === 0 ? 0.4 : 1 }}
+            >
+              <Text style={{ color: tema.acento, fontSize: 14 }}>◀</Text>
+            </TouchableOpacity>
+            <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>
+              {paginaActual + 1}/{totalPaginas}
+            </Text>
+            <TouchableOpacity
+              disabled={paginaActual >= totalPaginas - 1}
+              onPress={() => setPaginaHorario(paginaActual + 1)}
+              style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8,
+                backgroundColor: tema.tarjeta, opacity: paginaActual >= totalPaginas - 1 ? 0.4 : 1 }}
+            >
+              <Text style={{ color: tema.acento, fontSize: 14 }}>▶</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ── Formulario individual ── */}
         {mostrarFormBloque && (
@@ -1513,7 +1647,11 @@ export function EditMateriaScreen() {
           </>
         )}
 
-        {/* ── ASISTENCIA ── */}
+        </>)}
+
+        {/* ── TAB: ASISTENCIA ── */}
+        {tabActiva === 'asistencia' && (<>
+
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
 
         {/* Límites por tipo */}
@@ -1707,7 +1845,10 @@ export function EditMateriaScreen() {
           </View>
         )}
 
-        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 12 }}>
+        </>)}
+
+        {/* ── Footer siempre visible: autosave + eliminar ── */}
+        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
           <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Los cambios se guardan automáticamente</Text>
         </View>
 
