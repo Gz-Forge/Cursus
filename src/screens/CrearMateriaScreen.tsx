@@ -99,6 +99,42 @@ function HoraPicker({ value, onChange, label }: {
   );
 }
 
+// ── Tab bar de crear materia ─────────────────────────────────────────
+type TabEdit = 'general' | 'horarios' | 'asistencia';
+
+function TabBarEdit({ activa, onCambiar, tema }: { activa: TabEdit; onCambiar: (t: TabEdit) => void; tema: any }) {
+  const tabs: { id: TabEdit; icon: string; label: string }[] = [
+    { id: 'general',    icon: '📋', label: 'General'    },
+    { id: 'horarios',   icon: '📅', label: 'Horarios'   },
+    { id: 'asistencia', icon: '🙋', label: 'Asistencia' },
+  ];
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+      {tabs.map(t => (
+        <TouchableOpacity
+          key={t.id}
+          onPress={() => onCambiar(t.id)}
+          style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+        >
+          <Text style={{ fontSize: 18 }}>{t.icon}</Text>
+          <Text style={{
+            color: activa === t.id ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario,
+            fontSize: 11,
+            fontWeight: activa === t.id ? '700' : '400',
+            marginTop: 2,
+          }}>{t.label}</Text>
+          {activa === t.id && (
+            <View style={{
+              position: 'absolute', bottom: 0, left: 8, right: 8,
+              height: 2, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 1,
+            }} />
+          )}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 export function CrearMateriaScreen() {
   const navigation = useNavigation();
   const { materias, config, guardarMateria, actualizarConfig } = useStore();
@@ -125,6 +161,7 @@ export function CrearMateriaScreen() {
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
+  const [tabActiva, setTabActiva] = useState<TabEdit>('general');
 
   // ── Filtros de horario ──
   const [filtroTipos, setFiltroTipos] = useState<TipoBloque[]>([]);
@@ -603,6 +640,11 @@ export function CrearMateriaScreen() {
           </View>
         </View>
 
+        <TabBarEdit activa={tabActiva} onCambiar={setTabActiva} tema={tema} />
+
+        {/* ── TAB: GENERAL ── */}
+        {tabActiva === 'general' && (<>
+
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
         {campo('Nombre', form.nombre, v => {
           setForm(f => ({ ...f, nombre: v }));
@@ -829,7 +871,11 @@ export function CrearMateriaScreen() {
           </View>
         )}
 
-        {/* ── HORARIO ── */}
+        </>)}
+
+        {/* ── TAB: HORARIOS ── */}
+        {tabActiva === 'horarios' && (<>
+
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
           <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
           {hayFiltrosActivos && (
@@ -1439,7 +1485,11 @@ export function CrearMateriaScreen() {
           </>
         )}
 
-        {/* ── ASISTENCIA ── */}
+        </>)}
+
+        {/* ── TAB: ASISTENCIA ── */}
+        {tabActiva === 'asistencia' && (<>
+
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
 
         {/* Límites por tipo */}
@@ -1633,8 +1683,11 @@ export function CrearMateriaScreen() {
           </View>
         )}
 
+        </>)}
+
+        {/* ── Footer: botón crear siempre visible ── */}
         <TouchableOpacity onPress={guardar}
-          style={{ backgroundColor: tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 }}>
+          style={{ backgroundColor: tema.acento, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>💾 Crear materia</Text>
         </TouchableOpacity>
 
