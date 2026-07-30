@@ -114,10 +114,22 @@ export function renumerarMaterias(materias: Materia[], materiaGuardada: Materia)
     }
   });
 
-  return sorted.map((m, i) => ({
+  const remapped = sorted.map((m, i) => ({
     ...m,
     numero: i + 1,
     previasNecesarias: m.previasNecesarias.map(n => mapaNumeros.get(n) ?? n),
-    esPreviaDe: m.esPreviaDe.map(n => mapaNumeros.get(n) ?? n),
+    esPreviaDe: [] as number[],
   }));
+
+  // Recomputar esPreviaDe invirtiendo previasNecesarias para mantenerlo siempre sincronizado
+  remapped.forEach(m => {
+    m.previasNecesarias.forEach(numPrev => {
+      const prev = remapped.find(x => x.numero === numPrev);
+      if (prev && !prev.esPreviaDe.includes(m.numero)) {
+        prev.esPreviaDe.push(m.numero);
+      }
+    });
+  });
+
+  return remapped;
 }

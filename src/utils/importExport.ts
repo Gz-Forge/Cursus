@@ -6,7 +6,6 @@ export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'col
 export function generarPromptCarrera(modo: 'crear' | 'revisar' = 'crear'): string {
   if (modo === 'revisar') {
     return `Voy a pedirte que revises y actualices un JSON con el plan de carrera de mi app universitaria.
-Devolvé solo el JSON actualizado al final, sin explicaciones extras.
 
 Tu tarea:
 1. Pedime que pegue mi JSON actual (array de materias con nombre, semestre, previas, créditos, etc.)
@@ -16,8 +15,7 @@ Tu tarea:
    - Previas faltantes, sobrantes o con nombre mal escrito
    - Créditos desfasados
 4. Listá todos los cambios que vas a aplicar y preguntame si los confirmo
-5. Una vez que confirme, devolvé el JSON completo actualizado en el mismo formato original
-   (compatible para reimportar a la app directamente)
+5. Una vez que confirme, generá el archivo .json actualizado para descargar
 
 Formato que reconoce la app:
 [
@@ -31,11 +29,12 @@ Formato que reconoce la app:
   ...
 ]
 
+⚠️ IMPORTANTE: Entregá el resultado final como un archivo .json para descargar — NO pegues el contenido en el chat.
+
 Empezá pidiéndome el JSON actual.`;
   }
 
-  return `Generá un archivo JSON con el plan de estudios de mi carrera.
-Devolvé solo el JSON, sin explicaciones.
+  return `Generá un archivo .json con el plan de estudios de mi carrera.
 
 Formato: array de objetos. Campos obligatorios:
 - nombre (string): nombre de la materia
@@ -56,7 +55,9 @@ Ejemplo:
 ]
 
 Materias de mi carrera:
-[describí tu carrera acá]`;
+[describí tu carrera acá]
+
+⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
 }
 
 export interface MateriaJson {
@@ -258,7 +259,9 @@ Reglas:
 - notaMaxima: el puntaje máximo posible para esa evaluación.
 
 Mis materias y sus evaluaciones:
-[describí acá: nombre de cada materia, exámenes, trabajos, pesos aproximados]`;
+[describí acá: nombre de cada materia, exámenes, trabajos, pesos aproximados]
+
+⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
 }
 
 export function generarPromptCompleto(): string {
@@ -388,7 +391,9 @@ EJEMPLO COMPLETO
 }
 
 Mi carrera:
-[describí tu carrera acá: materias, semestres, previas, horarios, evaluaciones y reglamento de evaluación]`;
+[describí tu carrera acá: materias, semestres, previas, horarios, evaluaciones y reglamento de evaluación]
+
+⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
 }
 
 export function esFormatoMultiMateriaEval(parsed: unknown[]): boolean {
@@ -471,7 +476,24 @@ export function mergeImportar(
     const soloNuevas = jsonData.filter(d => !existentesPorNombre.has(key(d.nombre)));
     if (soloNuevas.length === 0) return existentes;
     const renumbered = soloNuevas.map((d, i) => ({ ...d, numero: maxNum + i + 1 }));
-    const nuevas = jsonAMaterias(renumbered, oportunidades);
+
+    // Mapa combinado: existentes + nuevas, para resolver previas que apunten a materias ya en el sistema
+    const nombreANumero = new Map<string, number>();
+    existentes.forEach(m => nombreANumero.set(key(m.nombre), m.numero));
+    renumbered.forEach(d => nombreANumero.set(key(d.nombre), d.numero!));
+
+    // Índice por nombre para releer el campo previas del JSON original
+    const jsonPorNombre = new Map<string, MateriaJson>(
+      renumbered.map(d => [key(d.nombre), d]),
+    );
+
+    const nuevas = jsonAMaterias(renumbered, oportunidades).map(m => ({
+      ...m,
+      previasNecesarias: (jsonPorNombre.get(key(m.nombre))?.previas ?? [])
+        .map(n => nombreANumero.get(key(n)))
+        .filter((n): n is number => n !== undefined),
+    }));
+
     const combined = [...existentes, ...nuevas];
     combined.sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
     return deriveRelaciones(combined);
@@ -851,7 +873,9 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "tarjetaTipoFormacion": false,
   "tarjetaCreditosExtendida": "ambos",
   "tarjetaMostrarToggleCursando": true
-}`;
+}
+
+⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
 }
 
 const COLORES_BLOQUES_DEFAULT_PROMPT = [
@@ -958,7 +982,7 @@ export function generarPromptCombinado(
     if (unico === 'colores') {
       const seccion = buildSeccionColores(config, materias);
       if (!seccion) return 'No hay materias con horarios definidos para configurar colores.';
-      return `Sos un asistente de diseño de colores para una app académica de horarios.\n${seccion}\nCuando termines de preguntar, devolvé SOLO el JSON con los colores elegidos (sin texto adicional).`;
+      return `Sos un asistente de diseño de colores para una app académica de horarios.\n${seccion}\nCuando termines de preguntar, entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
     }
   }
 
@@ -1077,13 +1101,13 @@ Campos disponibles (los más comunes):
 
   const seccionColores = modulos.has('colores') ? buildSeccionColores(config, materias) : '';
 
-  return `Sos un asistente de la app Cursus. Tu objetivo es generar UN SOLO archivo JSON con ${descripcion}.
+  return `Sos un asistente de la app Cursus. Tu objetivo es generar UN SOLO archivo .json con ${descripcion}.
 
 Para lograrlo:
 1. Analizá toda la información que te proporcione el usuario (documentos, programas, calendarios académicos, etc.).
 2. Por cada dato que no puedas determinar con certeza, preguntale al usuario de a uno por vez, explicándole brevemente para qué sirve.
 3. Solo incluí en el JSON los datos que puedas confirmar. Omití los que queden sin confirmar.
-4. Al final, devolvé ÚNICAMENTE el JSON completo, sin texto adicional.
+4. Al final, entregá el archivo .json para descargar — NO pegues el contenido en el chat.
 
 FORMATO DEL JSON:
 ${estructuraRaiz}
