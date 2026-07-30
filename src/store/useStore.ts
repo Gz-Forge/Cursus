@@ -120,7 +120,13 @@ export const useStore = create<Store>((set, get) => ({
 
   eliminarMateria: (id, numero) => {
     const { perfilActivoId, config, materias } = get();
-    const nuevas = materias.filter(m => !(m.id === id && m.numero === numero));
+    const sinEliminada = materias.filter(m => !(m.id === id && m.numero === numero));
+    // Limpiar referencias a la materia eliminada en todas las demás
+    const nuevas = sinEliminada.map(m => ({
+      ...m,
+      previasNecesarias: m.previasNecesarias.filter(n => n !== numero),
+      esPreviaDe: m.esPreviaDe.filter(n => n !== numero),
+    }));
     set({ materias: nuevas });
     guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
       e => { if (__DEV__) console.error('[store] eliminarMateria: fallo al persistir', e); },
