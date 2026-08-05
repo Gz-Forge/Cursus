@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform, Animated, useWindowDimensions, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Platform, Animated, useWindowDimensions, TextInput, Modal, Switch } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
@@ -52,6 +52,12 @@ export function CarreraScreen() {
   const [mostrarQrScanner, setMostrarQrScanner] = useState(false);
   const [confirmImportar, setConfirmImportar] = useState<{ datos: Awaited<ReturnType<typeof importarCarrera>> } | null>(null);
   const [showConfirmPeriodo, setShowConfirmPeriodo] = useState(false);
+  const [modalCreditos, setModalCreditos] = useState(false);
+  const [creditosIncluirAprobado, setCreditosIncluirAprobado] = useState(false);
+  const [modalExoneradas, setModalExoneradas] = useState(false);
+  const [modalDisponibles, setModalDisponibles] = useState(false);
+  const [dispIncluirAprobado, setDispIncluirAprobado] = useState(false);
+  const [dispIncluirRecursar, setDispIncluirRecursar] = useState(false);
   const { showAlert } = useAlert();
 
   const [colaFelicitaciones, setColaFelicitaciones] = useState<{ titulo: string; frase: string }[]>([]);
@@ -405,16 +411,18 @@ export function CarreraScreen() {
 
       {/* Resumen */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: surfaceBg }}>
-        {[
-          { valor: creditos, label: 'Créditos' },
-          { valor: exoneradas, label: getLabel('exonerado') },
-          { valor: disponibles, label: 'Disponibles' },
-        ].map(({ valor, label }) => (
-          <View key={label} style={{ alignItems: 'center' }}>
-            <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{valor}</Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{label}</Text>
-          </View>
-        ))}
+        <TouchableOpacity onPress={() => setModalCreditos(true)} style={{ alignItems: 'center' }}>
+          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{creditos}</Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Créditos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setModalExoneradas(true)} style={{ alignItems: 'center' }}>
+          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{exoneradas}</Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setModalDisponibles(true)} style={{ alignItems: 'center' }}>
+          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{disponibles}</Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Pestañas */}
@@ -830,6 +838,318 @@ export function CarreraScreen() {
         onConfirmar={() => setColaFelicitaciones(q => q.slice(1))}
         onCancelar={() => setColaFelicitaciones(q => q.slice(1))}
       />
+
+      {/* ── Modal: Créditos obtenidos ── */}
+      <Modal
+        visible={modalCreditos}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setModalCreditos(false); setCreditosIncluirAprobado(false); }}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => { setModalCreditos(false); setCreditosIncluirAprobado(false); }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
+          >
+            {(() => {
+              const listaCreditos = materias
+                .filter(m => {
+                  const e = calcularEstadoFinal(m, config);
+                  if (e === 'exonerado') return true;
+                  if (creditosIncluirAprobado && config.usarEstadoAprobado && e === 'aprobado') return true;
+                  return false;
+                })
+                .sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
+              const totalCr = listaCreditos.reduce((acc, m) => acc + m.creditosQueDA, 0);
+              return (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
+                    Créditos obtenidos
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: config.usarEstadoAprobado ? 10 : 14 }}>
+                    {listaCreditos.length} materia{listaCreditos.length !== 1 ? 's' : ''} · {totalCr} créditos
+                  </Text>
+
+                  {config.usarEstadoAprobado && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 13, flex: 1 }}>
+                        Incluir {getLabel('aprobado')}
+                      </Text>
+                      <Switch
+                        value={creditosIncluirAprobado}
+                        onValueChange={setCreditosIncluirAprobado}
+                        trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  )}
+
+                  <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                    {listaCreditos.length === 0 ? (
+                      <Text style={{ color: tema.textoSecundario, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
+                        Sin créditos obtenidos aún
+                      </Text>
+                    ) : (
+                      listaCreditos.map((mat, idx) => {
+                        const semIdx = semestres.indexOf(mat.semestre);
+                        const color = coloresSem[semIdx] ?? coloresSem[semIdx % coloresSem.length];
+                        return (
+                          <View
+                            key={mat.id}
+                            style={{
+                              flexDirection: 'row', alignItems: 'center', gap: 10,
+                              paddingVertical: 9,
+                              borderBottomWidth: idx < listaCreditos.length - 1 ? 1 : 0,
+                              borderBottomColor: tema.borde,
+                            }}
+                          >
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, flexShrink: 0 }} />
+                            <Text style={{ color: tema.texto, fontSize: 13, flex: 1 }}>
+                              {mat.nombre}
+                            </Text>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                              {mat.creditosQueDA} cr
+                            </Text>
+                          </View>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    onPress={() => { setModalCreditos(false); setCreditosIncluirAprobado(false); }}
+                    style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Modal: Materias exoneradas ── */}
+      <Modal
+        visible={modalExoneradas}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalExoneradas(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => setModalExoneradas(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
+          >
+            {(() => {
+              const listaExoneradas = materias
+                .filter(m => calcularEstadoFinal(m, config) === 'exonerado')
+                .sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
+              return (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
+                    {getLabel('exonerado')}
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+                    {listaExoneradas.length} materia{listaExoneradas.length !== 1 ? 's' : ''}
+                  </Text>
+
+                  <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                    {listaExoneradas.length === 0 ? (
+                      <Text style={{ color: tema.textoSecundario, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
+                        Sin materias {getLabel('exonerado').toLowerCase()} aún
+                      </Text>
+                    ) : (
+                      listaExoneradas.map((mat, idx) => (
+                        <View
+                          key={mat.id}
+                          style={{
+                            flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                            paddingVertical: 9,
+                            borderBottomWidth: idx < listaExoneradas.length - 1 ? 1 : 0,
+                            borderBottomColor: tema.borde,
+                          }}
+                        >
+                          <Text style={{ color: tema.texto, fontSize: 13, flex: 1 }}>
+                            {mat.nombre}
+                          </Text>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                            Semestre {mat.semestre}°
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    onPress={() => setModalExoneradas(false)}
+                    style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Modal: Materias disponibles ── */}
+      <Modal
+        visible={modalDisponibles}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setModalDisponibles(false); setDispIncluirAprobado(false); setDispIncluirRecursar(false); }}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => { setModalDisponibles(false); setDispIncluirAprobado(false); setDispIncluirRecursar(false); }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 360 }}
+          >
+            {(() => {
+              const creditosAcum = creditosAcumulados(materias, config);
+              const aprobadas = new Set(
+                materias.filter(m => {
+                  const e = calcularEstadoFinal(m, config);
+                  return e === 'exonerado' || (config.aprobadoHabilitaPrevias && e === 'aprobado');
+                }).map(m => m.numero)
+              );
+              const listaDisp = materias
+                .filter(m => {
+                  const previasOk = m.previasNecesarias.every(p => aprobadas.has(p));
+                  const creditosOk = creditosAcum >= m.creditosNecesarios;
+                  if (!previasOk || !creditosOk) return false;
+                  const e = calcularEstadoFinal(m, config);
+                  if (e === 'por_cursar') return true;
+                  if (e === 'recursar') return dispIncluirRecursar;
+                  if (e === 'aprobado' && config.usarEstadoAprobado) return dispIncluirAprobado;
+                  return false;
+                })
+                .sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
+
+              const primerSem = listaDisp.filter(m => m.semestre % 2 !== 0);
+              const segundoSem = listaDisp.filter(m => m.semestre % 2 === 0);
+
+              const renderFila = (mat: typeof materias[0], idx: number, lista: typeof materias) => (
+                <View
+                  key={mat.id}
+                  style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    paddingVertical: 9,
+                    borderBottomWidth: idx < lista.length - 1 ? 1 : 0,
+                    borderBottomColor: tema.borde,
+                  }}
+                >
+                  <Text style={{ color: tema.texto, fontSize: 13, flex: 1 }}>
+                    {mat.nombre}
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                    Semestre {mat.semestre}°
+                  </Text>
+                </View>
+              );
+
+              return (
+                <>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
+                    Materias disponibles
+                  </Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14 }}>
+                    {listaDisp.length} materia{listaDisp.length !== 1 ? 's' : ''}
+                  </Text>
+
+                  {/* Config de estados */}
+                  <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 12, marginBottom: 14, gap: 10 }}>
+                    {/* Por cursar — fijo ON */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: tema.texto, fontSize: 13 }}>Por cursar</Text>
+                      <Switch
+                        value={true}
+                        disabled
+                        trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+
+                    {/* Recursar */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: tema.texto, fontSize: 13 }}>{getLabel('recursar')}</Text>
+                      <Switch
+                        value={dispIncluirRecursar}
+                        onValueChange={setDispIncluirRecursar}
+                        trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+
+                    {/* Aprobado — solo si usarEstadoAprobado */}
+                    {config.usarEstadoAprobado && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: tema.texto, fontSize: 13 }}>{getLabel('aprobado')}</Text>
+                        <Switch
+                          value={dispIncluirAprobado}
+                          onValueChange={setDispIncluirAprobado}
+                          trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                          thumbColor="#fff"
+                        />
+                      </View>
+                    )}
+                  </View>
+
+                  <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                    {listaDisp.length === 0 ? (
+                      <Text style={{ color: tema.textoSecundario, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
+                        Sin materias disponibles con estos filtros
+                      </Text>
+                    ) : (
+                      <>
+                        {primerSem.length > 0 && (
+                          <>
+                            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 12, marginBottom: 6 }}>
+                              1° semestre del año
+                            </Text>
+                            {primerSem.map((m, idx) => renderFila(m, idx, primerSem))}
+                          </>
+                        )}
+                        {segundoSem.length > 0 && (
+                          <>
+                            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 12, marginTop: primerSem.length > 0 ? 12 : 0, marginBottom: 6 }}>
+                              2° semestre del año
+                            </Text>
+                            {segundoSem.map((m, idx) => renderFila(m, idx, segundoSem))}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    onPress={() => { setModalDisponibles(false); setDispIncluirAprobado(false); setDispIncluirRecursar(false); }}
+                    style={{ marginTop: 16, paddingVertical: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '600' }}>Cerrar</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
     </View>
   );
