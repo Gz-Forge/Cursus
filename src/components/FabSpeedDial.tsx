@@ -16,22 +16,26 @@ export function FabSpeedDial({ acciones }: Props) {
   const [abierto, setAbierto] = useState(false);
   const tema = useTema();
   const rotacion = useRef(new Animated.Value(0)).current;
-  // Refs que crecen si acciones.length aumenta entre renders
-  const escalasRef = useRef<Animated.Value[]>([]);
-  const traduccionesRef = useRef<Animated.Value[]>([]);
-  while (escalasRef.current.length < acciones.length) {
-    escalasRef.current.push(new Animated.Value(0));
-    traduccionesRef.current.push(new Animated.Value(0));
-  }
-  const escalas = escalasRef.current;
-  const traducciones = traduccionesRef.current;
+  // Map label → { escala, traduccion } para que los AnimatedValues sean estables
+  // aunque la lista cambie de largo o de orden (evita crash en Concurrent Mode)
+  const animMapRef = useRef(new Map<string, { escala: Animated.Value; traduccion: Animated.Value }>());
+  acciones.forEach(a => {
+    if (!animMapRef.current.has(a.label)) {
+      animMapRef.current.set(a.label, {
+        escala: new Animated.Value(0),
+        traduccion: new Animated.Value(0),
+      });
+    }
+  });
 
   const animar = (abrir: boolean) => {
     setAbierto(abrir);
     Animated.spring(rotacion, { toValue: abrir ? 1 : 0, useNativeDriver: true }).start();
-    acciones.forEach((_, i) => {
-      Animated.spring(escalas[i], { toValue: abrir ? 1 : 0, delay: i * 50, useNativeDriver: true }).start();
-      Animated.spring(traducciones[i], { toValue: abrir ? 1 : 0, delay: i * 50, useNativeDriver: true }).start();
+    acciones.forEach((a, i) => {
+      const vals = animMapRef.current.get(a.label);
+      if (!vals) return;
+      Animated.spring(vals.escala, { toValue: abrir ? 1 : 0, delay: i * 50, useNativeDriver: true }).start();
+      Animated.spring(vals.traduccion, { toValue: abrir ? 1 : 0, delay: i * 50, useNativeDriver: true }).start();
     });
   };
 
@@ -45,14 +49,16 @@ export function FabSpeedDial({ acciones }: Props) {
 
       <View style={s.contenedor} pointerEvents="box-none">
         {acciones.map((accion, i) => {
-          const offsetY = traducciones[i].interpolate({
+          const vals = animMapRef.current.get(accion.label);
+          if (!vals) return null;
+          const offsetY = vals.traduccion.interpolate({
             inputRange: [0, 1],
             outputRange: [0, -((i + 1) * 64)],
           });
           return (
             <Animated.View
               key={accion.label}
-              style={[s.miniContenedor, { transform: [{ translateY: offsetY }, { scale: escalas[i] }] }]}
+              style={[s.miniContenedor, { transform: [{ translateY: offsetY }, { scale: vals.escala }] }]}
             >
               <Text style={[s.miniLabel, { color: tema.texto, backgroundColor: tema.tarjeta }]}>
                 {accion.label}
