@@ -1090,12 +1090,15 @@ export function CrearMateriaScreen() {
               <HoraPicker
                 label="Inicio"
                 value={bloqueNuevo.horaInicio}
-                onChange={v => setBloqueNuevo(b => ({ ...b, horaInicio: v }))}
+                onChange={v => setBloqueNuevo(b => {
+                  const finCorregido = b.horaFin < v + 30 ? v + 30 : b.horaFin;
+                  return { ...b, horaInicio: v, horaFin: finCorregido };
+                })}
               />
               <HoraPicker
                 label="Fin"
                 value={bloqueNuevo.horaFin}
-                onChange={v => setBloqueNuevo(b => ({ ...b, horaFin: v }))}
+                onChange={v => { if (v > bloqueNuevo.horaInicio) setBloqueNuevo(b => ({ ...b, horaFin: v })); }}
               />
             </View>
 

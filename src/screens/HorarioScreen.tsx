@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, Text, ScrollView, TouchableOpacity, Pressable, useWindowDimensions, Modal, Platform, Animated, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Pressable, useWindowDimensions, Modal, Platform, Animated, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
@@ -86,7 +86,7 @@ export function HorarioScreen() {
   const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const BLOCK_FONT   = config.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8);
   const BLOCK_LINE_H = BLOCK_FONT + 4;
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
   const isFocused = useIsFocused();
@@ -136,6 +136,25 @@ export function HorarioScreen() {
   const [salonOverride, setSalonOverride] = useState<{ id: string; salon?: string } | null>(null);
   const modalAbiertaRef = React.useRef(false);
   React.useEffect(() => { modalAbiertaRef.current = modalEdicionRapida !== null; }, [modalEdicionRapida]);
+  // --- Modal crear bloque (doble tap en espacio vacío) ---
+  const [modalCrearBloque, setModalCrearBloque] = useState<{
+    fecha: string; horaInicio: number; horaFin: number;
+  } | null>(null);
+  const [cmbMateriaId, setCmbMateriaId] = useState('');
+  const [cmbTipoBloque, setCmbTipoBloque] = useState<'horario' | 'evaluacion' | null>(null);
+  const [cmbSubTipo, setCmbSubTipo] = useState<TipoBloque>('teorica');
+  const [cmbSalon, setCmbSalon] = useState('');
+  const [cmbEsGrupal, setCmbEsGrupal] = useState<boolean | null>(null);
+  const [cmbNombreEval, setCmbNombreEval] = useState('');
+  const [cmbPesoEval, setCmbPesoEval] = useState('');
+  const [cmbGrupoId, setCmbGrupoId] = useState<string | null>(null);
+  const [cmbNombreGrupo, setCmbNombreGrupo] = useState('');
+  const [cmbPesoGrupo, setCmbPesoGrupo] = useState('');
+  const [cmbNombrePrimeraSubEval, setCmbNombrePrimeraSubEval] = useState('');
+  const [cmbPaso, setCmbPaso] = useState(1);
+  const lastTapRef = React.useRef<{ fecha: string; t: number } | null>(null);
+  const modalCrearAbiertaRef = React.useRef(false);
+  React.useEffect(() => { modalCrearAbiertaRef.current = modalCrearBloque !== null; }, [modalCrearBloque]);
   // --- Estado de drag para evaluaciones ---
   const [evalEnDrag, setEvalEnDrag] = useState<string | null>(null);
   const evalDragDataRef = React.useRef<{
@@ -1084,6 +1103,29 @@ export function HorarioScreen() {
                         backgroundColor: tema.borde, opacity: 0.2,
                       }} />
                     ))}
+
+                    {/* Zona de doble tap en espacio vacío — debe ir antes de los bloques para quedar detrás */}
+                    <Pressable
+                      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                      onPress={(e) => {
+                        if (cardEnEdicion !== null || modalAbiertaRef.current || modalCrearAbiertaRef.current) return;
+                        const now = Date.now();
+                        const nev = e.nativeEvent as any;
+                        const locationY = nev.locationY ?? nev.offsetY ?? 0;
+                        if (lastTapRef.current?.fecha === fecha && now - lastTapRef.current.t < 400) {
+                          const minsDesdeInicio = locationY / PX_POR_MIN;
+                          const hiSnapped = Math.max(horaInicio, Math.min(snap30(horaInicio + minsDesdeInicio), horaFin - 60));
+                          setModalCrearBloque({ fecha, horaInicio: hiSnapped, horaFin: hiSnapped + 60 });
+                          setCmbPaso(1); setCmbMateriaId(''); setCmbTipoBloque(null); setCmbSubTipo('teorica');
+                          setCmbSalon(''); setCmbEsGrupal(null); setCmbNombreEval('');
+                          setCmbPesoEval(''); setCmbGrupoId(null); setCmbNombreGrupo('');
+                          setCmbPesoGrupo(''); setCmbNombrePrimeraSubEval('');
+                          lastTapRef.current = null;
+                        } else {
+                          lastTapRef.current = { fecha, t: now };
+                        }
+                      }}
+                    />
 
                     {/* Bloques de este día */}
                     {bloquesEstaSemana
@@ -2536,8 +2578,460 @@ export function HorarioScreen() {
                 <Text style={{ color: '#fff', fontWeight: '600' }}>Guardar</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={{ marginTop: 8, padding: 10, backgroundColor: '#F4433622', borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#F44336' }}
+              onPress={() => {
+                if (!modalEdicionRapida) return;
+                showConfirm(
+                  'Eliminar bloque',
+                  '¿Estás seguro de que querés eliminar este bloque del horario?',
+                  () => {
+                    const { guardarMateria, materias: mats } = useStore.getState();
+                    if (modalEdicionRapida.tipo === 'regular') {
+                      const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
+                      if (materia) {
+                        guardarMateria({ ...materia, bloques: (materia.bloques ?? []).filter(bl => bl.id !== modalEdicionRapida.bloqueId) });
+                        setCardEnEdicion(null);
+                        setDraftBloque(null);
+                      }
+                    } else {
+                      const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
+                      if (materia) {
+                        const eliminarEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
+                          (evs.map(ev => {
+                            if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) return null;
+                            if (ev.tipo === 'grupo') {
+                              return { ...ev, subEvaluaciones: ev.subEvaluaciones.filter(sub => sub.id !== modalEdicionRapida.bloqueId) };
+                            }
+                            return ev;
+                          }).filter(Boolean) as typeof materia.evaluaciones);
+                        guardarMateria({ ...materia, evaluaciones: eliminarEval(materia.evaluaciones) });
+                      }
+                    }
+                    setModalEdicionRapida(null);
+                  },
+                  { labelConfirmar: 'Eliminar', destructivo: true },
+                );
+              }}
+            >
+              <Text style={{ color: '#F44336', fontWeight: '600' }}>Eliminar bloque</Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* ── Modal crear nuevo bloque — bottom sheet 2 páginas ── */}
+    <Modal
+      visible={modalCrearBloque !== null}
+      transparent
+      animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
+      onRequestClose={() => setModalCrearBloque(null)}
+    >
+      <TouchableOpacity
+        style={{
+          flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
+          alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+        }}
+        activeOpacity={1}
+        onPress={() => setModalCrearBloque(null)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: tema.tarjeta,
+              borderTopLeftRadius: 16, borderTopRightRadius: 16,
+              ...(Platform.OS === 'web' ? { borderRadius: 16, width: Math.min(420, width - 32) } : {}),
+              overflow: 'hidden',
+            }}
+          >
+            {/* Handle bar — solo móvil */}
+            {Platform.OS !== 'web' && (
+              <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 2 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: tema.acentoLineas ?? '#888' }} />
+              </View>
+            )}
+
+            {/* ── Header ── */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 16 : 10, paddingBottom: 12,
+              borderBottomWidth: 1, borderBottomColor: tema.fondo,
+            }}>
+              {cmbPaso === 2 ? (
+                <TouchableOpacity onPress={() => setCmbPaso(1)} style={{ marginRight: 10, padding: 2 }}>
+                  <Text style={{ color: tema.acento, fontSize: 22, lineHeight: 24 }}>←</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ width: 34 }} />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16 }}>
+                  {cmbPaso === 1 ? 'Nuevo bloque' : cmbTipoBloque === 'horario' ? 'Configurar horario' : 'Configurar evaluación'}
+                </Text>
+                {modalCrearBloque && (
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 1 }}>
+                    {cmbPaso === 2 && cmbMateriaId
+                      ? `${materiasEnCurso.find(m => m.id === cmbMateriaId)?.nombre ?? ''} · `
+                      : ''}
+                    {(() => { const [, mo, d] = modalCrearBloque.fecha.split('-'); return `${d}/${mo}`; })()} · {fmtHora(modalCrearBloque.horaInicio)}–{fmtHora(modalCrearBloque.horaFin)}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => setModalCrearBloque(null)} style={{ padding: 4 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 22, lineHeight: 24 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Página 1: Materia + Tipo de bloque ── */}
+            {cmbPaso === 1 && (
+              <>
+                <ScrollView
+                  style={{ maxHeight: Platform.OS === 'web' ? 440 : 400 }}
+                  contentContainerStyle={{ padding: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>MATERIA</Text>
+                  {materiasEnCurso.length === 0 ? (
+                    <Text style={{ color: tema.textoSecundario, fontSize: 13, fontStyle: 'italic', marginBottom: 16 }}>
+                      No hay materias en curso
+                    </Text>
+                  ) : (
+                    materiasEnCurso.map(m => {
+                      const sel = cmbMateriaId === m.id;
+                      const ac = tema.acentoFondo ?? tema.acento;
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          onPress={() => { setCmbMateriaId(m.id); setCmbEsGrupal(null); setCmbGrupoId(null); }}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center',
+                            padding: 12, borderRadius: 10, marginBottom: 6,
+                            backgroundColor: sel ? ac + '18' : tema.fondo,
+                            borderWidth: 1.5, borderColor: sel ? ac : 'transparent',
+                          }}
+                        >
+                          <View style={{
+                            width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                            borderColor: sel ? ac : tema.textoSecundario,
+                            marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {sel && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: ac }} />}
+                          </View>
+                          <Text style={{ color: sel ? ac : tema.texto, fontSize: 14, fontWeight: sel ? '600' : '400', flex: 1 }}>
+                            {m.nombre}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginTop: 18, marginBottom: 10 }}>TIPO DE BLOQUE</Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {(['horario', 'evaluacion'] as const).map(tipo => {
+                      const sel = cmbTipoBloque === tipo;
+                      const ac = tema.acentoFondo ?? tema.acento;
+                      return (
+                        <TouchableOpacity
+                          key={tipo}
+                          onPress={() => { setCmbTipoBloque(tipo); setCmbEsGrupal(null); setCmbGrupoId(null); }}
+                          style={{
+                            flex: 1, paddingVertical: 18, borderRadius: 14, alignItems: 'center', gap: 8,
+                            backgroundColor: sel ? ac : tema.fondo,
+                            borderWidth: 1.5, borderColor: sel ? ac : 'transparent',
+                          }}
+                        >
+                          <Text style={{ fontSize: 30 }}>{tipo === 'horario' ? '📅' : '📝'}</Text>
+                          <Text style={{ color: sel ? '#fff' : tema.texto, fontWeight: '600', fontSize: 14 }}>
+                            {tipo === 'horario' ? 'Horario' : 'Evaluación'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+
+                {/* Footer P1 */}
+                <View style={{ padding: 16, paddingBottom: 16 + safeBottomModal, borderTopWidth: 1, borderTopColor: tema.fondo }}>
+                  {(() => {
+                    const habilitado = cmbMateriaId !== '' && cmbTipoBloque !== null;
+                    const ac = tema.acentoFondo ?? tema.acento;
+                    return (
+                      <TouchableOpacity
+                        disabled={!habilitado}
+                        onPress={() => setCmbPaso(2)}
+                        style={{
+                          padding: 14, borderRadius: 12, alignItems: 'center',
+                          backgroundColor: habilitado ? ac : tema.fondo,
+                        }}
+                      >
+                        <Text style={{ color: habilitado ? '#fff' : tema.textoSecundario, fontWeight: '700', fontSize: 15 }}>
+                          Siguiente →
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                </View>
+              </>
+            )}
+
+            {/* ── Página 2: Configuración ── */}
+            {cmbPaso === 2 && (
+              <>
+                <ScrollView
+                  style={{ maxHeight: Platform.OS === 'web' ? 440 : 400 }}
+                  contentContainerStyle={{ padding: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Config Horario */}
+                  {cmbTipoBloque === 'horario' && (
+                    <>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>TIPO DE CLASE</Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
+                        {(['teorica', 'practica', 'otro'] as TipoBloque[]).map(t => {
+                          const sel = cmbSubTipo === t;
+                          const ac = tema.acentoFondo ?? tema.acento;
+                          return (
+                            <TouchableOpacity
+                              key={t}
+                              onPress={() => setCmbSubTipo(t)}
+                              style={{
+                                paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10,
+                                backgroundColor: sel ? ac : tema.fondo,
+                                borderWidth: 1.5, borderColor: sel ? ac : 'transparent',
+                              }}
+                            >
+                              <Text style={{ color: sel ? '#fff' : tema.texto, fontSize: 14, fontWeight: sel ? '600' : '400' }}>
+                                {t === 'teorica' ? (config.labelTeorica || 'Teórica') :
+                                 t === 'practica' ? (config.labelPractica || 'Práctica') :
+                                 (config.labelOtro || 'Otro')}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>SALÓN / AULA</Text>
+                      <TextInput
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14 }}
+                        value={cmbSalon}
+                        onChangeText={setCmbSalon}
+                        placeholder="Ej: Aula 3 (opcional)"
+                        placeholderTextColor={tema.textoSecundario}
+                      />
+                    </>
+                  )}
+
+                  {/* Config Evaluación */}
+                  {cmbTipoBloque === 'evaluacion' && (
+                    <>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>MODALIDAD</Text>
+                      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 22 }}>
+                        {([false, true] as const).map(esGrupal => {
+                          const sel = cmbEsGrupal === esGrupal;
+                          const ac = tema.acentoFondo ?? tema.acento;
+                          return (
+                            <TouchableOpacity
+                              key={String(esGrupal)}
+                              onPress={() => { setCmbEsGrupal(esGrupal); setCmbGrupoId(null); }}
+                              style={{
+                                flex: 1, paddingVertical: 16, borderRadius: 14, alignItems: 'center', gap: 6,
+                                backgroundColor: sel ? ac : tema.fondo,
+                                borderWidth: 1.5, borderColor: sel ? ac : 'transparent',
+                              }}
+                            >
+                              <Text style={{ fontSize: 26 }}>{esGrupal ? '👥' : '👤'}</Text>
+                              <Text style={{ color: sel ? '#fff' : tema.texto, fontWeight: '600', fontSize: 14 }}>
+                                {esGrupal ? 'Grupal' : 'Individual'}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Individual */}
+                      {cmbEsGrupal === false && (
+                        <>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>NOMBRE (opcional)</Text>
+                          <TextInput
+                            style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 18 }}
+                            value={cmbNombreEval}
+                            onChangeText={setCmbNombreEval}
+                            placeholder="Ej: Parcial 1"
+                            placeholderTextColor={tema.textoSecundario}
+                          />
+                          <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>PESO EN % (obligatorio)</Text>
+                          <TextInput
+                            style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14 }}
+                            value={cmbPesoEval}
+                            onChangeText={v => setCmbPesoEval(v.replace(/[^0-9.]/g, ''))}
+                            placeholder="Ej: 40"
+                            placeholderTextColor={tema.textoSecundario}
+                            keyboardType="numeric"
+                          />
+                        </>
+                      )}
+
+                      {/* Grupal */}
+                      {cmbEsGrupal === true && (() => {
+                        const matSelec = materiasEnCurso.find(m => m.id === cmbMateriaId);
+                        const grupos = (matSelec?.evaluaciones ?? []).filter((ev): ev is GrupoEvaluacion => ev.tipo === 'grupo');
+                        const ac = tema.acentoFondo ?? tema.acento;
+                        return (
+                          <>
+                            {grupos.length > 0 && (
+                              <>
+                                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>GRUPO DE EVALUACIÓN</Text>
+                                {grupos.map(g => {
+                                  const sel = cmbGrupoId === g.id;
+                                  return (
+                                    <TouchableOpacity
+                                      key={g.id}
+                                      onPress={() => setCmbGrupoId(g.id)}
+                                      style={{
+                                        flexDirection: 'row', alignItems: 'center',
+                                        padding: 12, borderRadius: 10, marginBottom: 6,
+                                        backgroundColor: sel ? ac + '18' : tema.fondo,
+                                        borderWidth: 1.5, borderColor: sel ? ac : 'transparent',
+                                      }}
+                                    >
+                                      <View style={{
+                                        width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                                        borderColor: sel ? ac : tema.textoSecundario,
+                                        marginRight: 10, alignItems: 'center', justifyContent: 'center',
+                                      }}>
+                                        {sel && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: ac }} />}
+                                      </View>
+                                      <Text style={{ color: sel ? ac : tema.texto, fontSize: 14, flex: 1 }}>
+                                        {g.nombre || '(sin nombre)'} · {g.pesoEnMateria}%
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                                <TouchableOpacity
+                                  onPress={() => setCmbGrupoId('nuevo')}
+                                  style={{
+                                    flexDirection: 'row', alignItems: 'center',
+                                    padding: 12, borderRadius: 10, marginBottom: 18,
+                                    backgroundColor: cmbGrupoId === 'nuevo' ? ac + '18' : tema.fondo,
+                                    borderWidth: 1.5, borderColor: cmbGrupoId === 'nuevo' ? ac : 'transparent',
+                                  }}
+                                >
+                                  <Text style={{ color: ac, fontWeight: '600', fontSize: 14, marginLeft: 30 }}>
+                                    + Crear nuevo grupo
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+
+                            {/* Formulario grupo nuevo */}
+                            {(cmbGrupoId === 'nuevo' || grupos.length === 0) && (
+                              <>
+                                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>NOMBRE DEL GRUPO</Text>
+                                <TextInput
+                                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 18 }}
+                                  value={cmbNombreGrupo}
+                                  onChangeText={setCmbNombreGrupo}
+                                  placeholder="Ej: Trabajos prácticos"
+                                  placeholderTextColor={tema.textoSecundario}
+                                />
+                                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>PESO TOTAL DEL GRUPO EN %</Text>
+                                <TextInput
+                                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 18 }}
+                                  value={cmbPesoGrupo}
+                                  onChangeText={v => setCmbPesoGrupo(v.replace(/[^0-9.]/g, ''))}
+                                  placeholder="Ej: 30"
+                                  placeholderTextColor={tema.textoSecundario}
+                                  keyboardType="numeric"
+                                />
+                                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>NOMBRE DE LA PRIMERA EVALUACIÓN</Text>
+                                <TextInput
+                                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14 }}
+                                  value={cmbNombrePrimeraSubEval}
+                                  onChangeText={setCmbNombrePrimeraSubEval}
+                                  placeholder="Ej: TP 1"
+                                  placeholderTextColor={tema.textoSecundario}
+                                />
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
+                  )}
+                </ScrollView>
+
+                {/* Footer P2 */}
+                <View style={{ padding: 16, paddingBottom: 16 + safeBottomModal, borderTopWidth: 1, borderTopColor: tema.fondo }}>
+                  <TouchableOpacity
+                    style={{ padding: 14, borderRadius: 12, alignItems: 'center', backgroundColor: tema.acentoFondo ?? tema.acento }}
+                    onPress={() => {
+                      if (!modalCrearBloque || !cmbMateriaId || !cmbTipoBloque) return;
+                      const { guardarMateria } = useStore.getState();
+                      const materia = materiasEnCurso.find(m => m.id === cmbMateriaId);
+                      if (!materia) return;
+                      const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+                      if (cmbTipoBloque === 'horario') {
+                        const nuevoBloque: BloqueHorario = {
+                          id: newId(), fecha: modalCrearBloque.fecha,
+                          horaInicio: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                          tipo: cmbSubTipo,
+                          ...(cmbSalon.trim() ? { salon: cmbSalon.trim() } : {}),
+                        };
+                        guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), nuevoBloque] });
+                      } else if (cmbEsGrupal === false) {
+                        if (!cmbPesoEval) return;
+                        const nuevaEval: EvaluacionSimple = {
+                          id: newId(), tipo: 'simple', nombre: cmbNombreEval.trim(),
+                          pesoEnMateria: parseFloat(cmbPesoEval) || 0,
+                          tipoNota: 'numero', nota: null, notaMaxima: config.notaMaxima,
+                          fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                        };
+                        guardarMateria({ ...materia, evaluaciones: [...materia.evaluaciones, nuevaEval] });
+                      } else if (cmbEsGrupal === true) {
+                        const grupos = materia.evaluaciones.filter((ev): ev is GrupoEvaluacion => ev.tipo === 'grupo');
+                        if (cmbGrupoId && cmbGrupoId !== 'nuevo') {
+                          const nuevoSub: SubEvaluacion = {
+                            id: newId(), nombre: '', tipoNota: 'numero', nota: null,
+                            notaMaxima: config.notaMaxima,
+                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                          };
+                          guardarMateria({
+                            ...materia,
+                            evaluaciones: materia.evaluaciones.map(ev =>
+                              ev.tipo === 'grupo' && ev.id === cmbGrupoId
+                                ? { ...ev, subEvaluaciones: [...ev.subEvaluaciones, nuevoSub] }
+                                : ev
+                            ),
+                          });
+                        } else if (cmbGrupoId === 'nuevo' || grupos.length === 0) {
+                          if (!cmbNombreGrupo.trim() || !cmbPesoGrupo || !cmbNombrePrimeraSubEval.trim()) return;
+                          const primeraSub: SubEvaluacion = {
+                            id: newId(), nombre: cmbNombrePrimeraSubEval.trim(),
+                            tipoNota: 'numero', nota: null, notaMaxima: config.notaMaxima,
+                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                          };
+                          const nuevoGrupo: GrupoEvaluacion = {
+                            id: newId(), tipo: 'grupo', nombre: cmbNombreGrupo.trim(),
+                            pesoEnMateria: parseFloat(cmbPesoGrupo) || 0,
+                            subEvaluaciones: [primeraSub],
+                          };
+                          guardarMateria({ ...materia, evaluaciones: [...materia.evaluaciones, nuevoGrupo] });
+                        } else return;
+                      } else return;
+
+                      setModalCrearBloque(null);
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Guardar</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </KeyboardAvoidingView>
       </TouchableOpacity>
     </Modal>
     </>
