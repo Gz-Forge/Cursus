@@ -64,10 +64,10 @@ export function RootNavigator() {
             m => !m.nombre.trim() || !(m.semestre >= 1)
           );
           if (incompleta) {
-            navRef.navigate('EditMateria' as never, {
+            (navRef.navigate as any)('EditMateria', {
               materiaId: incompleta.id,
               incompleta: true,
-            } as never);
+            });
           }
         }}
       >

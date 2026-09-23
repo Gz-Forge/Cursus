@@ -37,6 +37,7 @@ const configBase: Config = {
   horarioPrimerDia: 'lunes',
   horarioFiltroOcultos: [],
   horarioFiltroOcultarEvaluaciones: false,
+  horarioMostrarLineaHoraActual: true,
 };
 
 describe('calcularPorcentajeEvaluacion', () => {

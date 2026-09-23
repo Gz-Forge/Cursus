@@ -188,6 +188,7 @@ export interface Config {
   horarioPrimerDia: 'lunes' | 'domingo';
   horarioFiltroOcultos: TipoBloque[];        // [] = mostrar todo
   horarioFiltroOcultarEvaluaciones: boolean; // false = mostrar evaluaciones
+  horarioMostrarLineaHoraActual: boolean;
   horarioFontSize?: number;              // undefined → fallback por plataforma (web=12, móvil=8). Rango: 6–20.
   horariosPorPagina?: number;            // entradas por página en la lista de horarios de editar materia (10/20/40/60/80/100, default 20)
   // Métricas personalizables
@@ -201,8 +202,12 @@ export interface Config {
   coloresEvaluacionesGrupales?: ColorBloque;               // legado — color global (fallback)
   coloresGruposEvaluacion?: Record<string, ColorBloque>;   // por GrupoEvaluacion.id
   coloresEvaluacionesSimples?: Record<string, ColorBloque>; // por EvaluacionSimple.id
-  // UI state — persistido para recordar entre sesiones
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
+  ocultarSemestresExonerados?: boolean; // default false — oculta semestres donde TODAS las materias están exoneradas
+  evaluacionesColapsadas?: Record<string, boolean>; // key = id de Evaluacion/SubEvaluacion; true = colapsada
+  creditosModalIncluirAprobado?: boolean;      // toggle "Incluir Aprobado" en el modal de Créditos obtenidos
+  disponiblesModalIncluirAprobado?: boolean;   // toggle "Incluir Aprobado" en el modal de Materias disponibles
+  disponiblesModalIncluirRecursar?: boolean;   // toggle "Incluir Recursar" en el modal de Materias disponibles
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;

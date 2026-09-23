@@ -196,7 +196,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -632,6 +632,11 @@ export function ConfigScreen() {
             'Mostrar nombre completo en el horario',
             'mostrarNombreCompletoEnBloque',
             'Si está activo, muestra "Teórica" en vez de "T" en los bloques',
+          )}
+          {toggle(
+            'Línea de hora actual',
+            'horarioMostrarLineaHoraActual',
+            'Muestra una línea horizontal en el día de hoy marcando la hora actual del dispositivo',
           )}
           <View style={{ marginBottom: 14 }}>
             <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 6 }}>Primer día de la semana</Text>

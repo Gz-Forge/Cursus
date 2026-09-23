@@ -15,14 +15,14 @@ function uint8ToBase64(arr: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToUint8(b64: string): Uint8Array {
+function base64ToUint8(b64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(b64);
   const arr = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
   return arr;
 }
 
-async function deriveKey(passphrase: string, salt: Uint8Array): Promise<Uint8Array> {
+async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   const pass = new TextEncoder().encode(passphrase);
 
   // Web Crypto API corre en C++ nativo — mucho más rápido que la implementación JS
@@ -62,7 +62,7 @@ export async function decryptPayload(encryptedData: string, passphrase: string):
   // Compatibilidad con datos legacy (sin encriptación)
   if (!encryptedData.startsWith(PREFIX)) return encryptedData;
 
-  let combined: Uint8Array;
+  let combined: Uint8Array<ArrayBuffer>;
   try {
     combined = base64ToUint8(encryptedData.slice(PREFIX.length));
   } catch {
