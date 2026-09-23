@@ -53,6 +53,7 @@ const CONFIG_DEFAULT: Config = {
   horarioPrimerDia: 'lunes',
   horarioFiltroOcultos: [],
   horarioFiltroOcultarEvaluaciones: false,
+  horarioMostrarLineaHoraActual: true,
   metricasOcultas: [],
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,

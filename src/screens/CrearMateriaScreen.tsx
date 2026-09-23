@@ -348,6 +348,13 @@ export function CrearMateriaScreen() {
     setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, nueva] }));
   };
 
+  // ── Colapso de evaluaciones (persistido en config, por id de evaluación/sub-evaluación) ──
+  const evaluacionesColapsadas = config.evaluacionesColapsadas ?? {};
+  const isEvalColapsada = (id: string) => evaluacionesColapsadas[id] ?? false;
+  const toggleEvalColapsada = (id: string) => actualizarConfig({
+    evaluacionesColapsadas: { ...evaluacionesColapsadas, [id]: !isEvalColapsada(id) },
+  });
+
   const importarDesdeCSV = async () => {
     if (Platform.OS === 'web') {
       showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
@@ -824,6 +831,8 @@ export function CrearMateriaScreen() {
                 evaluacion={ev}
                 onChange={nueva => setForm(f => ({ ...f, evaluaciones: f.evaluaciones.map((e, j) => j === i ? nueva : e) }))}
                 onEliminar={() => setForm(f => ({ ...f, evaluaciones: f.evaluaciones.filter((_, j) => j !== i) }))}
+                isColapsada={isEvalColapsada}
+                onToggleColapso={toggleEvalColapsada}
               />
             ))}
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>

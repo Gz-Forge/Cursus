@@ -36,6 +36,7 @@ const CONFIG: Config = {
   coloresHorario: {},
   horarioMostrarEvaluaciones: true, horarioPrimerDia: 'lunes',
   horarioFiltroOcultos: [], horarioFiltroOcultarEvaluaciones: false,
+  horarioMostrarLineaHoraActual: true,
   metricasOcultas: [], cuelloBotellaUmbral: 3, cuelloBotellaSoloSiguiente: false,
 };
 

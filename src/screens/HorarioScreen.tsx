@@ -91,6 +91,7 @@ export function HorarioScreen() {
   const { width, height } = useWindowDimensions();
   const isFocused = useIsFocused();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [tickHoraActual, setTickHoraActual] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
   const [modalDatos, setModalDatos] = useState(false);
@@ -222,18 +223,15 @@ export function HorarioScreen() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isFocused, cardEnEdicion]);
 
-  // Drag & drop en escritorio — eventos nativos del DOM.
-  // Razones para NO usar onPressIn / Responder system:
-  //   1. ScrollView usa overflow:scroll en CSS → captura pointer events antes que los Views internos.
-  //   2. TouchableOpacity llama setPointerCapture vía el Responder → pointermove va al elemento, no al document.
-  //   3. measureInWindow es async → ghostOriginRef puede ser null cuando el usuario arrastra.
-  // Solución: pointerdown nativo en el elemento del bloque (getBoundingClientRect sincrónico),
-  //           pointermove / pointerup a nivel de document (fuera del ScrollView).
+  React.useEffect(() => {
+    if (!config.horarioMostrarLineaHoraActual) return;
+    const id = setInterval(() => setTickHoraActual(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [config.horarioMostrarLineaHoraActual]);
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (cardEnEdicion === null) return;
 
-    // Obtener el elemento DOM real del bloque en edición
     const blockEl = cardRefs.current.get(cardEnEdicion) as unknown as HTMLElement | null;
     if (!blockEl) return;
 
@@ -686,50 +684,44 @@ export function HorarioScreen() {
       })
     : [];
 
-  // Calcular rango horario combinando bloques y evaluaciones
-  const todosLosTiempos = [
-    ...todosLosBloques.flatMap(b => [b.horaInicio, b.horaFin]),
-    ...todasLasEvaluaciones.flatMap(ev => [ev.hora!, ev.horaFin ?? ev.hora! + 60]),
+  const semanaBase   = startOfWeek(new Date(), config.horarioPrimerDia as 'lunes' | 'domingo');
+  const semanaInicio = addDays(semanaBase, weekOffset * 7);
+  const fechasSemana = Array.from({ length: 7 }, (_, i) => isoDate(addDays(semanaInicio, i)));
+  const hoyIso       = isoDate(new Date());
+
+  const fechasSemanaDisplay = fechasSemana;
+
+  const bloquesEstaSemana = React.useMemo(
+    () => todosLosBloques.filter(b =>
+      b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
+      !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
+    ),
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
+  );
+
+  const evaluacionesEstaSemana = React.useMemo(
+    () => config.horarioFiltroOcultarEvaluaciones
+      ? []
+      : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
+    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}:${ev.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
+  );
+
+  const MARGEN_RANGO_MIN = 2 * 60;
+  const tiemposEstaSemana = [
+    ...bloquesEstaSemana.flatMap(b => [b.horaInicio, b.horaFin]),
+    ...evaluacionesEstaSemana.flatMap(ev => [ev.hora!, ev.horaFin ?? ev.hora! + 60]),
   ];
-  const horaInicio = todosLosTiempos.length > 0
-    ? Math.min(HORA_DEF_INICIO, Math.floor(Math.min(...todosLosTiempos) / 60) * 60)
+  const horaInicio = tiemposEstaSemana.length > 0
+    ? Math.max(0, Math.floor((Math.min(...tiemposEstaSemana) - MARGEN_RANGO_MIN) / 60) * 60)
     : HORA_DEF_INICIO;
-  const horaFin = todosLosTiempos.length > 0
-    ? Math.max(HORA_DEF_FIN, Math.ceil(Math.max(...todosLosTiempos) / 60) * 60)
+  const horaFin = tiemposEstaSemana.length > 0
+    ? Math.min(24 * 60, Math.ceil((Math.max(...tiemposEstaSemana) + MARGEN_RANGO_MIN) / 60) * 60)
     : HORA_DEF_FIN;
 
   const totalMins    = horaFin - horaInicio;
   const TOTAL_HEIGHT = totalMins * PX_POR_MIN;
   const horas        = Array.from({ length: totalMins / 60 }, (_, i) => horaInicio / 60 + i);
   const BASE_DAY_COL_W = gridW / 7;
-
-  // Fechas de la semana mostrada (anclada al primer día configurado)
-  const semanaBase   = startOfWeek(new Date(), config.horarioPrimerDia as 'lunes' | 'domingo');
-  const semanaInicio = addDays(semanaBase, weekOffset * 7);
-  const fechasSemana = Array.from({ length: 7 }, (_, i) => isoDate(addDays(semanaInicio, i)));
-  const hoyIso       = isoDate(new Date());
-
-  // El array ya empieza en el día correcto; el orden de display es siempre 0-6
-  const fechasSemanaDisplay = fechasSemana;
-
-  // Bloques filtrados a esta semana (memoizado para estabilizar la referencia)
-  const bloquesEstaSemana = React.useMemo(
-    () => todosLosBloques.filter(b =>
-      b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
-      !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
-  );
-
-  // Evaluaciones filtradas a esta semana (memoizado para estabilizar referencia en layoutPorDia)
-  const evaluacionesEstaSemana = React.useMemo(
-    () => config.horarioFiltroOcultarEvaluaciones
-      ? []
-      : todasLasEvaluaciones.filter(ev => ev.fecha! >= fechasSemana[0] && ev.fecha! <= fechasSemana[6]),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [todasLasEvaluaciones.map(ev => `${ev.id}:${ev.fecha}:${ev.hora}:${ev.horaFin}:${ev.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], config.horarioFiltroOcultarEvaluaciones]
-  );
 
   // Limpiar salonOverride cuando bloquesEstaSemana o evaluacionesEstaSemana ya reflejan el nuevo valor de Zustand
   React.useEffect(() => {
@@ -864,6 +856,7 @@ export function HorarioScreen() {
       bloques: materia.bloques!.map(b => b.id === id ? clean : b),
     });
   }
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
 
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
@@ -1086,6 +1079,20 @@ export function HorarioScreen() {
                         width: 1, height: TOTAL_HEIGHT,
                         backgroundColor: tema.acentoLineas ?? tema.acento, zIndex: 1,
                       }} />
+                    )}
+                    {/* Línea de hora actual — solo en el día de hoy, y solo si cae dentro del rango horario visible de la semana */}
+                    {esHoy && config.horarioMostrarLineaHoraActual && nowMinutes >= horaInicio && nowMinutes <= horaFin && (
+                      <View style={{
+                        position: 'absolute', top: (nowMinutes - horaInicio) * PX_POR_MIN - 1,
+                        left: 0, right: 0, height: 2,
+                        backgroundColor: tema.acentoLineas ?? tema.acento, zIndex: 2,
+                      }}>
+                        <View style={{
+                          position: 'absolute', left: -4, top: -3,
+                          width: 8, height: 8, borderRadius: 4,
+                          backgroundColor: tema.acentoLineas ?? tema.acento,
+                        }} />
+                      </View>
                     )}
                     {/* Líneas de hora */}
                     {horas.map((_, i) => (

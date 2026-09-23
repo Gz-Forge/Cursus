@@ -37,6 +37,12 @@ function fmtFechaBloque(iso: string): string {
   return `${dia} ${d}/${mo}/${y}`;
 }
 
+/** Convierte "YYYY-MM-DD" a "DD/MM/AAAA" plano */
+function isoADDMMAAAA(iso: string): string {
+  const [y, mo, d] = iso.split('-');
+  return `${d}/${mo}/${y}`;
+}
+
 // ── Parser individual (formulario manual) ───────────────────────────
 function parsearFecha(str: string): string | null {
   const m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -222,13 +228,19 @@ export function EditMateriaScreen() {
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
   const [mostrarAcordeonCSV, setMostrarAcordeonCSV] = useState(false);
 
-  // ── Asistencia ──────────────────────────────────────────────────────
+  // ── Asistencia ──
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
+  const [mostrarDropdownFechaFalta, setMostrarDropdownFechaFalta] = useState(false);
+  const [fechaFaltaManual, setFechaFaltaManual] = useState(false);
 
-  // ── Nota manual: estado de string para soportar decimales al tipear ──
+  const fechasDisponiblesFalta = React.useMemo(() => {
+    const fechas = new Set((form.bloques ?? []).filter(b => b.tipo === faltaNueva.tipo).map(b => b.fecha));
+    return [...fechas].sort();
+  }, [form.bloques, faltaNueva.tipo]);
+
   const [notaManualStr, setNotaManualStr] = useState<string>(() => {
     const nota = materiaOriginal?.notaManual ?? null;
     const tipo = materiaOriginal?.tipoNotaManual ?? 'porcentaje';
@@ -492,6 +504,13 @@ export function EditMateriaScreen() {
       : { id, tipo: 'grupo', nombre: '', pesoEnMateria: 0, subEvaluaciones: [] };
     setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, nueva] }));
   };
+
+  // ── Colapso de evaluaciones ──
+  const evaluacionesColapsadas = config.evaluacionesColapsadas ?? {};
+  const isEvalColapsada = (id: string) => evaluacionesColapsadas[id] ?? false;
+  const toggleEvalColapsada = (id: string) => actualizarConfig({
+    evaluacionesColapsadas: { ...evaluacionesColapsadas, [id]: !isEvalColapsada(id) },
+  });
 
   const importarDesdeCSV = async () => {
     if (Platform.OS === 'web') {
@@ -969,6 +988,8 @@ export function EditMateriaScreen() {
                 evaluacion={ev}
                 onChange={nueva => setForm(f => ({ ...f, evaluaciones: f.evaluaciones.map((e, j) => j === i ? nueva : e) }))}
                 onEliminar={() => setForm(f => ({ ...f, evaluaciones: f.evaluaciones.filter((_, j) => j !== i) }))}
+                isColapsada={isEvalColapsada}
+                onToggleColapso={toggleEvalColapsada}
               />
             ))}
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -1723,16 +1744,6 @@ export function EditMateriaScreen() {
         {/* Formulario de nueva falta */}
         {mostrarFormFalta && (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fecha (DD/MM/AAAA)</Text>
-            <TextInput
-              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 10 }}
-              value={faltaNueva.fechaStr}
-              onChangeText={v => setFaltaNueva(f => ({ ...f, fechaStr: autoFormatFechaBloque(f.fechaStr, v) }))}
-              placeholder="15/03/2026"
-              placeholderTextColor={tema.textoSecundario}
-              keyboardType="numbers-and-punctuation"
-            />
-
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Tipo</Text>
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
               {(
@@ -1743,7 +1754,10 @@ export function EditMateriaScreen() {
               ).map(({ key, label }) => (
                 <TouchableOpacity
                   key={key}
-                  onPress={() => setFaltaNueva(f => ({ ...f, tipo: key }))}
+                  onPress={() => {
+                    setFaltaNueva(f => ({ ...f, tipo: key, fechaStr: '' }));
+                    setMostrarDropdownFechaFalta(false);
+                  }}
                   style={{
                     flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center',
                     backgroundColor: faltaNueva.tipo === key ? tema.acento : tema.fondo,
@@ -1758,6 +1772,70 @@ export function EditMateriaScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Fecha</Text>
+            {!fechaFaltaManual ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => setMostrarDropdownFechaFalta(v => !v)}
+                  style={{
+                    backgroundColor: tema.fondo, padding: 8, borderRadius: 6,
+                    marginBottom: mostrarDropdownFechaFalta ? 4 : 10,
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  }}
+                >
+                  <Text style={{ color: faltaNueva.fechaStr ? tema.texto : tema.textoSecundario }}>
+                    {faltaNueva.fechaStr || 'Elegir fecha de horario...'}
+                  </Text>
+                  <Text style={{ color: tema.acento, fontSize: 11 }}>{mostrarDropdownFechaFalta ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+                {mostrarDropdownFechaFalta && (
+                  <View style={{ backgroundColor: tema.fondo, borderRadius: 6, marginBottom: 10, maxHeight: 160, borderWidth: 1, borderColor: tema.borde }}>
+                    {fechasDisponiblesFalta.length === 0 ? (
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12, padding: 10, textAlign: 'center' }}>
+                        No hay horarios de este tipo cargados
+                      </Text>
+                    ) : (
+                      <ScrollView nestedScrollEnabled>
+                        {fechasDisponiblesFalta.map(fechaISO => (
+                          <TouchableOpacity
+                            key={fechaISO}
+                            onPress={() => {
+                              setFaltaNueva(f => ({ ...f, fechaStr: isoADDMMAAAA(fechaISO) }));
+                              setMostrarDropdownFechaFalta(false);
+                            }}
+                            style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
+                          >
+                            <Text style={{ color: tema.texto, textAlign: 'center' }}>{fmtFechaBloque(fechaISO)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
+                <TouchableOpacity onPress={() => { setFechaFaltaManual(true); setMostrarDropdownFechaFalta(false); }}>
+                  <Text style={{ color: tema.acento, fontSize: 11, marginBottom: 10 }}>
+                    Escribir fecha manualmente
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TextInput
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 6 }}
+                  value={faltaNueva.fechaStr}
+                  onChangeText={v => setFaltaNueva(f => ({ ...f, fechaStr: autoFormatFechaBloque(f.fechaStr, v) }))}
+                  placeholder="15/03/2026"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="numbers-and-punctuation"
+                />
+                <TouchableOpacity onPress={() => { setFechaFaltaManual(false); setFaltaNueva(f => ({ ...f, fechaStr: '' })); }}>
+                  <Text style={{ color: tema.acento, fontSize: 11, marginBottom: 10 }}>
+                    Elegir de horarios cargados
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Justificada</Text>
@@ -1779,7 +1857,12 @@ export function EditMateriaScreen() {
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
-                onPress={() => { setMostrarFormFalta(false); setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false }); }}
+                onPress={() => {
+                  setMostrarFormFalta(false);
+                  setFaltaNueva({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
+                  setFechaFaltaManual(false);
+                  setMostrarDropdownFechaFalta(false);
+                }}
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}
               >
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
