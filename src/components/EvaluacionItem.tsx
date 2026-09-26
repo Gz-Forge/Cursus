@@ -333,6 +333,8 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
   const tema = useTema();
   const { showAlert } = useAlert();
   const contribucion = calcularPorcentajeEvaluacion(evaluacion);
+  // id (evaluación, grupo o sub-evaluación) cuyo nombre está en edición — null = ninguno
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   const actualizarSimple = (campo: Partial<EvaluacionSimple>) => {
     onChange({ ...evaluacion, ...campo } as EvaluacionSimple);
@@ -408,23 +410,38 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
     const colapsada = isColapsada(evaluacion.id);
     return (
       <View style={estilos.contenedor}>
-        {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: colapsada ? 0 : 6 }}>
-          <TextInput
-            style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
-            placeholder="Sin nombre" placeholderTextColor={tema.textoSecundario}
-            value={evaluacion.nombre} onChangeText={nombre => actualizarSimple({ nombre })} maxLength={20} />
-          <TouchableOpacity
-            onPress={() => onToggleColapso(evaluacion.id)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-          >
-            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-              {contribucion !== null ? `${Math.round(contribucion)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
+        {/* Header: tocar el nombre/peso extiende o contrae; el lápiz (solo visible extendida) edita el nombre */}
+        <TouchableOpacity
+          onPress={() => onToggleColapso(evaluacion.id)}
+          activeOpacity={0.7}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: colapsada ? 0 : 6 }}
+        >
+          {editandoId === evaluacion.id ? (
+            <TextInput
+              autoFocus
+              style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
+              placeholder="Sin nombre" placeholderTextColor={tema.textoSecundario}
+              value={evaluacion.nombre} onChangeText={nombre => actualizarSimple({ nombre })} maxLength={20}
+              onBlur={() => setEditandoId(null)} onSubmitEditing={() => setEditandoId(null)}
+            />
+          ) : (
+            <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+              {evaluacion.nombre || 'Sin nombre'}
             </Text>
-            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
+          )}
+          {!colapsada && editandoId !== evaluacion.id && (
+            <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={{ fontSize: 13 }}>✏️</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+            {contribucion !== null ? `${contribucion.toFixed(2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
+          </Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
+          <TouchableOpacity onPress={onEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Text style={{ color: '#F44336' }}>🗑️</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
         {!colapsada && (<>
         {/* Fila: Peso% */}
@@ -511,23 +528,38 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
   const grupoColapsado = isColapsada(grupo.id);
   return (
     <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento }]}>
-      {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: grupoColapsado ? 0 : 6 }}>
-        <TextInput
-          style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
-          placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
-          value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} maxLength={20} />
-        <TouchableOpacity
-          onPress={() => onToggleColapso(grupo.id)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-        >
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-            {contribucion !== null ? `${Math.round(contribucion)} / ${grupo.pesoEnMateria}` : `${grupo.pesoEnMateria}%`}
+      {/* Header: tocar el nombre/peso extiende o contrae; el lápiz (solo visible extendido) edita el nombre */}
+      <TouchableOpacity
+        onPress={() => onToggleColapso(grupo.id)}
+        activeOpacity={0.7}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: grupoColapsado ? 0 : 6 }}
+      >
+        {editandoId === grupo.id ? (
+          <TextInput
+            autoFocus
+            style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
+            placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
+            value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} maxLength={20}
+            onBlur={() => setEditandoId(null)} onSubmitEditing={() => setEditandoId(null)}
+          />
+        ) : (
+          <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+            {grupo.nombre || 'Sin nombre'}
           </Text>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
+        )}
+        {!grupoColapsado && editandoId !== grupo.id && (
+          <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Text style={{ fontSize: 13 }}>✏️</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+          {contribucion !== null ? `${contribucion.toFixed(2)} / ${grupo.pesoEnMateria}` : `${grupo.pesoEnMateria}%`}
+        </Text>
+        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
+        <TouchableOpacity onPress={onEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={{ color: '#F44336' }}>🗑️</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
-      </View>
+      </TouchableOpacity>
 
       {!grupoColapsado && (<>
       <View style={estilos.fila}>
@@ -539,19 +571,35 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
         const subColapsada = isColapsada(sub.id);
         return (
           <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>
-            {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: subColapsada ? 0 : 6 }}>
-              <TextInput
-                style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1, padding: 0 }}
-                placeholder={`Prueba ${i + 1}`} placeholderTextColor={tema.textoSecundario}
-                value={sub.nombre} onChangeText={nombre => actualizarSub(i, { nombre })} maxLength={20} />
-              <TouchableOpacity onPress={() => onToggleColapso(sub.id)}>
-                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => eliminarSub(i)}>
+            {/* Header: tocar el nombre extiende o contrae; el lápiz (solo visible extendida) edita el nombre */}
+            <TouchableOpacity
+              onPress={() => onToggleColapso(sub.id)}
+              activeOpacity={0.7}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: subColapsada ? 0 : 6 }}
+            >
+              {editandoId === sub.id ? (
+                <TextInput
+                  autoFocus
+                  style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1, padding: 0 }}
+                  placeholder={`Prueba ${i + 1}`} placeholderTextColor={tema.textoSecundario}
+                  value={sub.nombre} onChangeText={nombre => actualizarSub(i, { nombre })} maxLength={20}
+                  onBlur={() => setEditandoId(null)} onSubmitEditing={() => setEditandoId(null)}
+                />
+              ) : (
+                <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>
+                  {sub.nombre || `Prueba ${i + 1}`}
+                </Text>
+              )}
+              {!subColapsada && editandoId !== sub.id && (
+                <TouchableOpacity onPress={() => setEditandoId(sub.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Text style={{ fontSize: 12 }}>✏️</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
+              <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                 <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
 
             {!subColapsada && (<>
             {/* Fila: Tipo de nota */}
