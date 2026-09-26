@@ -187,6 +187,10 @@ export function CarreraScreen() {
 
   const ocultarExonerados = config.ocultarSemestresExonerados ?? false;
   const toggleOcultarExonerados = () => actualizarConfig({ ocultarSemestresExonerados: !ocultarExonerados });
+  const labelExoneradoCorto = (() => {
+    const label = getLabel('exonerado');
+    return label.length > 10 ? `${label.slice(0, 10)}...` : label;
+  })();
   const semestresVisibles = ocultarExonerados
     ? semestres.filter(sem =>
         !materias.filter(m => m.semestre === sem).every(m => calcularEstadoFinal(m, config) === 'exonerado')
@@ -506,7 +510,7 @@ export function CarreraScreen() {
                 style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta }}
               >
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>
-                  {ocultarExonerados ? '👁 Mostrar exonerados' : '🙈 Ocultar exonerados'}
+                  {ocultarExonerados ? `Mostrar ${labelExoneradoCorto}` : `Ocultar ${labelExoneradoCorto}`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

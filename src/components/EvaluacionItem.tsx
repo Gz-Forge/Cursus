@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion } from '../types';
+import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoNota } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
 import { calcularPorcentajeEvaluacion } from '../utils/calculos';
@@ -344,6 +344,43 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
     onChange({ ...grupo, subEvaluaciones: subs });
   };
 
+  // Al cambiar el tipo de nota, convierte el valor ya ingresado para que la
+  // contribución no salte de golpe, y fija/libera el máximo (100 en porcentaje).
+  const cambiarTipoNotaSimple = (nuevoTipo: TipoNota) => {
+    const simple = evaluacion as EvaluacionSimple;
+    if (nuevoTipo === simple.tipoNota) return;
+    if (nuevoTipo === 'porcentaje') {
+      const convertida = simple.nota !== null
+        ? Math.round((simple.nota / simple.notaMaxima) * 10000) / 100
+        : null;
+      actualizarSimple({ tipoNota: 'porcentaje', nota: convertida, notaMaxima: 100 });
+    } else {
+      const nuevoMax = 10;
+      const convertida = simple.nota !== null
+        ? Math.round((simple.nota / 100) * nuevoMax * 100) / 100
+        : null;
+      actualizarSimple({ tipoNota: 'numero', nota: convertida, notaMaxima: nuevoMax });
+    }
+  };
+
+  const cambiarTipoNotaSub = (idx: number, nuevoTipo: TipoNota) => {
+    const grupo = evaluacion as GrupoEvaluacion;
+    const sub = grupo.subEvaluaciones[idx];
+    if (nuevoTipo === sub.tipoNota) return;
+    if (nuevoTipo === 'porcentaje') {
+      const convertida = sub.nota !== null
+        ? Math.round((sub.nota / sub.notaMaxima) * 10000) / 100
+        : null;
+      actualizarSub(idx, { tipoNota: 'porcentaje', nota: convertida, notaMaxima: 100 });
+    } else {
+      const nuevoMax = 10;
+      const convertida = sub.nota !== null
+        ? Math.round((sub.nota / 100) * nuevoMax * 100) / 100
+        : null;
+      actualizarSub(idx, { tipoNota: 'numero', nota: convertida, notaMaxima: nuevoMax });
+    }
+  };
+
   const eliminarSub = (idx: number) => {
     const grupo = evaluacion as GrupoEvaluacion;
     onChange({ ...grupo, subEvaluaciones: grupo.subEvaluaciones.filter((_, i) => i !== idx) });
@@ -371,28 +408,25 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
     const colapsada = isColapsada(evaluacion.id);
     return (
       <View style={estilos.contenedor}>
-        {/* Header colapsable: nombre + peso% + chevron */}
-        <TouchableOpacity
-          onPress={() => onToggleColapso(evaluacion.id)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: colapsada ? 0 : 6 }}
-        >
-          <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-            {evaluacion.nombre || 'Sin nombre'}
-          </Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{evaluacion.pesoEnMateria}%</Text>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
-        </TouchableOpacity>
-
-        {!colapsada && (<>
-        {/* Fila: Nombre + eliminar */}
-        <View style={estilos.fila}>
-          <TextInput style={estilos.input} placeholder="Nombre" placeholderTextColor={tema.textoSecundario}
+        {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: colapsada ? 0 : 6 }}>
+          <TextInput
+            style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
+            placeholder="Sin nombre" placeholderTextColor={tema.textoSecundario}
             value={evaluacion.nombre} onChangeText={nombre => actualizarSimple({ nombre })} maxLength={20} />
+          <TouchableOpacity
+            onPress={() => onToggleColapso(evaluacion.id)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          >
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+              {contribucion !== null ? `${Math.round(contribucion)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
+            </Text>
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
         </View>
-        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
-          {evaluacion.nombre.length}/20
-        </Text>
+
+        {!colapsada && (<>
         {/* Fila: Peso% */}
         <View style={estilos.fila}>
           <Text style={estilos.label}>Peso%</Text>
@@ -407,6 +441,23 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             placeholderTextColor={tema.textoSecundario}
           />
         </View>
+        {/* Fila: Tipo de nota */}
+        <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+          {(['numero', 'porcentaje'] as TipoNota[]).map(t => (
+            <TouchableOpacity
+              key={t}
+              onPress={() => cambiarTipoNotaSimple(t)}
+              style={{
+                flex: 1, paddingVertical: 6, borderRadius: 6, alignItems: 'center',
+                backgroundColor: evaluacion.tipoNota === t ? (tema.acentoFondo ?? tema.acento) : tema.fondo,
+              }}
+            >
+              <Text style={{ color: evaluacion.tipoNota === t ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
+                {t === 'numero' ? '🔢 Número' : '% Porcentaje'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {/* Fila: Nota / Máx */}
         <View style={estilos.fila}>
           <Text style={estilos.label}>Nota</Text>
@@ -417,19 +468,22 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             placeholder="—"
             placeholderTextColor={tema.textoSecundario}
           />
-          <Text style={estilos.label}>/ Máx</Text>
-          <NotaInput
-            style={[estilos.input, { flex: 0, width: 70 }]}
-            value={evaluacion.notaMaxima}
-            onChange={notaMaxima => {
-              const n = notaMaxima ?? 10;
-              actualizarSimple({ notaMaxima: Math.min(9999, Math.max(0.01, n)) });
-            }}
-          />
+          {evaluacion.tipoNota === 'numero' ? (
+            <>
+              <Text style={estilos.label}>/ Máx</Text>
+              <NotaInput
+                style={[estilos.input, { flex: 0, width: 70 }]}
+                value={evaluacion.notaMaxima}
+                onChange={notaMaxima => {
+                  const n = notaMaxima ?? 10;
+                  actualizarSimple({ notaMaxima: Math.min(9999, Math.max(0.01, n)) });
+                }}
+              />
+            </>
+          ) : (
+            <Text style={estilos.label}>%</Text>
+          )}
         </View>
-        <TouchableOpacity onPress={() => actualizarSimple({ tipoNota: evaluacion.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
-          <Text style={estilos.label}>Tipo: {evaluacion.tipoNota === 'numero' ? '🔢 Número' : '% Porcentaje'} (tocar para cambiar)</Text>
-        </TouchableOpacity>
         <FechaHoraPicker
           fecha={evaluacion.fecha}
           hora={evaluacion.hora}
@@ -457,27 +511,25 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
   const grupoColapsado = isColapsada(grupo.id);
   return (
     <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento }]}>
-      {/* Header colapsable del grupo: nombre + peso% + chevron */}
-      <TouchableOpacity
-        onPress={() => onToggleColapso(grupo.id)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: grupoColapsado ? 0 : 6 }}
-      >
-        <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-          {grupo.nombre || 'Sin nombre'}
-        </Text>
-        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{grupo.pesoEnMateria}%</Text>
-        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
-      </TouchableOpacity>
-
-      {!grupoColapsado && (<>
-      <View style={estilos.fila}>
-        <TextInput style={estilos.input} placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
+      {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: grupoColapsado ? 0 : 6 }}>
+        <TextInput
+          style={{ color: tema.texto, fontSize: 14, fontWeight: '600', flex: 1, padding: 0 }}
+          placeholder="Nombre del grupo" placeholderTextColor={tema.textoSecundario}
           value={grupo.nombre} onChangeText={nombre => onChange({ ...grupo, nombre })} maxLength={20} />
+        <TouchableOpacity
+          onPress={() => onToggleColapso(grupo.id)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+        >
+          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+            {contribucion !== null ? `${Math.round(contribucion)} / ${grupo.pesoEnMateria}` : `${grupo.pesoEnMateria}%`}
+          </Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={onEliminar}><Text style={{ color: '#F44336' }}>🗑️</Text></TouchableOpacity>
       </View>
-      <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
-        {grupo.nombre.length}/20
-      </Text>
+
+      {!grupoColapsado && (<>
       <View style={estilos.fila}>
         <Text style={estilos.label}>Peso total del grupo en materia (%)</Text>
         <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
@@ -487,28 +539,38 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
         const subColapsada = isColapsada(sub.id);
         return (
           <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>
-            {/* Header colapsable de la sub-evaluación: nombre + chevron */}
-            <TouchableOpacity
-              onPress={() => onToggleColapso(sub.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: subColapsada ? 0 : 6 }}
-            >
-              <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-                {sub.nombre || `Prueba ${i + 1}`}
-              </Text>
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
-            </TouchableOpacity>
-
-            {!subColapsada && (<>
-            <View style={estilos.fila}>
-              <TextInput style={estilos.input} placeholder={`Prueba ${i + 1}`} placeholderTextColor={tema.textoSecundario}
+            {/* Header: el nombre ES el input de edición — evita mostrarlo dos veces al expandir */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: subColapsada ? 0 : 6 }}>
+              <TextInput
+                style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1, padding: 0 }}
+                placeholder={`Prueba ${i + 1}`} placeholderTextColor={tema.textoSecundario}
                 value={sub.nombre} onChangeText={nombre => actualizarSub(i, { nombre })} maxLength={20} />
+              <TouchableOpacity onPress={() => onToggleColapso(sub.id)}>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => eliminarSub(i)}>
                 <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>
               </TouchableOpacity>
             </View>
-            <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
-              {sub.nombre.length}/20
-            </Text>
+
+            {!subColapsada && (<>
+            {/* Fila: Tipo de nota */}
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+              {(['numero', 'porcentaje'] as TipoNota[]).map(t => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => cambiarTipoNotaSub(i, t)}
+                  style={{
+                    flex: 1, paddingVertical: 6, borderRadius: 6, alignItems: 'center',
+                    backgroundColor: sub.tipoNota === t ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
+                  }}
+                >
+                  <Text style={{ color: sub.tipoNota === t ? '#fff' : tema.textoSecundario, fontSize: 11, fontWeight: '600' }}>
+                    {t === 'numero' ? '🔢 Número' : '% Porcentaje'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <View style={estilos.fila}>
               <Text style={estilos.label}>Nota</Text>
               <NotaInput
@@ -518,15 +580,18 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 placeholder="—"
                 placeholderTextColor={tema.textoSecundario}
               />
-              <Text style={estilos.label}>/ Máx</Text>
-              <NotaInput
-                style={[estilos.input, { flex: 0, width: 70 }]}
-                value={sub.notaMaxima}
-                onChange={notaMaxima => actualizarSub(i, { notaMaxima: notaMaxima ?? 10 })}
-              />
-              <TouchableOpacity onPress={() => actualizarSub(i, { tipoNota: sub.tipoNota === 'numero' ? 'porcentaje' : 'numero' })}>
-                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{sub.tipoNota === 'numero' ? '🔢' : '%'}</Text>
-              </TouchableOpacity>
+              {sub.tipoNota === 'numero' ? (
+                <>
+                  <Text style={estilos.label}>/ Máx</Text>
+                  <NotaInput
+                    style={[estilos.input, { flex: 0, width: 70 }]}
+                    value={sub.notaMaxima}
+                    onChange={notaMaxima => actualizarSub(i, { notaMaxima: notaMaxima ?? 10 })}
+                  />
+                </>
+              ) : (
+                <Text style={estilos.label}>%</Text>
+              )}
             </View>
             <FechaHoraPicker
               fecha={sub.fecha}
