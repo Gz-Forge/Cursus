@@ -1,9 +1,10 @@
 import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Platform, Share, Linking,
+  Platform, Share,
 } from 'react-native';
 import appJson from '../../app.json';
+import { abrirUrl } from '../utils/abrirUrl';
 
 const APP_VERSION: string = appJson.expo.version;
 
@@ -78,11 +79,7 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
     const subject = encodeURIComponent(`[Cursus] Error Report v${APP_VERSION}`);
     const body = encodeURIComponent(this.buildLog());
     const url = `mailto:contacto@gz-forge.com?subject=${subject}&body=${body}`;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => {});
-    }
+    abrirUrl(url).catch(() => {});
   };
 
   render() {
