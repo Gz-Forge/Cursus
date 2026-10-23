@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Linking, ScrollView, Platform, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Platform, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { useStore } from '../store/useStore';
 import { temaOscuro, temaClaro } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
+import { abrirUrl } from '../utils/abrirUrl';
 
 // ── Reemplazá estas URLs cuando estén disponibles ──────────────────────────
 const PAYPAL_URL        = 'https://www.paypal.com/donate/?hosted_button_id=VNC65GKZYCJWL';
@@ -96,7 +97,7 @@ export function DonacionScreen() {
 
   const abrir = async (url: string) => {
     try {
-      await Linking.openURL(url);
+      await abrirUrl(url);
     } catch {
       showAlert('Error', 'No se pudo abrir el enlace. Verificá tu conexión.');
     }
