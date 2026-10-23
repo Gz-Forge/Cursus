@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Pressable, Platform, Animated, useWindowDimensions, TextInput, Modal, Switch } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { SemestreSection } from '../components/SemestreSection';
@@ -55,6 +56,9 @@ export function CarreraScreen() {
   const [modalCreditos, setModalCreditos] = useState(false);
   const [modalExoneradas, setModalExoneradas] = useState(false);
   const [modalDisponibles, setModalDisponibles] = useState(false);
+  const [modalFiltro, setModalFiltro] = useState(false);
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const safeBottomModal = Math.max(bottomInset, Platform.OS === 'android' ? 24 : 0);
   const { showAlert } = useAlert();
 
   const [colaFelicitaciones, setColaFelicitaciones] = useState<{ titulo: string; frase: string }[]>([]);
@@ -176,26 +180,30 @@ export function CarreraScreen() {
 
   const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
 
+  const ORDEN_ESTADOS_FILTRO: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
+  const estadosOcultos = (config.carreraFiltroEstadosOcultos ?? []).filter(e => e !== 'aprobado' || config.usarEstadoAprobado);
+  const filtroActivo = estadosOcultos.length > 0;
+  const materiaVisible = (m: Materia) => !estadosOcultos.includes(calcularEstadoFinal(m, config));
+  const estadosEnUso = new Set(materias.map(m => calcularEstadoFinal(m, config)));
+  const estadosListados = ORDEN_ESTADOS_FILTRO.filter(e =>
+    (e !== 'aprobado' || config.usarEstadoAprobado) && (estadosEnUso.has(e) || estadosOcultos.includes(e))
+  );
+  const toggleEstadoFiltro = (e: EstadoMateria) => actualizarConfig({
+    carreraFiltroEstadosOcultos: estadosOcultos.includes(e) ? estadosOcultos.filter(x => x !== e) : [...estadosOcultos, e],
+  });
+  const limpiarFiltro = () => actualizarConfig({ carreraFiltroEstadosOcultos: [] });
+  const semestresVisibles = semestres.filter(sem => materias.some(m => m.semestre === sem && materiaVisible(m)));
+
   const mapaExpandido = config.semestreExpandidoMap ?? {};
   const isExpandido = (sem: number) => mapaExpandido[String(sem)] !== undefined ? mapaExpandido[String(sem)] : true;
   const toggleSemestre = (sem: number) => actualizarConfig({ semestreExpandidoMap: { ...mapaExpandido, [String(sem)]: !isExpandido(sem) } });
-  const todosExpandidos = semestres.every(s => isExpandido(s));
+  const todosExpandidos = semestresVisibles.every(s => isExpandido(s));
   const toggleTodos = () => {
     const nuevo = !todosExpandidos;
-    actualizarConfig({ semestreExpandidoMap: Object.fromEntries(semestres.map(s => [String(s), nuevo])) });
+    actualizarConfig({
+      semestreExpandidoMap: { ...mapaExpandido, ...Object.fromEntries(semestresVisibles.map(s => [String(s), nuevo])) },
+    });
   };
-
-  const ocultarExonerados = config.ocultarSemestresExonerados ?? false;
-  const toggleOcultarExonerados = () => actualizarConfig({ ocultarSemestresExonerados: !ocultarExonerados });
-  const labelExoneradoCorto = (() => {
-    const label = getLabel('exonerado');
-    return label.length > 10 ? `${label.slice(0, 10)}...` : label;
-  })();
-  const semestresVisibles = ocultarExonerados
-    ? semestres.filter(sem =>
-        !materias.filter(m => m.semestre === sem).every(m => calcularEstadoFinal(m, config) === 'exonerado')
-      )
-    : semestres;
 
   const irAEditar = (m: Materia) => navigation.navigate('EditMateria', { materiaId: m.id });
 
@@ -505,14 +513,23 @@ export function CarreraScreen() {
         {vista === 'carrera' && (
           <>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
-              <TouchableOpacity
-                onPress={toggleOcultarExonerados}
-                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta }}
-              >
-                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>
-                  {ocultarExonerados ? `Mostrar ${labelExoneradoCorto}` : `Ocultar ${labelExoneradoCorto}`}
-                </Text>
-              </TouchableOpacity>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setModalFiltro(true)}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta,
+                    borderWidth: 1, borderColor: filtroActivo ? (tema.acentoLineas ?? tema.acento) : 'transparent',
+                  }}
+                >
+                  <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>Filtrar</Text>
+                </TouchableOpacity>
+                {filtroActivo && (
+                  <View style={{
+                    position: 'absolute', top: -3, right: -3, width: 10, height: 10,
+                    borderRadius: 5, backgroundColor: tema.acentoFondo ?? tema.acento,
+                  }} />
+                )}
+              </View>
               <TouchableOpacity
                 onPress={toggleTodos}
                 style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: tema.tarjeta }}
@@ -528,7 +545,8 @@ export function CarreraScreen() {
                 <SemestreSection
                   key={sem}
                   semestre={sem}
-                  materias={materias.filter(m => m.semestre === sem)}
+                  materias={materias.filter(m => m.semestre === sem && materiaVisible(m))}
+                  totalMaterias={materias.filter(m => m.semestre === sem).length}
                   todasLasMaterias={materias}
                   config={config}
                   colorAcento={coloresSem[i] ?? coloresSem[i % coloresSem.length]}
@@ -540,6 +558,19 @@ export function CarreraScreen() {
                 />
               );
             })}
+            {filtroActivo && semestresVisibles.length === 0 && (
+              <View style={{ alignItems: 'center', paddingVertical: 32, gap: 12 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 14, textAlign: 'center' }}>
+                  El filtro oculta todas las materias.
+                </Text>
+                <TouchableOpacity
+                  onPress={limpiarFiltro}
+                  style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, backgroundColor: tema.acentoFondo ?? tema.acento }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600' }}>Mostrar todos</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
 
@@ -1160,6 +1191,75 @@ export function CarreraScreen() {
                 </>
               );
             })()}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={modalFiltro} transparent animationType="fade" onRequestClose={() => setModalFiltro(false)}>
+        <View style={{
+          flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
+          padding: isWeb ? 24 : 0,
+        }}>
+          <Pressable
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            onPress={() => setModalFiltro(false)}
+          />
+          <View style={{
+            backgroundColor: tema.superficie, borderRadius: isWeb ? 16 : 0,
+            borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20,
+            paddingBottom: isWeb ? 20 : 20 + safeBottomModal,
+            width: isWeb ? '100%' : undefined, maxWidth: isWeb ? 400 : undefined,
+          }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              Mostrar en la carrera
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>
+              Se ocultan las materias en estados desmarcados, y los semestres que quedan sin materias
+            </Text>
+
+            {estadosListados.length === 0 && (
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+                No hay materias cargadas.
+              </Text>
+            )}
+
+            {estadosListados.map(e => {
+              const oculto = estadosOcultos.includes(e);
+              return (
+                <TouchableOpacity
+                  key={e}
+                  onPress={() => toggleEstadoFiltro(e)}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+                    borderBottomWidth: 1, borderBottomColor: tema.borde, gap: 12,
+                  }}
+                >
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: tema.acentoLineas ?? tema.acento,
+                    backgroundColor: !oculto ? (tema.acentoFondo ?? tema.acento) : undefined,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!oculto && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={{ fontSize: 16 }}>{getIcono(e)}</Text>
+                  <Text style={{ color: tema.texto, fontSize: 14, flex: 1 }}>{getLabel(e)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            {filtroActivo && (
+              <TouchableOpacity onPress={limpiarFiltro} style={{ paddingVertical: 12, alignItems: 'center' }}>
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>Mostrar todos</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setModalFiltro(false)}
+              style={{ marginTop: 8, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Listo</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -196,7 +196,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual' | 'barraProgresoEvaluaciones', descripcion?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -479,6 +479,13 @@ export function ConfigScreen() {
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
           {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
           {config.usarEstadoAprobado && toggle(`"${getLabel('aprobado')}" habilita previas`, 'aprobadoHabilitaPrevias', 'Si está desactivado, solo exonerado desbloquea materias siguientes')}
+
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>EVALUACIONES</Text>
+          {toggle(
+            'Barra de progreso de notas',
+            'barraProgresoEvaluaciones',
+            'Muestra en Editar materia una barra con tu avance sobre los umbrales de aprobación y exoneración',
+          )}
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TIPOS DE FORMACIÓN</Text>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>

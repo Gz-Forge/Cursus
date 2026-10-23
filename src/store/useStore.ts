@@ -54,6 +54,7 @@ const CONFIG_DEFAULT: Config = {
   horarioFiltroOcultos: [],
   horarioFiltroOcultarEvaluaciones: false,
   horarioMostrarLineaHoraActual: true,
+  barraProgresoEvaluaciones: true,
   metricasOcultas: [],
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,

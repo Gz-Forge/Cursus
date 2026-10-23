@@ -142,6 +142,7 @@ function mapearBloque(b: unknown, idx: string): BloqueHorario {
       ? (bloque.tipo as TipoBloque)
       : 'otro',
     ...(typeof bloque.salon === 'string' && bloque.salon.trim() && { salon: bloque.salon.trim() }),
+    ...(typeof bloque.descripcion === 'string' && bloque.descripcion.trim() && { descripcion: bloque.descripcion.trim().slice(0, 150) }),
   };
 }
 
@@ -293,7 +294,7 @@ export function generarEjemploJSONMateria(): string {
   return JSON.stringify({
     nombre: 'Cálculo I',
     bloques: [
-      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
+      { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3', descripcion: 'Repaso del tema 3' },
       { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
     ],
   }, null, 2);
@@ -312,7 +313,8 @@ export function generarPromptHorario(config: Config): string {
           "horaInicio": 480,
           "horaFin": 600,
           "tipo": "teorica",
-          "salon": "Aula 3"
+          "salon": "Aula 3",
+          "descripcion": "Repaso del tema 3"
         }
       ]
     }
@@ -327,6 +329,7 @@ Reglas:
   - "practica" → para clases de tipo ${config.labelPractica}
   - "otro"     → para cualquier otro tipo (${config.labelOtro})
 - "salon" (opcional): nombre del salón o aula donde ocurre la clase (ej: "Aula 3", "Lab 201"). Omitilo si no está disponible.
+- "descripcion" (opcional): nota libre de hasta 150 caracteres sobre esa clase (ej: tema a ver, qué llevar). Omitila si no hay nada que aclarar.
 - No uses "parcial" como tipo de bloque; los exámenes y evaluaciones se registran aparte desde la sección Evaluaciones.
 
 Pasame solamente el .json para descargar, sin explicaciones adicionales.`;
@@ -338,7 +341,7 @@ export function generarEjemploJSON(): string {
       {
         nombre: 'Cálculo I',
         bloques: [
-          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3' },
+          { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: 'Aula 3', descripcion: 'Repaso del tema 3' },
           { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica' },
         ],
       },

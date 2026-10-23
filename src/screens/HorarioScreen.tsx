@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, ScrollView, TouchableOpacity, Pressable, useWindowDimensions, Modal, Platform, Animated, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useAlert } from '../contexts/AlertContext';
@@ -8,8 +8,8 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity } from '../utils/useFondoPantalla';
-import { BloqueHorario, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoBloque } from '../types';
-import { calcularEstadoFinal } from '../utils/calculos';
+import { BloqueHorario, EvaluacionSimple, GrupoEvaluacion, Materia, SubEvaluacion, TipoBloque, TipoNota } from '../types';
+import { calcularEstadoFinal, convertirNotaDeTipo, pesoSubEvaluacion } from '../utils/calculos';
 import {
   exportarJSONMultiMateria, generarEjemploJSON, compartirArchivo,
   parsearJSONMultiMateria, leerArchivo,
@@ -90,6 +90,7 @@ export function HorarioScreen() {
   const tema = useTemaPantalla('horario');
   const { width, height } = useWindowDimensions();
   const isFocused = useIsFocused();
+  const navigation = useNavigation<any>();
   const [weekOffset, setWeekOffset] = useState(0);
   const [tickHoraActual, setTickHoraActual] = useState(0);
   const [modalExport, setModalExport] = useState(false);
@@ -134,9 +135,48 @@ export function HorarioScreen() {
   } | null>(null);
   const [modalFechaStr, setModalFechaStr] = useState('');
   const [modalSalonStr, setModalSalonStr] = useState('');
+  const [modalTab, setModalTab] = useState<'descripcion' | 'edicion' | 'nota'>('edicion');
+  const [modalTipoBloque, setModalTipoBloque] = useState<TipoBloque>('teorica');
+  const [modalDescStr, setModalDescStr] = useState('');
+  const [modalTipoNota, setModalTipoNota] = useState<TipoNota>('numero');
+  const [modalNotaStr, setModalNotaStr] = useState('');
+  const [modalNotaMaxStr, setModalNotaMaxStr] = useState('10');
   const [salonOverride, setSalonOverride] = useState<{ id: string; salon?: string } | null>(null);
   const modalAbiertaRef = React.useRef(false);
   React.useEffect(() => { modalAbiertaRef.current = modalEdicionRapida !== null; }, [modalEdicionRapida]);
+
+  const buscarEvaluacion = (materia: Materia | undefined, id: string) => {
+    if (!materia) return null;
+    for (const ev of materia.evaluaciones) {
+      if (ev.tipo === 'simple' && ev.id === id) {
+        return { nombre: ev.nombre, nota: ev.nota, notaMaxima: ev.notaMaxima, tipoNota: ev.tipoNota, peso: ev.pesoEnMateria };
+      }
+      if (ev.tipo === 'grupo') {
+        const sub = ev.subEvaluaciones.find(s => s.id === id);
+        if (sub) {
+          return { nombre: sub.nombre || ev.nombre, nota: sub.nota, notaMaxima: sub.notaMaxima, tipoNota: sub.tipoNota, peso: pesoSubEvaluacion(ev) };
+        }
+      }
+    }
+    return null;
+  };
+
+  React.useEffect(() => {
+    if (!modalEdicionRapida) return;
+    const { materias: mats } = useStore.getState();
+    setModalTab('edicion');
+    if (modalEdicionRapida.tipo === 'regular') {
+      const bloque = mats.flatMap(m => m.bloques ?? []).find(b => b.id === modalEdicionRapida.bloqueId);
+      setModalTipoBloque(bloque?.tipo ?? 'teorica');
+      setModalDescStr(bloque?.descripcion ?? '');
+    } else {
+      const materia = mats.find(m => m.id === modalEdicionRapida.materiaId);
+      const ev = buscarEvaluacion(materia, modalEdicionRapida.bloqueId);
+      setModalTipoNota(ev?.tipoNota ?? 'numero');
+      setModalNotaStr(ev?.nota !== null && ev?.nota !== undefined ? String(ev.nota) : '');
+      setModalNotaMaxStr(String(ev?.notaMaxima ?? config.notaMaxima));
+    }
+  }, [modalEdicionRapida?.bloqueId]);
   // --- Modal crear bloque (doble tap en espacio vacío) ---
   const [modalCrearBloque, setModalCrearBloque] = useState<{
     fecha: string; horaInicio: number; horaFin: number;
@@ -145,6 +185,7 @@ export function HorarioScreen() {
   const [cmbTipoBloque, setCmbTipoBloque] = useState<'horario' | 'evaluacion' | null>(null);
   const [cmbSubTipo, setCmbSubTipo] = useState<TipoBloque>('teorica');
   const [cmbSalon, setCmbSalon] = useState('');
+  const [cmbDescripcion, setCmbDescripcion] = useState('');
   const [cmbEsGrupal, setCmbEsGrupal] = useState<boolean | null>(null);
   const [cmbNombreEval, setCmbNombreEval] = useState('');
   const [cmbPesoEval, setCmbPesoEval] = useState('');
@@ -696,7 +737,7 @@ export function HorarioScreen() {
       b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
       !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
     ),
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.tipo}:${b.salon ?? ''}:${b.descripcion ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
   const evaluacionesEstaSemana = React.useMemo(
@@ -845,9 +886,10 @@ export function HorarioScreen() {
   }
 
   function persistirBloque(bloque: BloqueHorario) {
-    const { id, fecha, horaInicio, horaFin, tipo, salon } = bloque;
+    const { id, fecha, horaInicio, horaFin, tipo, salon, descripcion } = bloque;
     const clean: BloqueHorario = { id, fecha, horaInicio, horaFin, tipo };
     if (salon !== undefined) clean.salon = salon;
+    if (descripcion !== undefined) clean.descripcion = descripcion;
     const materia = materiasEnCurso.find(m => m.bloques?.some(b => b.id === id));
     if (!materia) return;
     const { guardarMateria } = useStore.getState();
@@ -857,6 +899,34 @@ export function HorarioScreen() {
     });
   }
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+
+  const materiaEdicionRapida = !modalEdicionRapida
+    ? undefined
+    : modalEdicionRapida.tipo === 'regular'
+      ? materias.find(m => m.bloques?.some(b => b.id === modalEdicionRapida.bloqueId))
+      : materias.find(m => m.id === modalEdicionRapida.materiaId);
+  const evalEdicionRapida = modalEdicionRapida?.tipo === 'eval'
+    ? buscarEvaluacion(materiaEdicionRapida, modalEdicionRapida.bloqueId)
+    : null;
+  const subtituloEdicionRapida = [
+    modalEdicionRapida?.tipo === 'regular' ? labelDeTipo(modalTipoBloque) : (evalEdicionRapida?.nombre || 'Evaluación'),
+    materiaEdicionRapida?.nombre,
+  ].filter(Boolean).join(' · ');
+  const notaPrevia = parseFloat(modalNotaStr);
+  const maxPrevio = modalTipoNota === 'porcentaje' ? 100 : parseFloat(modalNotaMaxStr);
+  const aportePrevio = evalEdicionRapida && !isNaN(notaPrevia) && maxPrevio > 0
+    ? (notaPrevia / maxPrevio) * evalEdicionRapida.peso
+    : null;
+
+  const cambiarTipoNotaModal = (nuevo: TipoNota) => {
+    if (nuevo === modalTipoNota) return;
+    const nota = parseFloat(modalNotaStr);
+    const max = parseFloat(modalNotaMaxStr);
+    const conv = convertirNotaDeTipo(!isNaN(nota) ? nota : null, max > 0 ? max : 10, nuevo);
+    setModalNotaStr(conv.nota !== null ? String(conv.nota) : '');
+    setModalNotaMaxStr(String(conv.notaMaxima));
+    setModalTipoNota(nuevo);
+  };
 
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
@@ -1124,7 +1194,7 @@ export function HorarioScreen() {
                           const hiSnapped = Math.max(horaInicio, Math.min(snap30(horaInicio + minsDesdeInicio), horaFin - 60));
                           setModalCrearBloque({ fecha, horaInicio: hiSnapped, horaFin: hiSnapped + 60 });
                           setCmbPaso(1); setCmbMateriaId(''); setCmbTipoBloque(null); setCmbSubTipo('teorica');
-                          setCmbSalon(''); setCmbEsGrupal(null); setCmbNombreEval('');
+                          setCmbSalon(''); setCmbDescripcion(''); setCmbEsGrupal(null); setCmbNombreEval('');
                           setCmbPesoEval(''); setCmbGrupoId(null); setCmbNombreGrupo('');
                           setCmbPesoGrupo(''); setCmbNombrePrimeraSubEval('');
                           lastTapRef.current = null;
@@ -2497,35 +2567,152 @@ export function HorarioScreen() {
         onPress={() => setModalEdicionRapida(null)}
       >
         <Pressable onPress={() => {}}>
-          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 20, width: 280 }}>
-            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 16 }}>
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 20, width: 300 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 2 }}>
               Edición rápida
             </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 12 }} numberOfLines={1}>
+              {subtituloEdicionRapida}
+            </Text>
 
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Día (DD/MM)</Text>
-            <TextInput
-              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 14 }}
-              value={modalFechaStr}
-              onChangeText={v => {
-                const digits = v.replace(/\D/g, '').slice(0, 4);
-                setModalFechaStr(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
-              }}
-              placeholder="ej: 15/06"
-              placeholderTextColor={tema.textoSecundario}
-              keyboardType="numeric"
-              maxLength={5}
-            />
+            <View style={{ flexDirection: 'row', gap: 4, marginBottom: 12 }}>
+              {(modalEdicionRapida?.tipo === 'regular'
+                ? [{ id: 'descripcion', label: 'Descripción' }, { id: 'edicion', label: 'Edición' }]
+                : [{ id: 'edicion', label: 'Edición' }, { id: 'nota', label: 'Nota' }]
+              ).map(t => (
+                <TouchableOpacity
+                  key={t.id}
+                  onPress={() => setModalTab(t.id as typeof modalTab)}
+                  style={{
+                    flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
+                    backgroundColor: modalTab === t.id ? (tema.acentoFondo ?? tema.acento) : tema.fondo,
+                  }}
+                >
+                  <Text style={{ color: modalTab === t.id ? '#fff' : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Salón (opcional)</Text>
-            <TextInput
-              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 16, fontSize: 14 }}
-              value={modalSalonStr}
-              onChangeText={setModalSalonStr}
-              placeholder="Ej: Aula 3"
-              placeholderTextColor={tema.textoSecundario}
-            />
+            {modalEdicionRapida?.tipo === 'regular' && modalTab === 'descripcion' && (
+              <>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Descripción (máx. 150)</Text>
+                <TextInput
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, minHeight: 96, textAlignVertical: 'top' }}
+                  value={modalDescStr}
+                  onChangeText={setModalDescStr}
+                  multiline
+                  maxLength={150}
+                  placeholder="Ej: Repaso del tema 3"
+                  placeholderTextColor={tema.textoSecundario}
+                />
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
+                  {modalDescStr.length} / 150
+                </Text>
+              </>
+            )}
 
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            {modalTab === 'edicion' && (
+              <>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Día (DD/MM)</Text>
+                <TextInput
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 14 }}
+                  value={modalFechaStr}
+                  onChangeText={v => {
+                    const digits = v.replace(/\D/g, '').slice(0, 4);
+                    setModalFechaStr(digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`);
+                  }}
+                  placeholder="ej: 15/06"
+                  placeholderTextColor={tema.textoSecundario}
+                  keyboardType="numeric"
+                  maxLength={5}
+                />
+
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Salón (opcional)</Text>
+                <TextInput
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: modalEdicionRapida?.tipo === 'regular' ? 12 : 4, fontSize: 14 }}
+                  value={modalSalonStr}
+                  onChangeText={setModalSalonStr}
+                  placeholder="Ej: Aula 3"
+                  placeholderTextColor={tema.textoSecundario}
+                />
+
+                {modalEdicionRapida?.tipo === 'regular' && (
+                  <>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Tipo de bloque</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
+                      {(['teorica', 'practica', 'otro'] as TipoBloque[]).map(t => (
+                        <TouchableOpacity
+                          key={t}
+                          onPress={() => setModalTipoBloque(t)}
+                          style={{
+                            flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center',
+                            backgroundColor: modalTipoBloque === t ? (tema.acentoFondo ?? tema.acento) : tema.fondo,
+                          }}
+                        >
+                          <Text style={{ color: modalTipoBloque === t ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                            {labelDeTipo(t)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+
+            {modalEdicionRapida?.tipo === 'eval' && modalTab === 'nota' && (
+              <>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                  {(['numero', 'porcentaje'] as TipoNota[]).map(t => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => cambiarTipoNotaModal(t)}
+                      style={{
+                        flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center',
+                        backgroundColor: modalTipoNota === t ? (tema.acentoFondo ?? tema.acento) : tema.fondo,
+                      }}
+                    >
+                      <Text style={{ color: modalTipoNota === t ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>
+                        {t === 'numero' ? 'Número' : 'Porcentaje'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Nota</Text>
+                  <TextInput
+                    style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, width: 70 }}
+                    value={modalNotaStr}
+                    onChangeText={v => setModalNotaStr(v.replace(/[^0-9.]/g, ''))}
+                    keyboardType="decimal-pad"
+                    placeholder="—"
+                    placeholderTextColor={tema.textoSecundario}
+                  />
+                  {modalTipoNota === 'numero' ? (
+                    <>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>/ Máx</Text>
+                      <TextInput
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, width: 70 }}
+                        value={modalNotaMaxStr}
+                        onChangeText={v => setModalNotaMaxStr(v.replace(/[^0-9.]/g, ''))}
+                        keyboardType="decimal-pad"
+                      />
+                    </>
+                  ) : (
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>%</Text>
+                  )}
+                </View>
+                {aportePrevio !== null && evalEdicionRapida && (
+                  <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>
+                    → Contribuye {aportePrevio.toFixed(2)} de {Math.round(evalEdicionRapida.peso * 100) / 100}% a la nota final
+                  </Text>
+                )}
+              </>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
               <TouchableOpacity
                 style={{ flex: 1, padding: 10, backgroundColor: tema.fondo, borderRadius: 8, alignItems: 'center' }}
                 onPress={() => setModalEdicionRapida(null)}
@@ -2537,21 +2724,30 @@ export function HorarioScreen() {
                 onPress={() => {
                   if (!modalEdicionRapida) return;
                   const m = modalFechaStr.match(/^(\d{1,2})\/(\d{1,2})$/);
-                  if (!m) return;
+                  if (!m) {
+                    setModalTab('edicion');
+                    showAlert('Día inválido', 'Ingresá el día con formato DD/MM en la pestaña Edición.');
+                    return;
+                  }
                   const [, d, mo] = m;
                   const y = new Date().getFullYear();
                   const nuevaFecha = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
-                  if (isNaN(Date.parse(nuevaFecha + 'T00:00:00'))) return;
+                  if (isNaN(Date.parse(nuevaFecha + 'T00:00:00'))) {
+                    setModalTab('edicion');
+                    showAlert('Día inválido', 'Esa fecha no existe. Revisá el día en la pestaña Edición.');
+                    return;
+                  }
                   const { guardarMateria, materias: mats } = useStore.getState();
                   if (modalEdicionRapida.tipo === 'regular') {
                     const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
                     if (materia) {
+                      const descripcion = modalDescStr.trim() || undefined;
                       setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
                       guardarMateria({
                         ...materia,
                         bloques: (materia.bloques ?? []).map(bl =>
                           bl.id === modalEdicionRapida.bloqueId
-                            ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined }
+                            ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined, tipo: modalTipoBloque, descripcion }
                             : bl
                         ),
                       });
@@ -2561,15 +2757,27 @@ export function HorarioScreen() {
                   } else {
                     const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
                     if (materia) {
+                      const notaTxt = modalNotaStr.trim();
+                      const notaVal = notaTxt === '' ? null : parseFloat(notaTxt);
+                      if (notaVal !== null && isNaN(notaVal)) {
+                        setModalTab('nota');
+                        showAlert('Nota inválida', 'Ingresá un número en la pestaña Nota.');
+                        return;
+                      }
+                      const maxParsed = parseFloat(modalNotaMaxStr);
+                      const maxVal = modalTipoNota === 'porcentaje'
+                        ? 100
+                        : (isNaN(maxParsed) ? 10 : Math.min(9999, Math.max(0.01, maxParsed)));
+                      const camposNota = { tipoNota: modalTipoNota, nota: notaVal, notaMaxima: maxVal };
                       const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
                         evs.map(ev => {
                           if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) {
-                            return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined };
+                            return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota };
                           }
                           if (ev.tipo === 'grupo') {
                             return { ...ev, subEvaluaciones: ev.subEvaluaciones.map(sub =>
                               sub.id === modalEdicionRapida.bloqueId
-                                ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined }
+                                ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota }
                                 : sub
                             )};
                           }
@@ -2622,6 +2830,19 @@ export function HorarioScreen() {
               }}
             >
               <Text style={{ color: '#F44336', fontWeight: '600' }}>Eliminar bloque</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ marginTop: 8, padding: 10, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
+              onPress={() => {
+                if (!materiaEdicionRapida) return;
+                const materiaId = materiaEdicionRapida.id;
+                setModalEdicionRapida(null);
+                setCardEnEdicion(null);
+                setDraftBloque(null);
+                navigation.navigate('EditMateria', { materiaId });
+              }}
+            >
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>Ir a editar materia</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -2821,12 +3042,25 @@ export function HorarioScreen() {
                       </View>
                       <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>SALÓN / AULA</Text>
                       <TextInput
-                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14 }}
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 22 }}
                         value={cmbSalon}
                         onChangeText={setCmbSalon}
                         placeholder="Ej: Aula 3 (opcional)"
                         placeholderTextColor={tema.textoSecundario}
                       />
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>DESCRIPCIÓN (OPCIONAL)</Text>
+                      <TextInput
+                        style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, minHeight: 72, textAlignVertical: 'top' }}
+                        value={cmbDescripcion}
+                        onChangeText={setCmbDescripcion}
+                        multiline
+                        maxLength={150}
+                        placeholder="Ej: Repaso del tema 3"
+                        placeholderTextColor={tema.textoSecundario}
+                      />
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 4 }}>
+                        {cmbDescripcion.length} / 150
+                      </Text>
                     </>
                   )}
 
@@ -2986,6 +3220,7 @@ export function HorarioScreen() {
                           horaInicio: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
                           tipo: cmbSubTipo,
                           ...(cmbSalon.trim() ? { salon: cmbSalon.trim() } : {}),
+                          ...(cmbDescripcion.trim() ? { descripcion: cmbDescripcion.trim() } : {}),
                         };
                         guardarMateria({ ...materia, bloques: [...(materia.bloques ?? []), nuevoBloque] });
                       } else if (cmbEsGrupal === false) {

@@ -73,6 +73,8 @@ export interface MateriaJson {
     horaInicio: number;
     horaFin: number;
     tipo?: TipoBloque;
+    salon?: string;
+    descripcion?: string;
   }>;
   evaluaciones?: Evaluacion[];
 }
@@ -105,6 +107,18 @@ export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): 
   return nuevos;
 }
 
+export function normalizarEvaluacionesImportadas(evaluaciones: Evaluacion[]): Evaluacion[] {
+  const norm = <T extends { tipoNota?: string; notaMaxima: number }>(x: T): T => {
+    const tipoNota = x.tipoNota === 'porcentaje' ? 'porcentaje' : 'numero';
+    return { ...x, tipoNota, notaMaxima: tipoNota === 'porcentaje' ? 100 : x.notaMaxima } as T;
+  };
+  return evaluaciones.map(ev =>
+    ev.tipo === 'grupo'
+      ? { ...ev, subEvaluaciones: ev.subEvaluaciones.map(norm) }
+      : norm(ev)
+  );
+}
+
 export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number): Materia[] {
   // Si alguno no tiene numero, ordenar por semestre y auto-asignar
   const necesitaNumerar = datos.some(d => d.numero === undefined);
@@ -128,6 +142,8 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
           horaInicio: b.horaInicio,
           horaFin: b.horaFin,
           tipo: (b.tipo ?? 'otro') as TipoBloque,
+          ...(typeof b.salon === 'string' && b.salon.trim() ? { salon: b.salon.trim() } : {}),
+          ...(typeof b.descripcion === 'string' && b.descripcion.trim() ? { descripcion: b.descripcion.trim().slice(0, 150) } : {}),
         }))
       : [];
 
@@ -172,7 +188,7 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       usarNotaManual: false,
       notaManual: null,
       tipoNotaManual: 'numero',
-      evaluaciones,
+      evaluaciones: normalizarEvaluacionesImportadas(evaluaciones),
       oportunidadesExamen: oportunidadesDefault,
       tipoFormacion: d.tipo_formacion,
       bloques,
@@ -255,8 +271,9 @@ TIPOS DE EVALUACIÓN
 Reglas:
 - La suma de pesoEnMateria de todos los ítems de una materia debe ser 100.
 - tipoNota: "numero" o "porcentaje".
+- notaMaxima: con tipoNota "numero", el puntaje máximo posible para esa evaluación (ej: 10, 12, 50). Con "porcentaje" debe ser 100 y "nota" va de 0 a 100.
 - nota: null si no hay nota aún.
-- notaMaxima: el puntaje máximo posible para esa evaluación.
+- En un grupo, el pesoEnMateria del grupo se reparte en partes iguales entre sus subEvaluaciones (un grupo de 30 con 2 pruebas pesa 15 por prueba). No pongas pesoEnMateria en las subEvaluaciones.
 
 Mis materias y sus evaluaciones:
 [describí acá: nombre de cada materia, exámenes, trabajos, pesos aproximados]
@@ -293,7 +310,7 @@ Cada elemento del array representa una materia con esta estructura:
   "previas": ["Nombre de materia prerequisito"],
   "tipo_formacion": "Básica",
   "bloques": [
-    { "fecha": "2026-03-15", "horaInicio": 480, "horaFin": 600, "tipo": "teorica" }
+    { "fecha": "2026-03-15", "horaInicio": 480, "horaFin": 600, "tipo": "teorica", "salon": "Aula 3", "descripcion": "Repaso del tema 3" }
   ],
   "evaluaciones": [
     { "id": "ev1", "tipo": "simple", "nombre": "Parcial 1", "pesoEnMateria": 50, "tipoNota": "numero", "nota": null, "notaMaxima": 12 }
@@ -305,12 +322,13 @@ Reglas para "bloques":
 - "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)
 - "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)
 - "salon" (opcional, string): aula o salón donde se dicta la clase
+- "descripcion" (opcional, string, máx. 150 caracteres): nota libre sobre esa clase (ej: tema a ver, qué llevar). Omitila si no hay nada que aclarar.
 
 Reglas para "evaluaciones":
 - "tipo": "simple" para una evaluación, "grupo" para agrupar varias.
 - "pesoEnMateria": % que pesa en la nota final. La suma de todos debe ser 100.
-- "tipoNota": "numero" o "porcentaje". "nota": null si no hay nota aún.
-- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria").
+- "tipoNota": "numero" o "porcentaje". Con "porcentaje", "notaMaxima" debe ser 100 y "nota" va de 0 a 100. "nota": null si no hay nota aún.
+- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); el peso del grupo se reparte en partes iguales entre sus pruebas.
 
 Campos opcionales por materia: creditos_da, creditos_necesarios, previas, tipo_formacion, bloques, evaluaciones.
 
@@ -347,6 +365,7 @@ HORARIO:
 - horarioPrimerDia ("lunes" o "domingo"): primer día de la semana.
 - mostrarNombreCompletoEnBloque (true/false): mostrar nombre completo o abreviatura en bloques.
 - horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha como bloques en el horario.
+- horarioMostrarLineaHoraActual (true/false): mostrar una línea horizontal con la hora actual en el día de hoy del horario.
 
 TARJETAS DE MATERIAS:
 - tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.
@@ -359,6 +378,9 @@ TARJETAS DE MATERIAS:
 - tarjetaTipoFormacion (true/false): mostrar tipo de formación.
 - tarjetaCreditosExtendida ("da", "necesita" o "ambos"): créditos en vista expandida.
 - tarjetaMostrarToggleCursando (true/false): botón para marcar como Cursando.
+
+EVALUACIONES:
+- barraProgresoEvaluaciones (true/false): mostrar, al editar una materia, una barra con el avance de la nota sobre los umbrales de aprobación y exoneración.
 
 ════════════════════════════
 EJEMPLO COMPLETO
@@ -668,6 +690,8 @@ export function aplicarConfigJson(
   str('abrevOtro', 3);
   bool('mostrarNombreCompletoEnBloque');
   bool('horarioMostrarEvaluaciones');
+  bool('horarioMostrarLineaHoraActual');
+  bool('barraProgresoEvaluaciones');
   oneOf('horarioPrimerDia', ['lunes', 'domingo']);
   oneOf('tarjetaCreditosBadge', ['da', 'necesita', 'ambos']);
   oneOf('tarjetaBadgeOrden', ['da_primero', 'necesita_primero']);
@@ -719,6 +743,8 @@ export function configAJson(config: import('../types').Config): Record<string, u
     mostrarNombreCompletoEnBloque: config.mostrarNombreCompletoEnBloque,
     horarioMostrarEvaluaciones: config.horarioMostrarEvaluaciones,
     horarioPrimerDia: config.horarioPrimerDia,
+    horarioMostrarLineaHoraActual: config.horarioMostrarLineaHoraActual,
+    barraProgresoEvaluaciones: config.barraProgresoEvaluaciones,
     tarjetaCreditosBadge: config.tarjetaCreditosBadge,
     tarjetaBadgeOrden: config.tarjetaBadgeOrden,
     tarjetaMostrarNota: config.tarjetaMostrarNota,
@@ -835,6 +861,12 @@ CAMPOS DE CONFIGURACIÓN:
 28. tarjetaMostrarToggleCursando (true/false)
     ¿Mostrar un botón en la tarjeta para marcar directamente una materia como "Cursando"?
 
+29. horarioMostrarLineaHoraActual (true/false)
+    En el horario semanal, ¿mostrar una línea horizontal que marque la hora actual en el día de hoy?
+
+30. barraProgresoEvaluaciones (true/false)
+    En la pantalla de edición de una materia, ¿mostrar una barra de progreso con el avance de la nota sobre los umbrales de aprobación y exoneración?
+
 ---
 
 FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
@@ -863,6 +895,7 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "mostrarNombreCompletoEnBloque": false,
   "horarioMostrarEvaluaciones": true,
   "horarioPrimerDia": "lunes",
+  "horarioMostrarLineaHoraActual": true,
   "tarjetaCreditosBadge": "ambos",
   "tarjetaBadgeOrden": "da_primero",
   "tarjetaMostrarNota": true,
@@ -872,7 +905,8 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "tarjetaAvisoPrevias": true,
   "tarjetaTipoFormacion": false,
   "tarjetaCreditosExtendida": "ambos",
-  "tarjetaMostrarToggleCursando": true
+  "tarjetaMostrarToggleCursando": true,
+  "barraProgresoEvaluaciones": true
 }
 
 ⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
@@ -1021,7 +1055,7 @@ export function generarPromptCombinado(
     if (modulos.has('horarios')) {
       camposMateriaPartes.push(
         `  "bloques": [`,
-        `    { "fecha": "YYYY-MM-DD", "horaInicio": 480, "horaFin": 600, "tipo": "teorica", "salon": "Aula 3" }`,
+        `    { "fecha": "YYYY-MM-DD", "horaInicio": 480, "horaFin": 600, "tipo": "teorica", "salon": "Aula 3", "descripcion": "Repaso del tema 3" }`,
         `  ],`,
       );
     }
@@ -1041,6 +1075,7 @@ export function generarPromptCombinado(
         `- "horaInicio" / "horaFin": minutos desde las 00:00 (480 = 8:00, 600 = 10:00)`,
         `- "tipo": "teorica", "practica" u "otro" (los exámenes van en evaluaciones, no en bloques)`,
         `- "salon" (opcional): nombre del aula`,
+        `- "descripcion" (opcional, máx. 150 caracteres): nota libre sobre esa clase (ej: tema a ver, qué llevar)`,
       );
     }
     if (modulos.has('evaluaciones')) {
@@ -1048,9 +1083,9 @@ export function generarPromptCombinado(
         `Reglas para "evaluaciones":`,
         `- "tipo": "simple" para una evaluación, "grupo" para agrupar varias.`,
         `- "pesoEnMateria": % que pesa en la nota final. La suma de todos los ítems de una materia debe ser 100.`,
-        `- "tipoNota": "numero" o "porcentaje". "nota": null si no hay nota aún.`,
-        `- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria").`,
-        `- "notaMaxima": puntaje máximo de esa evaluación.`,
+        `- "tipoNota": "numero" o "porcentaje". Con "porcentaje", "notaMaxima" debe ser 100 y "nota" va de 0 a 100. "nota": null si no hay nota aún.`,
+        `- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); el peso del grupo se reparte en partes iguales entre sus pruebas.`,
+        `- "notaMaxima": puntaje máximo de esa evaluación (100 si el tipoNota es "porcentaje").`,
       );
     }
 
@@ -1093,10 +1128,12 @@ Campos disponibles (los más comunes):
 - tiposFormacion (array de strings): categorías de materias. Ej: ["Básica", "Específica"].
 - horarioPrimerDia ("lunes" o "domingo"): primer día de la semana en el horario.
 - horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha en el horario.
+- horarioMostrarLineaHoraActual (true/false): mostrar una línea con la hora actual en el día de hoy del horario.
 - labelTeorica / abrevTeorica, labelPractica / abrevPractica, labelParcial / abrevParcial, labelOtro / abrevOtro: etiquetas y abreviaturas de tipos de bloque (máx 3 chars).
 - tarjetaMostrarNota (true/false), tarjetaNota ("numero" o "porcentaje"): nota en tarjeta.
 - tarjetaPrevias ("todas", "faltantes" o "ninguna"): previas visibles en tarjeta.
-- tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.`;
+- tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.
+- barraProgresoEvaluaciones (true/false): barra de progreso de notas al editar una materia.`;
   }
 
   const seccionColores = modulos.has('colores') ? buildSeccionColores(config, materias) : '';

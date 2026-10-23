@@ -5,6 +5,12 @@ import {
   calcularEstadoFinal,
   materiasDisponibles,
   renumerarMaterias,
+  pesoSubEvaluacion,
+  contribucionSubEvaluacion,
+  contribucionParcialEvaluacion,
+  puntosObtenidos,
+  calcularTramosBarra,
+  convertirNotaDeTipo,
 } from '../utils/calculos';
 import { Config, EvaluacionSimple, GrupoEvaluacion, Materia } from '../types';
 
@@ -311,5 +317,95 @@ describe('renumerarMaterias', () => {
     const nueva = materia({ id: 'm3', numero: 999, semestre: 3 });
     const resultado = renumerarMaterias(existentes, nueva);
     expect(resultado.map(m => m.numero).sort((a, b) => a - b)).toEqual([1, 2, 3]);
+  });
+});
+
+describe('contribución parcial y puntos obtenidos', () => {
+  const grupo: GrupoEvaluacion = {
+    id: 'g1', tipo: 'grupo', nombre: 'TP', pesoEnMateria: 30,
+    subEvaluaciones: [
+      { id: 's1', nombre: 'TP1', tipoNota: 'numero', nota: 10, notaMaxima: 10 },
+      { id: 's2', nombre: 'TP2', tipoNota: 'numero', nota: null, notaMaxima: 10 },
+    ],
+  };
+
+  it('cada prueba pesa peso del grupo / cantidad de pruebas', () => {
+    expect(pesoSubEvaluacion(grupo)).toBeCloseTo(15);
+  });
+
+  it('aporte de una prueba con y sin nota', () => {
+    expect(contribucionSubEvaluacion(grupo, grupo.subEvaluaciones[0])).toBeCloseTo(15);
+    expect(contribucionSubEvaluacion(grupo, grupo.subEvaluaciones[1])).toBeNull();
+  });
+
+  it('grupo con una sola prueba calificada suma solo esa prueba', () => {
+    expect(contribucionParcialEvaluacion(grupo)).toBeCloseTo(15);
+  });
+
+  it('grupo sin ninguna nota → null', () => {
+    const sinNotas: GrupoEvaluacion = {
+      ...grupo,
+      subEvaluaciones: grupo.subEvaluaciones.map(s => ({ ...s, nota: null })),
+    };
+    expect(contribucionParcialEvaluacion(sinNotas)).toBeNull();
+  });
+
+  it('con todas las pruebas calificadas coincide con calcularPorcentajeEvaluacion', () => {
+    const completo: GrupoEvaluacion = {
+      ...grupo,
+      subEvaluaciones: grupo.subEvaluaciones.map(s => ({ ...s, nota: 8 })),
+    };
+    expect(contribucionParcialEvaluacion(completo)).toBeCloseTo(calcularPorcentajeEvaluacion(completo)!);
+  });
+
+  it('puntosObtenidos suma simples y parciales de grupos', () => {
+    expect(puntosObtenidos([evalSimple(80, 100, 40), grupo])).toBeCloseTo(32 + 15);
+    expect(puntosObtenidos([])).toBe(0);
+  });
+});
+
+describe('calcularTramosBarra', () => {
+  it('con estado aprobado y oportunidades: 4 tramos', () => {
+    const t = calcularTramosBarra({ esNotaExamen: false, oportunidadesExamen: 3 }, CONFIG);
+    expect(t.map(x => x.estado)).toEqual(['recursar', 'reprobado', 'aprobado', 'exonerado']);
+    expect(t.map(x => x.desde)).toEqual([0, 45, 60, 85]);
+    expect(t[3].hasta).toBe(100);
+  });
+
+  it('sin estado aprobado: 3 tramos', () => {
+    const t = calcularTramosBarra({ esNotaExamen: false, oportunidadesExamen: 3 }, { ...CONFIG, usarEstadoAprobado: false });
+    expect(t.map(x => x.estado)).toEqual(['recursar', 'reprobado', 'exonerado']);
+    expect(t[1].hasta).toBe(85);
+  });
+
+  it('nota de examen: reprobado hasta el umbral de examen', () => {
+    const t = calcularTramosBarra({ esNotaExamen: true, oportunidadesExamen: 3 }, CONFIG);
+    expect(t.map(x => x.estado)).toEqual(['reprobado', 'exonerado']);
+    expect(t[0].hasta).toBe(55);
+  });
+
+  it('sin oportunidades: todo lo que no exonera es recursar', () => {
+    const t = calcularTramosBarra({ esNotaExamen: false, oportunidadesExamen: 0 }, CONFIG);
+    expect(t.map(x => x.estado)).toEqual(['recursar', 'exonerado']);
+    expect(t[0].hasta).toBe(85);
+  });
+
+  it('descarta tramos vacíos si los umbrales están mal ordenados', () => {
+    const t = calcularTramosBarra({ esNotaExamen: false, oportunidadesExamen: 3 }, { ...CONFIG, umbralAprobacion: 45 });
+    expect(t.every(x => x.hasta > x.desde)).toBe(true);
+  });
+});
+
+describe('convertirNotaDeTipo', () => {
+  it('número → porcentaje fija el máximo en 100 y conserva la proporción', () => {
+    expect(convertirNotaDeTipo(8, 10, 'porcentaje')).toEqual({ nota: 80, notaMaxima: 100 });
+  });
+
+  it('porcentaje → número vuelve a un máximo de 10', () => {
+    expect(convertirNotaDeTipo(80, 100, 'numero')).toEqual({ nota: 8, notaMaxima: 10 });
+  });
+
+  it('sin nota se mantiene null', () => {
+    expect(convertirNotaDeTipo(null, 10, 'porcentaje')).toEqual({ nota: null, notaMaxima: 100 });
   });
 });

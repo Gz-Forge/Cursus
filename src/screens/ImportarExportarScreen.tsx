@@ -76,9 +76,10 @@ function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number)
     // Formato nuevo: Materia[] completa
     return (perfil.materias as unknown as Materia[]).map(m => ({
       ...m,
-      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon, descripcion }: any) => ({
         id, fecha, horaInicio, horaFin, tipo,
         ...(salon !== undefined ? { salon } : {}),
+        ...(descripcion !== undefined ? { descripcion } : {}),
       })),
     }));
   }
@@ -90,9 +91,10 @@ function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number)
     if (!m?.nombre || mapaDesdeHorarios.has(m.nombre)) continue;
     mapaDesdeHorarios.set(m.nombre, {
       ...m,
-      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }: any) => ({
+      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon, descripcion }: any) => ({
         id, fecha, horaInicio, horaFin, tipo,
         ...(salon !== undefined ? { salon } : {}),
+        ...(descripcion !== undefined ? { descripcion } : {}),
       })),
     });
   }

@@ -7,6 +7,7 @@ import { MateriaCard } from './MateriaCard';
 interface Props {
   semestre: number;
   materias: Materia[];
+  totalMaterias?: number;
   todasLasMaterias: Materia[];
   config: Config;
   colorAcento: string;
@@ -17,7 +18,7 @@ interface Props {
   onToggleCursando?: (m: Materia, v: boolean) => void;
 }
 
-export function SemestreSection({ semestre, materias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid, onToggleCursando }: Props) {
+export function SemestreSection({ semestre, materias, totalMaterias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid, onToggleCursando }: Props) {
   const [expandidoLocal, setExpandidoLocal] = useState(true);
   const expandido = expandidoExterno !== undefined ? expandidoExterno : expandidoLocal;
   const toggleExpandido = onToggle ?? (() => setExpandidoLocal(v => !v));
@@ -37,7 +38,9 @@ export function SemestreSection({ semestre, materias, todasLasMaterias, config, 
           {expandido ? '▼' : '▶'} {semestre}° Semestre
         </Text>
         <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
-          {materias.length} materias
+          {totalMaterias !== undefined && totalMaterias > materias.length
+            ? `${materias.length} de ${totalMaterias} materias`
+            : `${materias.length} materias`}
         </Text>
       </TouchableOpacity>
       {expandido && (
