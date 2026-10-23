@@ -737,7 +737,7 @@ export function HorarioScreen() {
       b.fecha >= fechasSemana[0] && b.fecha <= fechasSemana[6] &&
       !(config.horarioFiltroOcultos ?? []).includes(b.tipo)
     ),
-    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.tipo}:${b.salon ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
+    [todosLosBloques.map(b => `${b.id}:${b.fecha}:${b.horaInicio}:${b.horaFin}:${b.tipo}:${b.salon ?? ''}:${b.descripcion ?? ''}`).join('|'), fechasSemana[0], fechasSemana[6], (config.horarioFiltroOcultos ?? []).join(',')]
   );
 
   const evaluacionesEstaSemana = React.useMemo(
