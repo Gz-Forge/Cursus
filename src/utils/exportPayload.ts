@@ -33,9 +33,10 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
     const estado = await cargarPerfilEstado(perfil.id);
 
     const materiasLimpias: Materia[] = estado.materias.map(m => {
-      const bloques = (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon }) => ({
+      const bloques = (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon, descripcion }) => ({
         id, fecha, horaInicio, horaFin, tipo,
         ...(salon !== undefined ? { salon } : {}),
+        ...(descripcion !== undefined ? { descripcion } : {}),
       }));
       if (m.cursando) {
         // Cursando: exportar con evaluaciones completas

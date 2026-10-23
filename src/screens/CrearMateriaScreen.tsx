@@ -8,6 +8,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
 import { EvaluacionItem } from '../components/EvaluacionItem';
+import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
 import { calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import {
@@ -16,7 +17,7 @@ import {
   leerArchivo, compartirArchivo,
 } from '../utils/horarioImportExport';
 import * as Clipboard from 'expo-clipboard';
-import { esFormatoMultiMateriaEval } from '../utils/importExport';
+import { esFormatoMultiMateriaEval, normalizarEvaluacionesImportadas } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { parsearMes } from '../utils/fecha';
@@ -156,8 +157,8 @@ export function CrearMateriaScreen() {
   const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
-    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string;
-  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string; descripcion: string;
+  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
@@ -322,6 +323,7 @@ export function CrearMateriaScreen() {
       horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
       ...(bloqueNuevo.salon.trim() && { salon: bloqueNuevo.salon.trim() }),
+      ...(bloqueNuevo.descripcion.trim() && { descripcion: bloqueNuevo.descripcion.trim() }),
     };
 
     if (bloqueEditandoId) {
@@ -335,7 +337,7 @@ export function CrearMateriaScreen() {
 
     setMostrarFormBloque(false);
     setBloqueEditandoId(null);
-    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
     setDropdownDia(false);
     setDropdownMes(false);
   };
@@ -496,7 +498,9 @@ export function CrearMateriaScreen() {
             String(m.numero) === String(entrada.materia)
           );
           if (!match) return;
-          const incomingEvals = (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
+          const incomingEvals = normalizarEvaluacionesImportadas(
+            (Array.isArray(entrada.evaluaciones) ? entrada.evaluaciones : []).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT)
+          );
           const nuevas = [...(match.evaluaciones ?? []), ...incomingEvals];
           guardarMateria({ ...match, evaluaciones: nuevas });
           // Keep local form in sync if this is the currently open materia
@@ -508,7 +512,7 @@ export function CrearMateriaScreen() {
         showAlert('Importar evaluaciones', `${procesadas} de ${total} materias procesadas.`);
       } else {
         // Flat single-materia format: array of evaluaciones for current materia
-        const evaluaciones = (parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT);
+        const evaluaciones = normalizarEvaluacionesImportadas((parsed as unknown[]).filter(esEvalValida).slice(0, MAX_EVALS_IMPORT));
         if (evaluaciones.length === 0) {
           showAlert('Sin evaluaciones válidas', 'El archivo no contiene evaluaciones con formato correcto.');
           return;
@@ -825,6 +829,11 @@ export function CrearMateriaScreen() {
         ) : (
           <>
             <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>EVALUACIONES</Text>
+            <BarraProgresoNotas
+              evaluaciones={form.evaluaciones}
+              esNotaExamen={form.esNotaExamen}
+              oportunidadesExamen={form.oportunidadesExamen}
+            />
             {form.evaluaciones.map((ev, i) => (
               <EvaluacionItem
                 key={ev.id}
@@ -985,6 +994,7 @@ export function CrearMateriaScreen() {
                     horaFin: b.horaFin,
                     tipo: b.tipo,
                     salon: b.salon ?? '',
+                    descripcion: b.descripcion ?? '',
                   });
                   setBloqueEditandoId(b.id);
                   setMostrarFormBloque(true);
@@ -1141,12 +1151,27 @@ export function CrearMateriaScreen() {
               placeholderTextColor={tema.textoSecundario}
             />
 
+            {/* ── Descripción ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Descripción (opcional, máx. 150)</Text>
+            <TextInput
+              style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, minHeight: 64, textAlignVertical: 'top' }}
+              value={bloqueNuevo.descripcion}
+              onChangeText={v => setBloqueNuevo(b => ({ ...b, descripcion: v }))}
+              multiline
+              maxLength={150}
+              placeholder="Ej: Repaso del tema 3"
+              placeholderTextColor={tema.textoSecundario}
+            />
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2, marginBottom: 12 }}>
+              {bloqueNuevo.descripcion.length} / 150
+            </Text>
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => {
                   setMostrarFormBloque(false);
                   setBloqueEditandoId(null);
-                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '' });
+                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
                   setDropdownDia(false);
                   setDropdownMes(false);
                 }}

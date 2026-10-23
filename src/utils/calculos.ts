@@ -1,4 +1,4 @@
-import { Config, EstadoMateria, Evaluacion, Materia } from '../types';
+import { Config, EstadoMateria, Evaluacion, GrupoEvaluacion, Materia, SubEvaluacion, TipoNota } from '../types';
 
 export function calcularPorcentajeEvaluacion(ev: Evaluacion): number | null {
   if (ev.tipo === 'simple') {
@@ -24,6 +24,79 @@ export function calcularNotaTotal(evaluaciones: Evaluacion[]): number | null {
     total += p;
   }
   return total; // en %
+}
+
+export function pesoSubEvaluacion(grupo: GrupoEvaluacion): number {
+  return grupo.subEvaluaciones.length === 0 ? 0 : grupo.pesoEnMateria / grupo.subEvaluaciones.length;
+}
+
+export function contribucionSubEvaluacion(grupo: GrupoEvaluacion, sub: SubEvaluacion): number | null {
+  if (sub.nota === null) return null;
+  return (sub.nota / sub.notaMaxima) * pesoSubEvaluacion(grupo);
+}
+
+export function contribucionParcialEvaluacion(ev: Evaluacion): number | null {
+  if (ev.tipo === 'simple') return calcularPorcentajeEvaluacion(ev);
+  const aportes = ev.subEvaluaciones
+    .map(sub => contribucionSubEvaluacion(ev, sub))
+    .filter((v): v is number => v !== null);
+  if (aportes.length === 0) return null;
+  return aportes.reduce((a, b) => a + b, 0);
+}
+
+export function puntosObtenidos(evaluaciones: Evaluacion[]): number {
+  return evaluaciones.reduce((acc, ev) => acc + (contribucionParcialEvaluacion(ev) ?? 0), 0);
+}
+
+export interface TramoBarra {
+  estado: EstadoMateria;
+  desde: number;
+  hasta: number;
+}
+
+export function calcularTramosBarra(
+  materia: Pick<Materia, 'esNotaExamen' | 'oportunidadesExamen'>,
+  config: Config,
+): TramoBarra[] {
+  const exo = materia.esNotaExamen ? config.umbralExamenExoneracion : config.umbralExoneracion;
+  let tramos: TramoBarra[];
+  if (materia.oportunidadesExamen === 0) {
+    tramos = [
+      { estado: 'recursar', desde: 0, hasta: exo },
+      { estado: 'exonerado', desde: exo, hasta: 100 },
+    ];
+  } else if (materia.esNotaExamen) {
+    tramos = [
+      { estado: 'reprobado', desde: 0, hasta: exo },
+      { estado: 'exonerado', desde: exo, hasta: 100 },
+    ];
+  } else if (config.usarEstadoAprobado) {
+    tramos = [
+      { estado: 'recursar', desde: 0, hasta: config.umbralPorExamen },
+      { estado: 'reprobado', desde: config.umbralPorExamen, hasta: config.umbralAprobacion },
+      { estado: 'aprobado', desde: config.umbralAprobacion, hasta: exo },
+      { estado: 'exonerado', desde: exo, hasta: 100 },
+    ];
+  } else {
+    tramos = [
+      { estado: 'recursar', desde: 0, hasta: config.umbralPorExamen },
+      { estado: 'reprobado', desde: config.umbralPorExamen, hasta: exo },
+      { estado: 'exonerado', desde: exo, hasta: 100 },
+    ];
+  }
+  return tramos.filter(t => t.hasta > t.desde);
+}
+
+export function convertirNotaDeTipo(
+  nota: number | null,
+  notaMaxima: number,
+  nuevoTipo: TipoNota,
+  maximoNumero = 10,
+): { nota: number | null; notaMaxima: number } {
+  if (nuevoTipo === 'porcentaje') {
+    return { nota: nota !== null ? Math.round((nota / notaMaxima) * 10000) / 100 : null, notaMaxima: 100 };
+  }
+  return { nota: nota !== null ? Math.round((nota / 100) * maximoNumero * 100) / 100 : null, notaMaxima: maximoNumero };
 }
 
 export function derivarEstado(

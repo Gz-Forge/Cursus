@@ -3,7 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoNota } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
-import { calcularPorcentajeEvaluacion } from '../utils/calculos';
+import {
+  calcularPorcentajeEvaluacion,
+  contribucionParcialEvaluacion,
+  contribucionSubEvaluacion,
+  pesoSubEvaluacion,
+} from '../utils/calculos';
 import { parsearMes } from '../utils/fecha';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -17,6 +22,10 @@ function fmtHoraEval(mins: number): string {
 function isoToDisplay(iso: string): string {
   const [y, mo, d] = iso.split('-');
   return `${d}/${mo}/${y}`;
+}
+
+function fmtNum(n: number): string {
+  return String(Math.round(n * 100) / 100);
 }
 
 // ── HoraPicker: botones ▲/▼ para hora, botones :00/:30 para minutos ───────────
@@ -526,6 +535,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
   // Grupo
   const grupo = evaluacion as GrupoEvaluacion;
   const grupoColapsado = isColapsada(grupo.id);
+  const parcialGrupo = contribucionParcialEvaluacion(grupo);
   return (
     <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento }]}>
       {/* Header: tocar el nombre/peso extiende o contrae; el lápiz (solo visible extendido) edita el nombre */}
@@ -553,7 +563,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           </TouchableOpacity>
         )}
         <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-          {contribucion !== null ? `${contribucion.toFixed(2)} / ${grupo.pesoEnMateria}` : `${grupo.pesoEnMateria}%`}
+          {parcialGrupo !== null ? `${parcialGrupo.toFixed(2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
         </Text>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
         <TouchableOpacity onPress={onEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
@@ -569,6 +579,8 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
       </View>
       {grupo.subEvaluaciones.map((sub, i) => {
         const subColapsada = isColapsada(sub.id);
+        const pesoSub = pesoSubEvaluacion(grupo);
+        const aporteSub = contribucionSubEvaluacion(grupo, sub);
         return (
           <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>
             {/* Header: tocar el nombre extiende o contrae; el lápiz (solo visible extendida) edita el nombre */}
@@ -595,6 +607,9 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                   <Text style={{ fontSize: 12 }}>✏️</Text>
                 </TouchableOpacity>
               )}
+              <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
+                {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : `${fmtNum(pesoSub)}%`}
+              </Text>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
               <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
                 <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>

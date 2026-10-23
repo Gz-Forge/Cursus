@@ -1,4 +1,5 @@
-import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar, detectarDuplicados, generarIdUnico } from '../src/utils/importExport';
+import { jsonAMaterias, materiasAJson, normalizarTipo, extraerTiposNuevos, mergeImportar, detectarDuplicados, generarIdUnico, normalizarEvaluacionesImportadas, configAJson, generarPromptCompleto, generarPromptEvaluaciones, generarPromptConfig } from '../src/utils/importExport';
+import { generarPromptHorario } from '../src/utils/horarioImportExport';
 import { Materia } from '../src/types';
 
 // previas = materias que necesito para cursar ESTA materia (previasNecesarias)
@@ -376,5 +377,103 @@ describe('generarIdUnico', () => {
 
   it('genera string no vacío', () => {
     expect(generarIdUnico().length).toBeGreaterThan(0);
+  });
+});
+
+describe('jsonAMaterias — bloques con salon y descripcion', () => {
+  it('importa salon y descripcion (recortadas) y descarta valores vacíos', () => {
+    const [m] = jsonAMaterias([{
+      nombre: 'Cálculo I', semestre: 1,
+      bloques: [
+        { fecha: '2026-03-15', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: ' Aula 3 ', descripcion: '  Repaso  ' },
+        { fecha: '2026-03-17', horaInicio: 840, horaFin: 960, tipo: 'practica', salon: '  ', descripcion: '' },
+      ],
+    }], 3);
+    expect(m.bloques![0].salon).toBe('Aula 3');
+    expect(m.bloques![0].descripcion).toBe('Repaso');
+    expect(m.bloques![1]).not.toHaveProperty('salon');
+    expect(m.bloques![1]).not.toHaveProperty('descripcion');
+  });
+
+  it('corta la descripcion a 150 caracteres', () => {
+    const [m] = jsonAMaterias([{
+      nombre: 'X', semestre: 1,
+      bloques: [{ fecha: '2026-03-15', horaInicio: 480, horaFin: 600, descripcion: 'a'.repeat(200) }],
+    }], 3);
+    expect(m.bloques![0].descripcion).toHaveLength(150);
+  });
+});
+
+describe('normalizarEvaluacionesImportadas', () => {
+  it('en porcentaje fija notaMaxima en 100', () => {
+    const [ev] = normalizarEvaluacionesImportadas([
+      { id: '1', tipo: 'simple', nombre: 'P', pesoEnMateria: 50, tipoNota: 'porcentaje', nota: 80, notaMaxima: 12 },
+    ]) as any[];
+    expect(ev.tipoNota).toBe('porcentaje');
+    expect(ev.notaMaxima).toBe(100);
+  });
+
+  it('sin tipoNota asume numero y conserva notaMaxima', () => {
+    const [ev] = normalizarEvaluacionesImportadas([
+      { id: '1', tipo: 'simple', nombre: 'P', pesoEnMateria: 50, nota: null, notaMaxima: 12 } as any,
+    ]) as any[];
+    expect(ev.tipoNota).toBe('numero');
+    expect(ev.notaMaxima).toBe(12);
+  });
+
+  it('normaliza también las pruebas dentro de un grupo', () => {
+    const [g] = normalizarEvaluacionesImportadas([
+      { id: 'g', tipo: 'grupo', nombre: 'TP', pesoEnMateria: 30, subEvaluaciones: [
+        { id: 's1', nombre: 'TP1', tipoNota: 'porcentaje', nota: 90, notaMaxima: 10 },
+      ] },
+    ]) as any[];
+    expect(g.subEvaluaciones[0].notaMaxima).toBe(100);
+  });
+});
+
+describe('configuración: flags nuevos', () => {
+  it('aplicarConfigJson acepta los dos booleanos y rechaza otros tipos', () => {
+    const calls: any[] = [];
+    const r = aplicarConfigJson({ cursus_config: 1, horarioMostrarLineaHoraActual: false, barraProgresoEvaluaciones: true }, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ horarioMostrarLineaHoraActual: false, barraProgresoEvaluaciones: true });
+    expect(r.aplicados).toEqual(expect.arrayContaining(['horarioMostrarLineaHoraActual', 'barraProgresoEvaluaciones']));
+
+    const r2 = aplicarConfigJson({ cursus_config: 1, barraProgresoEvaluaciones: 'si' }, () => {});
+    expect(r2.ignorados.some((x: any) => x.campo === 'barraProgresoEvaluaciones')).toBe(true);
+  });
+
+  it('configAJson exporta los dos booleanos y se puede volver a importar', () => {
+    const json = configAJson({ horarioMostrarLineaHoraActual: true, barraProgresoEvaluaciones: false } as any);
+    expect(json.horarioMostrarLineaHoraActual).toBe(true);
+    expect(json.barraProgresoEvaluaciones).toBe(false);
+    const calls: any[] = [];
+    aplicarConfigJson(json, p => calls.push(p));
+    expect(calls[0]).toMatchObject({ barraProgresoEvaluaciones: false });
+  });
+});
+
+describe('prompts de IA con la información nueva', () => {
+  it('el prompt completo menciona descripcion, porcentaje y los flags de config', () => {
+    const p = generarPromptCompleto();
+    expect(p).toContain('"descripcion"');
+    expect(p).toContain('horarioMostrarLineaHoraActual');
+    expect(p).toContain('barraProgresoEvaluaciones');
+    expect(p).toContain('"porcentaje", "notaMaxima" debe ser 100');
+  });
+
+  it('el prompt de evaluaciones explica porcentaje y reparto del grupo', () => {
+    const p = generarPromptEvaluaciones();
+    expect(p).toContain('Con "porcentaje" debe ser 100');
+    expect(p).toContain('partes iguales');
+  });
+
+  it('el prompt de config incluye los campos 29 y 30', () => {
+    const p = generarPromptConfig();
+    expect(p).toContain('29. horarioMostrarLineaHoraActual');
+    expect(p).toContain('30. barraProgresoEvaluaciones');
+  });
+
+  it('el prompt de horarios incluye descripcion', () => {
+    expect(generarPromptHorario({ labelTeorica: 'Teórica', labelPractica: 'Práctica', labelOtro: 'Otro' } as any)).toContain('"descripcion"');
   });
 });

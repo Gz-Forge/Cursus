@@ -66,6 +66,7 @@ export interface BloqueHorario {
   horaFin: number;
   tipo: TipoBloque;
   salon?: string;       // salón donde ocurre (opcional)
+  descripcion?: string; // descripción libre (opcional, máx. 150 caracteres)
 }
 
 export interface Materia {
@@ -203,11 +204,12 @@ export interface Config {
   coloresGruposEvaluacion?: Record<string, ColorBloque>;   // por GrupoEvaluacion.id
   coloresEvaluacionesSimples?: Record<string, ColorBloque>; // por EvaluacionSimple.id
   semestreExpandidoMap?: Record<string, boolean>; // key = semestre como string; undefined/ausente = expandido
-  ocultarSemestresExonerados?: boolean; // default false — oculta semestres donde TODAS las materias están exoneradas
+  carreraFiltroEstadosOcultos?: EstadoMateria[]; // estados desmarcados en el filtro de Carrera (ausente/[] = se muestran todos)
   evaluacionesColapsadas?: Record<string, boolean>; // key = id de Evaluacion/SubEvaluacion; true = colapsada
   creditosModalIncluirAprobado?: boolean;      // toggle "Incluir Aprobado" en el modal de Créditos obtenidos
   disponiblesModalIncluirAprobado?: boolean;   // toggle "Incluir Aprobado" en el modal de Materias disponibles
   disponiblesModalIncluirRecursar?: boolean;   // toggle "Incluir Recursar" en el modal de Materias disponibles
+  barraProgresoEvaluaciones?: boolean;         // default true — barra de progreso de notas en Editar/Crear materia
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;
