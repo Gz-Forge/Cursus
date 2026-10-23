@@ -152,7 +152,7 @@ export function DonacionScreen() {
             />
           </View>
           <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', lineHeight: 17, marginBottom: 4 }}>
-            Al escanearlo lo lleva a descargar la app.{'\n'}Por ahora disponible para Android y PC/Laptop.{'\n'}Próximamente en iOS.
+            Al escanearlo lo lleva a descargar la app.{'\n'}Por ahora disponible para Android y Windows.{'\n'}
           </Text>
 
           <View style={{ width: '100%', height: 1, backgroundColor: tema.borde, marginVertical: 32 }} />
