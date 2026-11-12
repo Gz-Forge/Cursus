@@ -11,6 +11,7 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, creditosAcumulados, calcularEstadoFinal } from '../utils/calculos';
+import { ejemploRedondeo } from '../utils/ayudas';
 import { EstadoMateria, Materia } from '../types';
 
 const PALETA_TIPOS = ['#7C4DFF','#00BCD4','#4CAF50','#FF9800','#F44336','#FFD700','#2196F3','#E91E63','#009688','#FF5722'];
@@ -565,6 +566,9 @@ export function MetricsScreen() {
                               );
                             })}
                           </View>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 8 }}>
+                            {ejemploRedondeo(notasRedondeo, materias, config.notaMaxima)}
+                          </Text>
                         </>
                       )}
                     </View>

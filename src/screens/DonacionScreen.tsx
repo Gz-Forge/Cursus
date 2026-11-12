@@ -103,10 +103,6 @@ export function DonacionScreen() {
     }
   };
 
-  const verAnuncio = () => {
-    showAlert('Próximamente', 'Esta función estará disponible en una próxima versión.');
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.fondo }}>
       <ScrollView contentContainerStyle={{ padding: 28, alignItems: 'center' }}>
@@ -253,35 +249,6 @@ export function DonacionScreen() {
               📝  Abrir formulario
             </Text>
           </TouchableOpacity>
-
-          {/* ── Ver anuncio (solo móvil) ── */}
-          {!isWeb && (
-            <>
-              <View style={{ width: '100%', height: 1, backgroundColor: tema.borde, marginVertical: 32 }} />
-              <Text style={{ fontSize: 38, marginBottom: 10 }}>📺</Text>
-              <Text style={{ color: tema.texto, fontSize: 18, fontWeight: '700', marginBottom: 10, textAlign: 'center' }}>
-                Colaborar mirando un anuncio
-              </Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
-                Si no podés donar, podés ayudarnos mirando un breve anuncio.{'\n'}
-                Es gratis para vos y nos ayuda a mantener la app activa.
-              </Text>
-              <TouchableOpacity
-                onPress={verAnuncio}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: tema.tarjeta, paddingVertical: 14,
-                  borderRadius: 12, width: '100%', alignItems: 'center',
-                  borderWidth: 1.5, borderColor: tema.acento,
-                }}
-              >
-                <Text style={{ color: tema.acento, fontWeight: '700', fontSize: 15 }}>▶  Ver anuncio</Text>
-              </TouchableOpacity>
-              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 8 }}>
-                Próximamente disponible
-              </Text>
-            </>
-          )}
 
           <View style={{ height: 20 }} />
         </View>

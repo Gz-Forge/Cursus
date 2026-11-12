@@ -14,6 +14,9 @@ import { calcularEstadoFinal } from '../utils/calculos';
 import { TipoBloque, ColorBloque, EvaluacionSimple, GrupoEvaluacion, EstadoMateria } from '../types';
 import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
 import { estadoColores } from '../theme/colors';
+import { ejemploAprobadoHabilita } from '../utils/ayudas';
+import { APP_VERSION } from '../utils/novedades';
+import { abrirNovedadesActuales } from '../components/NovedadesModal';
 
 // ── Paleta de colores predeterminados (misma que HorarioScreen) ──────────────
 const COLORES_BLOQUES_DEFAULT = [
@@ -196,7 +199,7 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual' | 'barraProgresoEvaluaciones', descripcion?: string) => {
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual' | 'barraProgresoEvaluaciones', descripcion?: string, ejemplo?: string) => {
     const val = config[key];
     return (
       <View style={{ marginBottom: 14 }}>
@@ -204,6 +207,11 @@ export function ConfigScreen() {
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{ color: tema.texto, fontSize: 14 }}>{label}</Text>
             {descripcion && <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>{descripcion}</Text>}
+            {ejemplo && (
+              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, paddingVertical: 5, paddingHorizontal: 8, marginTop: 6, alignSelf: 'flex-start' }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>{ejemplo}</Text>
+              </View>
+            )}
           </View>
           <TouchableOpacity
             onPress={() => actualizarConfig({ [key]: !val } as any)}
@@ -287,11 +295,13 @@ export function ConfigScreen() {
             'Felicitaciones por semestre completo',
             'mostrarFelicitaciones',
             'Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre',
+            '🎉 "¡2° semestre completo!"',
           )}
           {toggle(
             'Felicitaciones por año completo',
             'mostrarFelicitacionesAnio',
             'Mostrá un mensaje motivacional cuando exonerás todas las materias de un año académico',
+            '🎉 "¡Año 1° completo!"',
           )}
           {/* ── ESTADOS DE MATERIA ──────────────────────── */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -478,7 +488,12 @@ export function ConfigScreen() {
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
           {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
-          {config.usarEstadoAprobado && toggle(`"${getLabel('aprobado')}" habilita previas`, 'aprobadoHabilitaPrevias', 'Si está desactivado, solo exonerado desbloquea materias siguientes')}
+          {config.usarEstadoAprobado && toggle(
+            `"${getLabel('aprobado')}" habilita previas`,
+            'aprobadoHabilitaPrevias',
+            'Si está desactivado, solo exonerado desbloquea materias siguientes',
+            ejemploAprobadoHabilita(config.aprobadoHabilitaPrevias, materias, getLabel('aprobado'), getLabel('exonerado')).texto,
+          )}
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>EVALUACIONES</Text>
           {toggle(
@@ -1022,6 +1037,13 @@ export function ConfigScreen() {
           )}
           </>
           )}
+
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 28, marginBottom: 8 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Cursus {APP_VERSION} · </Text>
+            <TouchableOpacity onPress={abrirNovedadesActuales} accessibilityRole="link" accessibilityLabel="Ver qué hay de nuevo en esta versión">
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '600' }}>Qué hay de nuevo</Text>
+            </TouchableOpacity>
+          </View>
 
         </View>
       </Animated.ScrollView>
