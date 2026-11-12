@@ -7,6 +7,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider } from './src/theme/ThemeContext';
 import { AlertProvider } from './src/contexts/AlertContext';
 import { GlobalErrorBoundary } from './src/components/GlobalErrorBoundary';
+import { NovedadesModal } from './src/components/NovedadesModal';
 
 export default function App() {
   const cargar = useStore(s => s.cargar);
@@ -32,6 +33,7 @@ export default function App() {
           <ThemeProvider>
             <AlertProvider>
               <RootNavigator />
+              <NovedadesModal />
             </AlertProvider>
           </ThemeProvider>
         </SafeAreaProvider>

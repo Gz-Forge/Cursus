@@ -11,6 +11,7 @@ import { EvaluacionItem } from '../components/EvaluacionItem';
 import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
 import { calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
+import { ayudaNotaExamen } from '../utils/ayudas';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
   exportarJSONMateria, generarEjemploCSV, generarEjemploTexto, generarEjemploJSONMateria,
@@ -783,9 +784,7 @@ export function CrearMateriaScreen() {
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{ color: tema.texto }}>Esta nota es de examen</Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
-              {form.esNotaExamen
-                ? `Exonera ≥ ${config.umbralExamenExoneracion}% · Por debajo repite examen o recursa`
-                : `Exonera ≥ ${config.umbralExoneracion}% · Oportunidad de Examen ≥ ${config.umbralPorExamen}%`}
+              {ayudaNotaExamen(!!form.esNotaExamen, config)}
             </Text>
           </View>
           <Switch
