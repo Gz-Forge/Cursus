@@ -545,11 +545,20 @@ export function mergeImportar(
       creditosQueDA: d.creditos_da ?? existing.creditosQueDA,
       creditosNecesarios: d.creditos_necesarios ?? existing.creditosNecesarios,
       tipoFormacion: d.tipo_formacion ?? existing.tipoFormacion,
-      previasNecesarias: resolvePrevias(d.previas),
+      // Sin campo "previas" en el JSON se conservan las actuales (igual que con los créditos).
+      previasNecesarias: d.previas !== undefined ? resolvePrevias(d.previas) : existing.previasNecesarias,
     };
   });
 
-  const nuevas = jsonAMaterias(nuevasConNum, oportunidades);
+  // jsonAMaterias solo conoce las materias nuevas: las previas se vuelven a resolver
+  // con el mapa combinado para enlazar también las que ya existían.
+  const jsonNuevasPorNombre = new Map<string, MateriaJson>(
+    nuevasConNum.map(d => [key(d.nombre), d]),
+  );
+  const nuevas = jsonAMaterias(nuevasConNum, oportunidades).map(m => ({
+    ...m,
+    previasNecesarias: resolvePrevias(jsonNuevasPorNombre.get(key(m.nombre))?.previas),
+  }));
 
   const actualizadasIds = new Set(actualizadas.map(m => m.id));
   const resultado = [
@@ -657,16 +666,23 @@ export function aplicarConfigJson(
     aplicados.push(key);
   };
 
-  const isoDateArr = (key: string) => {
+  // Fechas de examen: 'YYYY-MM-DD', o 'DD-MM' cuando el período se repite cada año.
+  const fechasExamen = (key: string, ciclo: boolean) => {
     const v = d[key];
     if (v === undefined) return;
-    const re = /^\d{4}-\d{2}-\d{2}$/;
-    if (!Array.isArray(v) || !v.every((x: unknown) => typeof x === 'string' && re.test(x) && !isNaN(new Date(x).getTime()))) {
-      ignorados.push({ campo: key, motivo: 'debe ser array de fechas YYYY-MM-DD' });
+    const reIso = /^\d{4}-\d{2}-\d{2}$/;
+    const reCiclo = /^\d{2}-\d{2}$/;
+    const valida = (x: unknown) => typeof x === 'string' && (
+      ciclo ? reCiclo.test(x) : reIso.test(x) && !isNaN(new Date(x).getTime())
+    );
+    if (!Array.isArray(v) || !v.every(valida)) {
+      ignorados.push({ campo: key, motivo: ciclo ? 'debe ser array de fechas DD-MM' : 'debe ser array de fechas YYYY-MM-DD' });
       return;
     }
     (update as any)[key] = v;
     aplicados.push(key);
+    // Las fechas y el modo "repetir cada año" tienen que quedar siempre en el mismo formato.
+    update.examenRepetirCiclo = ciclo;
   };
 
   num('notaMaxima', 1, 1000);
@@ -679,7 +695,8 @@ export function aplicarConfigJson(
   num('oportunidadesExamenDefault', 1, 99);
   strArr('tiposFormacion');
   oneOf('modoExamen', ['manual', 'automatico']);
-  isoDateArr('fechasLimiteExamen');
+  fechasExamen('fechasLimiteExamen', d.examenRepetirCiclo === true);
+  oneOf('mostrarNotaComo', ['numero', 'porcentaje']);
   str('labelTeorica');
   str('abrevTeorica', 3);
   str('labelPractica');
@@ -732,6 +749,8 @@ export function configAJson(config: import('../types').Config): Record<string, u
     tiposFormacion: config.tiposFormacion,
     modoExamen: config.modoExamen,
     fechasLimiteExamen: config.fechasLimiteExamen,
+    examenRepetirCiclo: config.examenRepetirCiclo === true,
+    mostrarNotaComo: config.mostrarNotaComo,
     labelTeorica: config.labelTeorica,
     abrevTeorica: config.abrevTeorica,
     labelPractica: config.labelPractica,
