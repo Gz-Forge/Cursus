@@ -10,6 +10,7 @@ interface MateriaCompacta {
   cd?: number;  // creditos_da
   cn?: number;  // creditos_necesarios
   p?: string[]; // previas
+  tf?: string;  // tipo_formacion
 }
 
 function aCompacta(m: MateriaJson): MateriaCompacta {
@@ -18,6 +19,7 @@ function aCompacta(m: MateriaJson): MateriaCompacta {
   if (m.creditos_da !== undefined) c.cd = m.creditos_da;
   if (m.creditos_necesarios !== undefined) c.cn = m.creditos_necesarios;
   if (m.previas !== undefined && m.previas.length > 0) c.p = m.previas;
+  if (m.tipo_formacion) c.tf = m.tipo_formacion;
   return c;
 }
 
@@ -27,6 +29,7 @@ function aLarga(m: MateriaCompacta): MateriaJson {
   if (m.cd !== undefined) j.creditos_da = m.cd;
   if (m.cn !== undefined) j.creditos_necesarios = m.cn;
   if (m.p !== undefined) j.previas = m.p;
+  if (typeof m.tf === 'string' && m.tf) j.tipo_formacion = m.tf;
   return j;
 }
 

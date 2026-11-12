@@ -73,6 +73,8 @@ interface Store extends AppState {
   cargar: () => Promise<void>;
   guardarMateria: (m: Materia) => void;
   reemplazarMaterias: (nuevas: Materia[]) => void;
+  /** Reemplaza materias y configuración del perfil activo en una sola escritura. */
+  reemplazarEstado: (materias: Materia[], config: Config) => Promise<void>;
   eliminarMateria: (id: string, numero: number) => void;
   actualizarConfig: (c: Partial<Config>) => void;
   decrementarPeriodoExamen: () => Materia[];
@@ -118,6 +120,12 @@ export const useStore = create<Store>((set, get) => ({
     guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
       e => { if (__DEV__) console.error('[store] reemplazarMaterias: fallo al persistir', e); },
     );
+  },
+
+  reemplazarEstado: async (materias, config) => {
+    const { perfilActivoId } = get();
+    set({ materias, config });
+    await guardarPerfilEstado(perfilActivoId, { materias, config });
   },
 
   eliminarMateria: (id, numero) => {

@@ -10,13 +10,15 @@ import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { fileIO } from '../utils/fileIO';
 import { QrScannerModal } from '../components/QrScannerModal';
-import { construirPayload, type ExportPerfilPayload } from '../utils/exportPayload';
+import { construirPayload } from '../utils/exportPayload';
 import { cargarPerfilEstado, guardarPerfilEstado, MAX_PERFILES } from '../utils/perfiles';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
-import { Materia, Perfil, Config, TipoBloque, EvaluacionSimple } from '../types';
-import { jsonAMaterias, detectarDuplicados } from '../utils/importExport';
+import { Materia, Perfil, Config } from '../types';
+import { detectarDuplicados, extraerTiposNuevos, aplicarConfigJson, mergeImportar, materiasAJson } from '../utils/importExport';
+import { leerExportacionCompleta, esExportacionCompleta, combinarConfig, resumenConfig, type PerfilImportable } from '../utils/importCompleto';
+import { sanitizarConfigImportada } from '../utils/configImport';
 import { DuplicadosModal } from '../components/DuplicadosModal';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
@@ -69,54 +71,23 @@ export function ImportarExportarScreen() {
   );
 }
 
-function reconstruirMaterias(perfil: ExportPerfilPayload, oportunidades: number): Materia[] {
-  if (!Array.isArray(perfil.materias) || perfil.materias.length === 0) return [];
-  const primera = perfil.materias[0];
-  if (primera && 'cursando' in primera && 'id' in primera && 'evaluaciones' in primera) {
-    // Formato nuevo: Materia[] completa
-    return (perfil.materias as unknown as Materia[]).map(m => ({
-      ...m,
-      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon, descripcion }: any) => ({
-        id, fecha, horaInicio, horaFin, tipo,
-        ...(salon !== undefined ? { salon } : {}),
-        ...(descripcion !== undefined ? { descripcion } : {}),
-      })),
-    }));
-  }
-  // Formato viejo: materias es carrera-format (MateriaJson)
-  // Construir mapa nombre → Materia completa desde horarios (solo las cursando que tenían bloques)
-  const mapaDesdeHorarios = new Map<string, Materia>();
-  for (const bloque of (perfil as any).horarios ?? []) {
-    const m = bloque.materia;
-    if (!m?.nombre || mapaDesdeHorarios.has(m.nombre)) continue;
-    mapaDesdeHorarios.set(m.nombre, {
-      ...m,
-      bloques: (m.bloques ?? []).map(({ id, fecha, horaInicio, horaFin, tipo, salon, descripcion }: any) => ({
-        id, fecha, horaInicio, horaFin, tipo,
-        ...(salon !== undefined ? { salon } : {}),
-        ...(descripcion !== undefined ? { descripcion } : {}),
-      })),
-    });
-  }
-  // Convertir todas las materias carrera-format y hacer overlay con las que tienen estado completo
-  const todas = jsonAMaterias(perfil.materias as unknown as MateriaJson[], oportunidades);
-  const notasRecord = (perfil as any).notas as Record<string, number | null> | undefined;
-  const evalsRecord = (perfil as any).evaluaciones as Record<string, any[]> | undefined;
-  return todas.map(m => {
-    const desdeHorarios = mapaDesdeHorarios.get(m.nombre);
-    if (desdeHorarios) return desdeHorarios;
-    // Para materias no-cursando: aplicar notas y evaluaciones del record separado si existen
-    const nota = notasRecord?.[m.id];
-    const evals = evalsRecord?.[m.id];
-    if (nota !== undefined || evals) {
-      return {
-        ...m,
-        ...(nota !== undefined ? { usarNotaManual: true, notaManual: nota } : {}),
-        ...(evals ? { evaluaciones: evals } : {}),
-      };
-    }
-    return m;
+/**
+ * Colores de horario/evaluaciones que trae un JSON, validados y sumados a los actuales.
+ * Sirve para el JSON de colores suelto y para la sección "config" del formato todo-en-uno.
+ */
+function coloresDesdeJson(d: any, actual: Config): Partial<Config> {
+  const { config: c } = sanitizarConfigImportada({
+    coloresHorario: d?.coloresHorario,
+    coloresEvaluacionesGrupales: d?.coloresEvaluacionesGrupales,
+    coloresGruposEvaluacion: d?.coloresGruposEvaluacion,
+    coloresEvaluacionesSimples: d?.coloresEvaluacionesSimples,
   });
+  const out: Partial<Config> = {};
+  if (c.coloresHorario) out.coloresHorario = { ...(actual.coloresHorario ?? {}), ...c.coloresHorario };
+  if (c.coloresEvaluacionesGrupales) out.coloresEvaluacionesGrupales = c.coloresEvaluacionesGrupales;
+  if (c.coloresGruposEvaluacion) out.coloresGruposEvaluacion = { ...(actual.coloresGruposEvaluacion ?? {}), ...c.coloresGruposEvaluacion };
+  if (c.coloresEvaluacionesSimples) out.coloresEvaluacionesSimples = { ...(actual.coloresEvaluacionesSimples ?? {}), ...c.coloresEvaluacionesSimples };
+  return out;
 }
 
 function PanelImportar() {
@@ -128,12 +99,13 @@ function PanelImportar() {
   const [pendingImport, setPendingImport] = useState<{
     json: MateriaJson[];
     tiposNuevos: string[];
-    configAplicados?: number;
+    /** Configuración del archivo: se aplica recién al confirmar la importación. */
+    configUpdate?: Partial<Config>;
+    configIgnorados?: string[];
   } | null>(null);
-  const [pendingPerfilImport, setPendingPerfilImport] = useState<{
-    nombrePerfil: string;
-    materias: Materia[];
-  } | null>(null);
+  // Archivo con varios perfiles: primero se elige cuál importar.
+  const [perfilesArchivo, setPerfilesArchivo] = useState<PerfilImportable[] | null>(null);
+  const [pendingPerfilImport, setPendingPerfilImport] = useState<PerfilImportable | null>(null);
   const [bufferImport, setBufferImport] = useState<Materia[]>([]);
   const [mostrarDuplicadosImport, setMostrarDuplicadosImport] = useState(false);
   // 'merge' = came from doImport path; otherwise = perfilId (string) from ejecutarImportPerfil
@@ -167,21 +139,12 @@ function PanelImportar() {
       ((datos as any).coloresHorario || (datos as any).coloresEvaluacionesGrupales ||
        (datos as any).coloresGruposEvaluacion || (datos as any).coloresEvaluacionesSimples)
     ) {
-      const d = datos as any;
-      const updates: Record<string, unknown> = {};
-      if (d.coloresHorario && typeof d.coloresHorario === 'object') {
-        updates.coloresHorario = { ...(config.coloresHorario ?? {}), ...d.coloresHorario };
+      const updates = coloresDesdeJson(datos, config);
+      if (Object.keys(updates).length === 0) {
+        showAlert('Sin cambios', 'El archivo no contiene colores válidos.');
+        return;
       }
-      if (d.coloresEvaluacionesGrupales && typeof d.coloresEvaluacionesGrupales === 'object') {
-        updates.coloresEvaluacionesGrupales = d.coloresEvaluacionesGrupales;
-      }
-      if (d.coloresGruposEvaluacion && typeof d.coloresGruposEvaluacion === 'object') {
-        updates.coloresGruposEvaluacion = { ...(config.coloresGruposEvaluacion ?? {}), ...d.coloresGruposEvaluacion };
-      }
-      if (d.coloresEvaluacionesSimples && typeof d.coloresEvaluacionesSimples === 'object') {
-        updates.coloresEvaluacionesSimples = { ...(config.coloresEvaluacionesSimples ?? {}), ...d.coloresEvaluacionesSimples };
-      }
-      actualizarConfig(updates as Partial<typeof config>);
+      actualizarConfig(updates);
       showAlert('Colores importados', 'Los colores se aplicaron correctamente.');
       return;
     }
@@ -191,82 +154,52 @@ function PanelImportar() {
       typeof datos === 'object' && datos !== null &&
       (datos as any).cursus_todo_en_uno === 1
     ) {
-      let configAplicados = 0;
-      if ((datos as any).config && typeof (datos as any).config === 'object') {
+      const cfg = (datos as any).config;
+      let configUpdate: Partial<Config> = {};
+      let configIgnorados: string[] = [];
+      if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) {
         try {
-          const { aplicarConfigJson } = await import('../utils/importExport');
-          const resultado = aplicarConfigJson(
-            { cursus_config: 1, ...(datos as any).config },
-            actualizarConfig,
-          );
-          configAplicados = resultado.aplicados.length;
+          // Se captura el resultado sin aplicarlo todavía.
+          const resultado = aplicarConfigJson({ ...cfg, cursus_config: 1 }, u => { configUpdate = { ...u }; });
+          configIgnorados = resultado.ignorados.map(x => `${x.campo} (${x.motivo})`);
         } catch {
-          // ignorar errores de config, continuar con materias
+          configIgnorados = ['config'];
         }
+        // Los colores van dentro de "config" en este formato.
+        configUpdate = { ...configUpdate, ...coloresDesdeJson(cfg, config) };
       }
+      const nCampos = Object.keys(configUpdate).length;
+      const avisoIgnorados = configIgnorados.length > 0
+        ? `\n\n⚠️ ${configIgnorados.length} ignorado(s) por inválidos:\n${configIgnorados.map(x => `• ${x}`).join('\n')}`
+        : '';
       if (Array.isArray((datos as any).materias)) {
-        const { extraerTiposNuevos } = await import('../utils/importExport');
-        const tiposNuevos = extraerTiposNuevos((datos as any).materias, config.tiposFormacion);
-        setPendingImport({ json: (datos as any).materias, tiposNuevos, configAplicados });
+        const tiposNuevos = extraerTiposNuevos((datos as any).materias, configUpdate.tiposFormacion ?? config.tiposFormacion);
+        setPendingImport({ json: (datos as any).materias, tiposNuevos, configUpdate, configIgnorados });
+      } else if (nCampos > 0) {
+        actualizarConfig(configUpdate);
+        showAlert('Configuración aplicada', `✅ ${nCampos} campo(s) aplicado(s).${avisoIgnorados}`);
       } else {
-        showAlert('Configuración aplicada', `✅ ${configAplicados} campo(s) aplicado(s).`);
+        showAlert('Sin cambios', `El archivo no contiene materias ni configuración válida.${avisoIgnorados}`);
       }
       return;
     }
 
     // Detectar formato carrera (array con nombre + semestre)
     if (Array.isArray(datos) && (datos as any[])[0]?.nombre && (datos as any[])[0]?.semestre !== undefined) {
-      const { extraerTiposNuevos } = await import('../utils/importExport');
       const tiposNuevos = extraerTiposNuevos(datos as any, config.tiposFormacion);
       setPendingImport({ json: datos as MateriaJson[], tiposNuevos });
       return;
     }
 
     // Detectar formato exportación completa
-    if (
-      typeof datos === 'object' &&
-      datos !== null &&
-      'version' in datos &&
-      (datos as any).version === 1 &&
-      Array.isArray((datos as any).perfiles)
-    ) {
-      const d = datos as any;
-      const tieneConfig = d.config && typeof d.config === 'object' && !Array.isArray(d.config);
-      const primerPerfil: ExportPerfilPayload | undefined = d.perfiles[0];
-
-      // Aplicar config si existe
-      if (tieneConfig) {
-        try {
-          const { aplicarConfigJson } = await import('../utils/importExport');
-          aplicarConfigJson({ cursus_config: 1, ...d.config }, actualizarConfig);
-        } catch {
-          // ignorar errores de config
-        }
-        // aplicarConfigJson excluye deliberadamente los colores — aplicarlos directamente
-        const cd = d.config as any;
-        const colorUpdates: Partial<Config> = {};
-        if (cd.coloresHorario && typeof cd.coloresHorario === 'object') colorUpdates.coloresHorario = cd.coloresHorario;
-        if (cd.coloresGruposEvaluacion && typeof cd.coloresGruposEvaluacion === 'object') colorUpdates.coloresGruposEvaluacion = cd.coloresGruposEvaluacion;
-        if (cd.coloresEvaluacionesSimples && typeof cd.coloresEvaluacionesSimples === 'object') colorUpdates.coloresEvaluacionesSimples = cd.coloresEvaluacionesSimples;
-        if (cd.coloresEvaluacionesGrupales && typeof cd.coloresEvaluacionesGrupales === 'object') colorUpdates.coloresEvaluacionesGrupales = cd.coloresEvaluacionesGrupales;
-        if (Object.keys(colorUpdates).length > 0) actualizarConfig(colorUpdates);
-      }
-
-      if (!primerPerfil) {
-        showAlert('Error', 'El archivo no contiene perfiles.');
+    if (esExportacionCompleta(datos)) {
+      const encontrados = leerExportacionCompleta(datos, config.oportunidadesExamenDefault);
+      if (encontrados.length === 0) {
+        showAlert('Error', 'No se encontraron perfiles con materias en el archivo.');
         return;
       }
-
-      const materiasImportadas = reconstruirMaterias(primerPerfil, config.oportunidadesExamenDefault);
-      if (materiasImportadas.length === 0) {
-        showAlert('Error', 'No se encontraron materias en el archivo.');
-        return;
-      }
-
-      setPendingPerfilImport({
-        nombrePerfil: primerPerfil.nombre ?? 'Perfil importado',
-        materias: materiasImportadas,
-      });
+      if (encontrados.length === 1) setPendingPerfilImport(encontrados[0]);
+      else setPerfilesArchivo(encontrados);
       return;
     }
 
@@ -276,7 +209,6 @@ function PanelImportar() {
       (datos as any).cursus_config === 1
     ) {
       try {
-        const { aplicarConfigJson } = await import('../utils/importExport');
         const resultado = aplicarConfigJson(datos, actualizarConfig);
         if (resultado.aplicados.length === 0 && resultado.ignorados.length === 0) {
           showAlert('Sin cambios', 'El archivo no contiene campos de configuración reconocidos.');
@@ -303,38 +235,78 @@ function PanelImportar() {
 
   const MAX_MATERIAS_IMPORT = 500;
 
+  /**
+   * Escribe el perfil importado en el destino elegido: materias + configuración juntas,
+   * siempre sobre ese perfil (nunca sobre otro) y recién en este momento.
+   */
+  const aplicarPerfilImportado = async (
+    target: string | 'nuevo',
+    perfil: PerfilImportable,
+    materiasFinales: Materia[],
+  ) => {
+    const datos = { config: perfil.config, materias: materiasFinales };
+    if (target === 'nuevo') {
+      const antes = useStore.getState().perfilActivoId;
+      await crearPerfil(perfil.nombre);
+      const st = useStore.getState();
+      if (st.perfilActivoId === antes) throw new Error('No se pudo crear el perfil');
+      await st.reemplazarEstado(materiasFinales, combinarConfig(st.config, datos));
+      showAlert('✅ Perfil creado', `"${perfil.nombre}" con ${materiasFinales.length} materias.\n\n${resumenConfig(perfil)}`);
+    } else if (target === useStore.getState().perfilActivoId) {
+      const st = useStore.getState();
+      await st.reemplazarEstado(materiasFinales, combinarConfig(st.config, datos));
+      await renombrarPerfil(target, perfil.nombre);
+      showAlert('✅ Perfil importado', `${materiasFinales.length} materias cargadas en "${perfil.nombre}".\n\n${resumenConfig(perfil)}`);
+    } else {
+      const estadoActual = await cargarPerfilEstado(target);
+      await guardarPerfilEstado(target, {
+        materias: materiasFinales,
+        config: combinarConfig(estadoActual.config, datos),
+      });
+      await renombrarPerfil(target, perfil.nombre);
+      showAlert('✅ Perfil importado', `${materiasFinales.length} materias cargadas en "${perfil.nombre}".\n\n${resumenConfig(perfil)}`);
+    }
+  };
+
   const ejecutarImportPerfil = async (targetPerfilId: string | 'nuevo') => {
     if (!pendingPerfilImport) return;
-    const { nombrePerfil, materias: nuevasMaterias } = pendingPerfilImport;
-    const dups = detectarDuplicados(nuevasMaterias);
+    const perfil = pendingPerfilImport;
+    const dups = detectarDuplicados(perfil.materias);
     if (dups.size > 0) {
-      setBufferImport(nuevasMaterias);
+      setBufferImport(perfil.materias);
       setPendingImportTarget(targetPerfilId);
       setMostrarDuplicadosImport(true);
       return;
     }
     setCargando(true);
     try {
-      if (targetPerfilId === 'nuevo') {
-        await crearPerfil(nombrePerfil);
-        reemplazarMaterias(nuevasMaterias);
-        showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${nuevasMaterias.length} materias`);
-      } else if (targetPerfilId === perfilActivoId) {
-        reemplazarMaterias(nuevasMaterias);
-        await renombrarPerfil(perfilActivoId, nombrePerfil);
-        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
-      } else {
-        const estadoActual = await cargarPerfilEstado(targetPerfilId);
-        await guardarPerfilEstado(targetPerfilId, { ...estadoActual, materias: nuevasMaterias });
-        await renombrarPerfil(targetPerfilId, nombrePerfil);
-        showAlert('✅ Perfil importado', `${nuevasMaterias.length} materias cargadas en "${nombrePerfil}"`);
-      }
+      await aplicarPerfilImportado(targetPerfilId, perfil, perfil.materias);
       setPendingPerfilImport(null);
     } catch {
       showAlert('Error', 'No se pudo importar el perfil.');
     } finally {
       setCargando(false);
     }
+  };
+
+  /** Aplica la configuración que traía el archivo (formato todo-en-uno) y suma los tipos de formación nuevos. */
+  const aplicarConfigPendiente = (p: NonNullable<typeof pendingImport>) => {
+    const fresh = useStore.getState().config;
+    const update: Partial<Config> = { ...(p.configUpdate ?? {}) };
+    const baseTipos = update.tiposFormacion ?? fresh.tiposFormacion;
+    const nuevos = extraerTiposNuevos(p.json, baseTipos);
+    if (nuevos.length > 0) update.tiposFormacion = [...baseTipos, ...nuevos];
+    if (Object.keys(update).length > 0) actualizarConfig(update);
+  };
+
+  const textoFinImport = (p: NonNullable<typeof pendingImport>, total: number) => {
+    const n = Object.keys(p.configUpdate ?? {}).length;
+    const ign = p.configIgnorados ?? [];
+    return [
+      `Se procesaron ${total} materias.`,
+      n > 0 ? `⚙️ ${n} campo(s) de configuración aplicados.` : null,
+      ign.length > 0 ? `⚠️ ${ign.length} campo(s) de configuración ignorados:\n${ign.map(x => `• ${x}`).join('\n')}` : null,
+    ].filter(Boolean).join('\n\n');
   };
 
   const doImport = async (modo: ModoImport) => {
@@ -345,12 +317,11 @@ function PanelImportar() {
     }
     setCargando(true);
     try {
-      const { mergeImportar } = await import('../utils/importExport');
       const merged = mergeImportar(
         materias,
         pendingImport.json,
         modo,
-        config.oportunidadesExamenDefault,
+        pendingImport.configUpdate?.oportunidadesExamenDefault ?? config.oportunidadesExamenDefault,
       );
       const dups = detectarDuplicados(merged);
       if (dups.size > 0) {
@@ -359,13 +330,10 @@ function PanelImportar() {
         setMostrarDuplicadosImport(true);
         return;
       }
-      if (pendingImport.tiposNuevos.length > 0) {
-        const freshConfig = useStore.getState().config;
-        actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...pendingImport.tiposNuevos] });
-      }
+      aplicarConfigPendiente(pendingImport);
       reemplazarMaterias(merged);
       setPendingImport(null);
-      showAlert('Importación completa', `Se procesaron ${merged.length} materias.`);
+      showAlert('Importación completa', textoFinImport(pendingImport, merged.length));
     } catch {
       showAlert('Error', 'No se pudo completar la importación.');
     } finally {
@@ -379,35 +347,17 @@ function PanelImportar() {
     setPendingImportTarget(null);
 
     if (target === 'merge') {
-      if (pendingImport?.tiposNuevos && pendingImport.tiposNuevos.length > 0) {
-        const freshConfig = useStore.getState().config;
-        actualizarConfig({ tiposFormacion: [...freshConfig.tiposFormacion, ...pendingImport.tiposNuevos] });
-      }
+      if (!pendingImport) return;
+      aplicarConfigPendiente(pendingImport);
       reemplazarMaterias(bufferImport);
       setPendingImport(null);
-      showAlert('Importación completa', `Se procesaron ${bufferImport.length} materias.`);
+      showAlert('Importación completa', textoFinImport(pendingImport, bufferImport.length));
     } else if (target !== null) {
-      const nombrePerfil = pendingPerfilImport?.nombrePerfil;
-      if (!nombrePerfil) {
-        setCargando(false);
-        return;
-      }
+      const perfil = pendingPerfilImport;
+      if (!perfil) return;
       setCargando(true);
       try {
-        if (target === 'nuevo') {
-          await crearPerfil(nombrePerfil);
-          reemplazarMaterias(bufferImport);
-          showAlert('✅ Perfil creado', `"${nombrePerfil}" con ${bufferImport.length} materias`);
-        } else if (target === perfilActivoId) {
-          reemplazarMaterias(bufferImport);
-          await renombrarPerfil(perfilActivoId, nombrePerfil);
-          showAlert('✅ Perfil importado', `${bufferImport.length} materias cargadas en "${nombrePerfil}"`);
-        } else {
-          const estadoActual = await cargarPerfilEstado(target);
-          await guardarPerfilEstado(target, { ...estadoActual, materias: bufferImport });
-          await renombrarPerfil(target, nombrePerfil);
-          showAlert('✅ Perfil importado', `${bufferImport.length} materias cargadas en "${nombrePerfil}"`);
-        }
+        await aplicarPerfilImportado(target, perfil, bufferImport);
         setPendingPerfilImport(null);
       } catch {
         showAlert('Error', 'No se pudo importar el perfil.');
@@ -462,12 +412,12 @@ function PanelImportar() {
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 2 }}>
               {pendingImport.json.length} materias encontradas
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: pendingImport.configAplicados ? 6 : 14 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: Object.keys(pendingImport.configUpdate ?? {}).length > 0 ? 6 : 14 }}>
               {nuevoCount} nuevas · {existenteCount} ya existentes
             </Text>
-            {!!pendingImport.configAplicados && (
+            {Object.keys(pendingImport.configUpdate ?? {}).length > 0 && (
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, marginBottom: 14 }}>
-                ⚙️ {pendingImport.configAplicados} campo(s) de configuración ya aplicados
+                ⚙️ También se aplicarán {Object.keys(pendingImport.configUpdate ?? {}).length} campo(s) de configuración al elegir una opción
               </Text>
             )}
 
@@ -549,11 +499,15 @@ function PanelImportar() {
             maxWidth: 400,
           }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
-              Importar perfil "{pendingPerfilImport?.nombrePerfil}"
+              Importar perfil "{pendingPerfilImport?.nombre}"
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 6 }}>
               {pendingPerfilImport?.materias.length} materias encontradas
+              {pendingPerfilImport?.config ? ' · con configuración' : ' · sin configuración'}
               {perfiles.length >= MAX_PERFILES ? ' — elegí qué perfil reemplazar' : ''}
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 14, lineHeight: 17 }}>
+              Las materias{pendingPerfilImport?.config ? ' y la configuración' : ''} del perfil que elijas se reemplazan por las del archivo.
             </Text>
 
             {perfiles.length < MAX_PERFILES ? (
@@ -609,6 +563,45 @@ function PanelImportar() {
               onPress={() => setPendingPerfilImport(null)}
               style={{ alignItems: 'center', marginTop: 4 }}
             >
+              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!perfilesArchivo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPerfilesArchivo(null)}
+      >
+        <View style={{
+          flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center', alignItems: 'center', padding: 24,
+        }}>
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 14, padding: 20, width: '100%', maxWidth: 400 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+              El archivo tiene {perfilesArchivo?.length} perfiles
+            </Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16 }}>
+              Elegí cuál querés importar. Para importar otro, volvé a seleccionar el archivo.
+            </Text>
+            {(perfilesArchivo ?? []).map((p, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => { setPerfilesArchivo(null); setPendingPerfilImport(p); }}
+                style={{
+                  backgroundColor: tema.fondo, padding: 14, borderRadius: 10, marginBottom: 8,
+                  borderWidth: 1, borderColor: tema.borde,
+                }}
+              >
+                <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>{p.nombre}</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                  {p.materias.length} materias{p.config ? ' · con configuración' : ' · sin configuración'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity onPress={() => setPerfilesArchivo(null)} style={{ alignItems: 'center', marginTop: 4 }}>
               <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
             </TouchableOpacity>
           </View>
@@ -684,6 +677,12 @@ function PanelExportar() {
         <Checkbox label="Evaluaciones" value={inclEvaluaciones} onChange={setInclEvaluaciones} />
         <Checkbox label="Horarios" value={inclHorarios} onChange={setInclHorarios} />
         <Checkbox label="Configuración" value={inclConfig} onChange={setInclConfig} />
+        <Text style={{ color: tema.textoSecundario, fontSize: 12, lineHeight: 18, marginBottom: 4 }}>
+          • <Text style={{ color: tema.texto }}>Notas</Text> sin Evaluaciones: se exporta solo la nota final de cada materia.{'\n'}
+          • <Text style={{ color: tema.texto }}>Evaluaciones</Text> sin Notas: se exportan vacías, sin calificaciones.{'\n'}
+          • <Text style={{ color: tema.texto }}>Horarios</Text>: clases y registro de faltas.{'\n'}
+          • <Text style={{ color: tema.texto }}>Configuración</Text>: la de cada perfil, con su tema. Las imágenes de fondo guardadas en el dispositivo no se exportan.
+        </Text>
         {(inclNotas || inclEvaluaciones) && (
           <Text style={{ color: '#FF9800', fontSize: 12, marginTop: 4, lineHeight: 18 }}>
             ⚠️ El archivo exportado contendrá datos académicos personales (notas y/o evaluaciones). Compartilo solo con personas de confianza.
@@ -723,9 +722,10 @@ function PanelExportar() {
         inclNotas={inclNotas}
         inclEvaluaciones={inclEvaluaciones}
         inclHorarios={inclHorarios}
-        config={inclConfig ? config : undefined}
+        inclConfig={inclConfig}
         perfilesSelec={perfiles.filter(p => perfilesSelec.includes(p.id))}
         materiasActivas={materias}
+        activo={{ id: perfilActivoId, materias, config }}
       />
 
       <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 8 }}>
@@ -801,19 +801,21 @@ interface PanelMetodosProps {
   inclNotas: boolean;
   inclEvaluaciones: boolean;
   inclHorarios: boolean;
-  config?: Config;
+  inclConfig: boolean;
   perfilesSelec: Perfil[];
   materiasActivas: Materia[];
+  activo: { id: string; materias: Materia[]; config: Config };
 }
 
 function PanelMetodos({
-  inclNotas, inclEvaluaciones, inclHorarios, config,
-  perfilesSelec, materiasActivas,
+  inclNotas, inclEvaluaciones, inclHorarios, inclConfig,
+  perfilesSelec, materiasActivas, activo,
 }: PanelMetodosProps) {
   const tema = useTema();
   const { showAlert } = useAlert();
   const [cargando, setCargando] = useState(false);
   const [mostrarQrModal, setMostrarQrModal] = useState(false);
+  const [materiasQr, setMateriasQr] = useState<Materia[]>([]);
   const [mostrarOpcionesQr, setMostrarOpcionesQr] = useState(false);
   const { eliminarMateria, reemplazarMaterias, materias: storeMaterias } = useStore();
   const [mostrarDuplicados, setMostrarDuplicados] = useState<boolean>(false);
@@ -825,7 +827,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
@@ -854,7 +856,7 @@ function PanelMetodos({
     setCargando(true);
     try {
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
+        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
       await Clipboard.setStringAsync(contenido);
@@ -880,12 +882,24 @@ function PanelMetodos({
     await _doExportClipboard();
   };
 
-  const handleQrPantalla = () => {
+  /** Los QR llevan la carrera de un solo perfil: el primero de los seleccionados. */
+  const materiasDelPrimerPerfil = async (): Promise<Materia[]> => {
+    const primero = perfilesSelec[0];
+    if (!primero || primero.id === activo.id) return activo.materias;
+    return (await cargarPerfilEstado(primero.id)).materias ?? [];
+  };
+
+  const handleQrPantalla = async () => {
     if (sinPerfiles) {
       showAlert('Sin perfiles', 'Seleccioná al menos un perfil para exportar.');
       return;
     }
-    setMostrarQrModal(true);
+    try {
+      setMateriasQr(await materiasDelPrimerPerfil());
+      setMostrarQrModal(true);
+    } catch {
+      showAlert('Error', 'No se pudo generar los QRs.');
+    }
   };
 
   const handleDescargarQrs = async (formato: 'png' | 'pdf' | 'zip') => {
@@ -895,11 +909,8 @@ function PanelMetodos({
     }
     setCargando(true);
     try {
-      const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, config, perfilesSelec,
-      });
-      const materias = payload.perfiles[0]?.materias ?? [];
-      const encoded = encodeCarrera(materias);
+      // Mismo contenido que el QR en pantalla: plan de carrera con créditos, previas y tipo.
+      const encoded = encodeCarrera(materiasAJson(await materiasDelPrimerPerfil()));
       const chunks = splitEnChunks(encoded);
       const dataUrls = await generarQrDataUrls(chunks);
 
@@ -1005,6 +1016,12 @@ function PanelMetodos({
         </View>
       )}
 
+      <Text style={{ color: tema.textoSecundario, fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 6 }}>
+        Los QR llevan solo el plan de carrera (materias, créditos, previas y tipo de formación)
+        {perfilesSelec.length > 1 ? ` del primer perfil seleccionado ("${perfilesSelec[0].nombre}")` : ''}.
+        Para notas, evaluaciones, horarios o configuración usá Descargar o Copiar.
+      </Text>
+
       {sinPerfiles && (
         <Text style={{ color: '#FF9800', fontSize: 12, textAlign: 'center', marginTop: 4 }}>
           ⚠️ Seleccioná al menos un perfil arriba
@@ -1013,7 +1030,7 @@ function PanelMetodos({
 
       <QrShareModal
         visible={mostrarQrModal}
-        materias={materiasActivas}
+        materias={materiasQr}
         onCerrar={() => setMostrarQrModal(false)}
       />
 
