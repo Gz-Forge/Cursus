@@ -195,6 +195,7 @@ export function HorarioScreen() {
   const [cmbNombrePrimeraSubEval, setCmbNombrePrimeraSubEval] = useState('');
   const [cmbPaso, setCmbPaso] = useState(1);
   const lastTapRef = React.useRef<{ fecha: string; t: number } | null>(null);
+  const zonasVaciasRef = React.useRef(new Map<string, View>());
   const modalCrearAbiertaRef = React.useRef(false);
   React.useEffect(() => { modalCrearAbiertaRef.current = modalCrearBloque !== null; }, [modalCrearBloque]);
   // --- Estado de drag para evaluaciones ---
@@ -212,8 +213,6 @@ export function HorarioScreen() {
   const resizeStartRef   = React.useRef<{ horaInicio: number; horaFin: number } | null>(null);
   const webDragStartRef  = React.useRef<{ x: number; y: number } | null>(null);
   const webDragModeRef   = React.useRef<'resize-top' | 'drag' | 'resize-bottom' | null>(null);
-  // Persiste el timestamp del primer clic en enterEditWeb para detectar doble clic cross-render
-  const lastEnterEditRef = React.useRef<{ blockId: string; t: number } | null>(null);
   const draftBloqueRef          = React.useRef<BloqueHorario | null>(null);
   const gridAreaRef             = React.useRef<View>(null);
   const gridAreaTopRef          = React.useRef(0);
@@ -277,9 +276,9 @@ export function HorarioScreen() {
     if (!blockEl) return;
 
     const HANDLE_H = 16;
-    let lastPdTime = 0;
 
     const handleBlockPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
 
@@ -287,26 +286,6 @@ export function HorarioScreen() {
       const relY = e.clientY - rect.top;
       const draft = draftBloqueRef.current;
       if (!draft) return;
-
-      // Detectar doble clic (dos pointerdown en zona central dentro de 350ms)
-      // Caso A: ya en modo edición → lastPdTime (mismo useEffect, mismo render)
-      // Caso B: primer clic entró vía TouchableOpacity → lastEnterEditRef persiste cross-render
-      const now = Date.now();
-      const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
-      const prevRef = lastEnterEditRef.current;
-      const isCrossPathDouble = inCentral && prevRef?.blockId === draft.id && now - prevRef.t < 350;
-      const isSamePathDouble  = inCentral && now - lastPdTime < 350;
-      if (isCrossPathDouble || isSamePathDouble) {
-        lastPdTime = 0;
-        lastEnterEditRef.current = null;
-        const [, mesStr, diaStr] = draft.fecha.split('-');
-        setModalEdicionRapida({ bloqueId: draft.id, tipo: 'regular' });
-        setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
-        setModalSalonStr(draft.salon ?? '');
-        return;
-      }
-      lastEnterEditRef.current = null;
-      lastPdTime = now;
 
       // Recalcular outerOriginRef sincrónicamente (puede haber scroll desde el último onLayout)
       const outerEl = outerViewRef.current as unknown as HTMLElement | null;
@@ -440,37 +419,13 @@ export function HorarioScreen() {
 
     const HANDLE_H = 16;
 
-    let lastPdTimeEval = 0;
-
     const handleEvalPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
 
       const rect = evalEl.getBoundingClientRect();
       const relY = e.clientY - rect.top;
-
-      // Detectar doble clic en zona central
-      // Caso A: ya en modo edición → lastPdTimeEval (mismo useEffect)
-      // Caso B: primer clic entró vía TouchableOpacity → lastEnterEditRef persiste cross-render
-      const now = Date.now();
-      const inCentral = relY >= HANDLE_H && relY <= rect.height - HANDLE_H;
-      const prevRef = lastEnterEditRef.current;
-      const isCrossPathDouble = inCentral && prevRef?.blockId === evalEnDrag && now - prevRef.t < 350;
-      const isSamePathDouble  = inCentral && now - lastPdTimeEval < 350;
-      if (isCrossPathDouble || isSamePathDouble) {
-        lastPdTimeEval = 0;
-        lastEnterEditRef.current = null;
-        const data = evalDragDataRef.current;
-        if (data?.fecha) {
-          const [, mesStr, diaStr] = data.fecha.split('-');
-          setModalEdicionRapida({ bloqueId: evalEnDrag, tipo: 'eval', materiaId: data.materiaId });
-          setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
-          setModalSalonStr(data.salon ?? '');
-        }
-        return;
-      }
-      lastEnterEditRef.current = null;
-      lastPdTimeEval = now;
 
       // Recalibrar outerOriginRef y gridAreaTopRef sincrónicamente
       const outerEl = outerViewRef.current as unknown as HTMLElement | null;
@@ -775,6 +730,62 @@ export function HorarioScreen() {
     }
   }, [bloquesEstaSemana, evaluacionesEstaSemana, salonOverride]);
 
+  const datosContextMenuRef = React.useRef({ bloques: bloquesEstaSemana, evals: evaluacionesEstaSemana });
+  datosContextMenuRef.current = { bloques: bloquesEstaSemana, evals: evaluacionesEstaSemana };
+
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !isFocused) return;
+
+    const abrirEdicionRapida = (fechaIso: string, salon: string | undefined) => {
+      const [, mesStr, diaStr] = fechaIso.split('-');
+      setModalFechaStr(`${diaStr.replace(/^0/, '')}/${mesStr.replace(/^0/, '')}`);
+      setModalSalonStr(salon ?? '');
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (modalAbiertaRef.current || modalCrearAbiertaRef.current) return;
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      for (const [id, el] of cardRefs.current.entries()) {
+        const node = el as unknown as HTMLElement | null;
+        if (!node?.contains(target)) continue;
+
+        const { bloques, evals } = datosContextMenuRef.current;
+        const bloque = bloques.find(b => b.id === id);
+        if (bloque) {
+          e.preventDefault();
+          const actual = draftBloqueRef.current?.id === id ? draftBloqueRef.current : bloque;
+          setModalEdicionRapida({ bloqueId: id, tipo: 'regular' });
+          abrirEdicionRapida(actual.fecha, actual.salon);
+          return;
+        }
+        const ev = evals.find(x => x.id === id);
+        if (ev?.fecha) {
+          e.preventDefault();
+          setModalEdicionRapida({ bloqueId: id, tipo: 'eval', materiaId: ev.materia.id });
+          abrirEdicionRapida(ev.fecha, ev.salon);
+        }
+        return;
+      }
+
+      for (const [fecha, el] of zonasVaciasRef.current.entries()) {
+        const node = el as unknown as HTMLElement | null;
+        if (!node?.contains(target)) continue;
+        e.preventDefault();
+        const offsetY = e.clientY - node.getBoundingClientRect().top;
+        const hI = horaInicioRef.current;
+        const hF = horaFinRef.current;
+        const hiSnapped = Math.max(hI, Math.min(snap30(hI + offsetY / PX_POR_MIN), hF - 60));
+        abrirCrearBloque(fecha, hiSnapped);
+        return;
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    return () => document.removeEventListener('contextmenu', handleContextMenu);
+  }, [isFocused]);
+
   // Layout de superposición por día — incluye bloques Y evaluaciones para que compartan columna
   const layoutPorDia = React.useMemo(() => {
     const map = new Map<string, Map<string, LayoutBloque>>();
@@ -879,6 +890,14 @@ export function HorarioScreen() {
       fecha: fechas[Math.max(0, Math.min(diaIdx, fechas.length - 1))],
       horaInicio: Math.max(hInicio, Math.min(nuevaHoraInicio, hFin - 30)),
     };
+  }
+
+  function abrirCrearBloque(fecha: string, hiSnapped: number) {
+    setModalCrearBloque({ fecha, horaInicio: hiSnapped, horaFin: hiSnapped + 60 });
+    setCmbPaso(1); setCmbMateriaId(''); setCmbTipoBloque(null); setCmbSubTipo('teorica');
+    setCmbSalon(''); setCmbDescripcion(''); setCmbEsGrupal(null); setCmbNombreEval('');
+    setCmbPesoEval(''); setCmbGrupoId(null); setCmbNombreGrupo('');
+    setCmbPesoGrupo(''); setCmbNombrePrimeraSubEval('');
   }
 
   function snap30(mins: number): number {
@@ -1183,8 +1202,10 @@ export function HorarioScreen() {
 
                     {/* Zona de doble tap en espacio vacío — debe ir antes de los bloques para quedar detrás */}
                     <Pressable
+                      ref={(el) => { if (el) zonasVaciasRef.current.set(fecha, el as unknown as View); else zonasVaciasRef.current.delete(fecha); }}
                       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                       onPress={(e) => {
+                        if (Platform.OS === 'web') return;
                         if (cardEnEdicion !== null || modalAbiertaRef.current || modalCrearAbiertaRef.current) return;
                         const now = Date.now();
                         const nev = e.nativeEvent as any;
@@ -1192,11 +1213,7 @@ export function HorarioScreen() {
                         if (lastTapRef.current?.fecha === fecha && now - lastTapRef.current.t < 400) {
                           const minsDesdeInicio = locationY / PX_POR_MIN;
                           const hiSnapped = Math.max(horaInicio, Math.min(snap30(horaInicio + minsDesdeInicio), horaFin - 60));
-                          setModalCrearBloque({ fecha, horaInicio: hiSnapped, horaFin: hiSnapped + 60 });
-                          setCmbPaso(1); setCmbMateriaId(''); setCmbTipoBloque(null); setCmbSubTipo('teorica');
-                          setCmbSalon(''); setCmbDescripcion(''); setCmbEsGrupal(null); setCmbNombreEval('');
-                          setCmbPesoEval(''); setCmbGrupoId(null); setCmbNombreGrupo('');
-                          setCmbPesoGrupo(''); setCmbNombrePrimeraSubEval('');
+                          abrirCrearBloque(fecha, hiSnapped);
                           lastTapRef.current = null;
                         } else {
                           lastTapRef.current = { fecha, t: now };
@@ -1238,7 +1255,6 @@ export function HorarioScreen() {
                         if (Platform.OS === 'web') {
                           const enterEditWeb = () => {
                             if (cardEnEdicion !== null || evalEnDrag !== null) return;
-                            lastEnterEditRef.current = { blockId: b.id, t: Date.now() };
                             setCardEnEdicion(b.id);
                             setDraftBloque({ ...b });
                             // NO measureInWindow: el useEffect calibra sincrónicamente
@@ -1270,7 +1286,7 @@ export function HorarioScreen() {
                                     <View style={{ width: 24, height: 3, backgroundColor: '#fff', borderRadius: 2 }} />
                                   </View>
 
-                                  {/* Zona central — drag para mover (doble clic detectado en handleBlockPointerDown) */}
+                                  {/* Zona central — drag para mover */}
                                   <View style={{ flex: 1, padding: 2 }}>
                                     <Text
                                       style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
@@ -1581,7 +1597,6 @@ export function HorarioScreen() {
                         if (Platform.OS === 'web') {
                           const enterEditEvalWeb = () => {
                             if (cardEnEdicion !== null || evalEnDrag !== null) return;
-                            lastEnterEditRef.current = { blockId: ev.id, t: Date.now() };
                             evalDragDataRef.current = {
                               fondoColor, textoColor, labelBloque, height,
                               horaI, duracion, tieneHoraFin: ev.horaFin !== undefined, fecha: ev.fecha!,
@@ -2554,7 +2569,7 @@ export function HorarioScreen() {
       })()}
     </View>
 
-    {/* ── Modal de edición rápida (doble tap / doble clic) ── */}
+    {/* ── Modal de edición rápida (doble tap en móvil / clic derecho en escritorio) ── */}
     <Modal
       visible={modalEdicionRapida !== null}
       transparent
