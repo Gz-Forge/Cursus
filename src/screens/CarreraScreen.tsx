@@ -27,6 +27,7 @@ import {
   FRASE_UN_SEMESTRE_RESTANTE, FRASE_CARRERA_COMPLETA,
 } from '../utils/frases';
 import { ModoBusqueda, Mostrar, placeholderBusqueda, filtrosAplicados } from '../utils/busqueda';
+import { creditosSugeridos } from '../utils/numerosNotas';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
 const VISTA_LABELS: Record<Vista, string> = {
@@ -672,6 +673,11 @@ export function CarreraScreen() {
                   onToggle={() => toggleSemestre(sem)}
                   webGrid={isWeb}
                   onToggleCursando={handleToggleCursandoCard}
+                  onAgregar={semestre => navigation.navigate('CrearMateria', {
+                    // Punto 48: semestre y créditos necesarios precargados (editables)
+                    semestre,
+                    creditosNecesarios: creditosSugeridos(materias, semestre),
+                  })}
                 />
               );
             })}

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, 
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
@@ -24,6 +24,8 @@ import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { EstadoCursandoCard } from '../components/EstadoCursandoCard';
 import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
 import { nivelContador } from '../utils/formulario';
+import { CampoNumerico } from '../components/CampoNumerico';
+import { ultimoMaximo } from '../utils/numerosNotas';
 import { parsearMes } from '../utils/fecha';
 
 
@@ -142,21 +144,25 @@ function TabBarEdit({ activa, onCambiar, tema }: { activa: TabEdit; onCambiar: (
 
 export function CrearMateriaScreen() {
   const navigation = useNavigation();
+  // Punto 48: desde "＋ Agregar materia" de un semestre llegan el semestre y los créditos sugeridos
+  const route = useRoute<any>();
+  const semestreInicial: number = route.params?.semestre ?? 1;
+  const creditosInicial: number = route.params?.creditosNecesarios ?? 0;
   const { materias, config, guardarMateria, actualizarConfig } = useStore();
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
   const { getLabel } = useEstadoEstilo();
 
   const [form, setForm] = useState<Materia>({
-    id: Date.now().toString(), numero: 0, nombre: '', semestre: 1,
-    creditosQueDA: 0, creditosNecesarios: 0, previasNecesarias: [], esPreviaDe: [],
+    id: Date.now().toString(), numero: 0, nombre: '', semestre: semestreInicial,
+    creditosQueDA: 0, creditosNecesarios: creditosInicial, previasNecesarias: [], esPreviaDe: [],
     cursando: false,
     usarNotaManual: false, notaManual: null, tipoNotaManual: 'numero',
     evaluaciones: [], oportunidadesExamen: config.oportunidadesExamenDefault,
     tipoFormacion: undefined, bloques: [],
   });
   const [busquedaPrevia, setBusquedaPrevia] = useState('');
-  const [semestreStr, setSemestreStr] = useState('1');
+  const [semestreStr, setSemestreStr] = useState(String(semestreInicial));
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
@@ -348,7 +354,8 @@ export function CrearMateriaScreen() {
   const agregarEvaluacion = (tipo: 'simple' | 'grupo') => {
     const id = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const nueva: Evaluacion = tipo === 'simple'
-      ? { id, tipo: 'simple', nombre: '', pesoEnMateria: 0, tipoNota: 'numero', nota: null, notaMaxima: 10 }
+      // Punto 64: el "Máx" viene con el último máximo usado (materia, luego perfil, luego 10)
+      ? { id, tipo: 'simple', nombre: '', pesoEnMateria: 0, tipoNota: 'numero', nota: null, notaMaxima: ultimoMaximo(form.evaluaciones, materias) }
       : { id, tipo: 'grupo', nombre: '', pesoEnMateria: 0, subEvaluaciones: [] };
     setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, nueva] }));
   };
@@ -659,17 +666,46 @@ export function CrearMateriaScreen() {
           setForm(f => ({ ...f, nombre: v }));
           if (v.trim()) setCamposError(e => ({ ...e, nombre: false }));
         }, false, 100, camposError.nombre)}
-        {campo('Semestre', semestreStr, v => {
-          setSemestreStr(v);
-          const n = parseInt(v, 10);
-          if (!isNaN(n) && n >= 1) {
-            setForm(f => ({ ...f, semestre: n }));
-            setCamposError(e => ({ ...e, semestre: false }));
-          }
-        }, true, undefined, camposError.semestre)}
-        {campo('Créditos que da', String(form.creditosQueDA), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }, true)}
-        {campo('Créditos necesarios para cursarla', String(form.creditosNecesarios), v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }, true)}
-        {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }, true)}
+        {/* Punto 2: grilla de 2 columnas con − / + (tocar el número permite escribirlo) */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+          <CampoNumerico
+            label="Semestre"
+            texto={semestreStr}
+            min={1}
+            error={camposError.semestre}
+            onTexto={v => {
+              setSemestreStr(v);
+              const n = parseInt(v, 10);
+              if (!isNaN(n) && n >= 1) {
+                setForm(f => ({ ...f, semestre: n }));
+                setCamposError(e => ({ ...e, semestre: false }));
+              }
+            }}
+          />
+          <CampoNumerico
+            label="Oportunidades restantes"
+            texto={String(form.oportunidadesExamen)}
+            min={0}
+            max={99}
+            onTexto={v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }}
+          />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+          <CampoNumerico
+            label="Créditos que da"
+            texto={String(form.creditosQueDA)}
+            min={0}
+            decimal
+            onTexto={v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }}
+          />
+          <CampoNumerico
+            label="Créditos necesarios para cursarla"
+            texto={String(form.creditosNecesarios)}
+            min={0}
+            decimal
+            onTexto={v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }}
+          />
+        </View>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>TIPO DE FORMACIÓN</Text>
         <SelectorTipoFormacion
@@ -768,17 +804,19 @@ export function CrearMateriaScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
-              {form.tipoNotaManual === 'porcentaje' ? 'Nota (0–100%)' : `Nota (0–${config.notaMaxima})`}
-            </Text>
-            <TextInput
-              style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8 }}
-              value={notaManualStr}
-              onChangeText={handleNotaManualChange}
-              keyboardType="decimal-pad"
-              placeholder={form.tipoNotaManual === 'porcentaje' ? '0 – 100' : `0 – ${config.notaMaxima}`}
-              placeholderTextColor={tema.textoSecundario}
-            />
+            {/* Punto 21: − / + de a 0,5 (número) o de a 1 (porcentaje); tocar el número permite escribirlo */}
+            <View style={{ flexDirection: 'row' }}>
+              <CampoNumerico
+                label={form.tipoNotaManual === 'porcentaje' ? 'Nota (0–100%)' : `Nota (0–${config.notaMaxima})`}
+                texto={notaManualStr}
+                onTexto={handleNotaManualChange}
+                min={0}
+                max={form.tipoNotaManual === 'porcentaje' ? 100 : config.notaMaxima}
+                paso={form.tipoNotaManual === 'porcentaje' ? 1 : 0.5}
+                decimal
+                placeholder={form.tipoNotaManual === 'porcentaje' ? '0 – 100' : `0 – ${config.notaMaxima}`}
+              />
+            </View>
           </View>
         ) : (
           <>
@@ -796,6 +834,7 @@ export function CrearMateriaScreen() {
                 onEliminar={() => setForm(f => ({ ...f, evaluaciones: f.evaluaciones.filter((_, j) => j !== i) }))}
                 isColapsada={isEvalColapsada}
                 onToggleColapso={toggleEvalColapsada}
+                maximoSugerido={ultimoMaximo(form.evaluaciones, materias)}
               />
             ))}
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>

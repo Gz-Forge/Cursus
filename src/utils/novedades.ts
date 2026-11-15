@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.7.0',
+    items: [
+      '➕ Semestre, créditos y oportunidades se cargan con − / + (y tocando el número lo escribís).',
+      '🎚️ Los umbrales de estado se ven en una barra de colores, y podés cargarlos en % o directamente en nota.',
+      '📝 La nota manual también tiene − / + (de a 0,5, o de a 1 en porcentaje).',
+      '📚 Al final de cada semestre hay una tarjeta "＋ Agregar materia" que ya trae el semestre y los créditos necesarios.',
+      '🔁 Una evaluación nueva trae el mismo "Máx" que la última que cargaste.',
+      '🛑 Si escribís una nota mayor que el máximo, se ajusta sola.',
+    ],
+  },
+  {
     version: '1.6.5',
     items: [
       '🍩 Nuevo estilo para el Progreso general: un anillo con el % de créditos y cuatro cifras (elegilo en ⚙️ de Métricas).',
