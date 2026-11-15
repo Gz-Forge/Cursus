@@ -222,6 +222,8 @@ export interface Config {
 export interface AppState {
   materias: Materia[];
   config: Config;
+  /** Última vez que se guardó un cambio en este perfil (ms). Ausente en perfiles viejos. */
+  modificadoEn?: number;
 }
 
 export interface Perfil {

@@ -108,49 +108,15 @@ export function DonacionScreen() {
       <ScrollView contentContainerStyle={{ padding: 28, alignItems: 'center' }}>
         <View style={isWeb ? { maxWidth: 480, width: '100%', alignItems: 'center' } : { width: '100%', alignItems: 'center' }}>
 
-          {/* ── Donar con PayPal ── */}
+          {/* ── Encabezado (punto 136: primero lo gratis, después donar) ── */}
           <Text style={{ fontSize: 48, marginBottom: 12 }}>❤️</Text>
           <Text style={{ color: tema.texto, fontSize: 20, fontWeight: '700', marginBottom: 14, textAlign: 'center' }}>
             Apoyar la app
           </Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 28 }}>
-            Solo si la app te sirvió y te lo podés permitir, podés donar.{'\n'}
+            Hay formas de ayudar que no cuestan nada.{'\n'}
             Desde ya, ¡gracias!
           </Text>
-
-          <TouchableOpacity
-            onPress={() => abrir(PAYPAL_URL)}
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: '#0070BA',
-              paddingVertical: 15, paddingHorizontal: 48,
-              borderRadius: 12, width: '100%', alignItems: 'center',
-              shadowColor: '#0070BA', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-              elevation: 4, marginBottom: 12,
-            }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
-              💙  Donar con PayPal
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => abrir(GITHUB_SPONSORS_URL)}
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: '#24292F',
-              paddingVertical: 15, paddingHorizontal: 48,
-              borderRadius: 12, width: '100%', alignItems: 'center',
-              shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-              elevation: 4,
-            }}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
-              🤍  Apoyar en GitHub Sponsors
-            </Text>
-          </TouchableOpacity>
-
-          <View style={{ width: '100%', height: 1, backgroundColor: tema.borde, marginVertical: 32 }} />
 
           {/* ── Dejar reseña ── */}
           <Text style={{ fontSize: 38, marginBottom: 10 }}>⭐</Text>
@@ -224,6 +190,48 @@ export function DonacionScreen() {
           <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', lineHeight: 17, marginBottom: 4 }}>
             Al escanearlo lo lleva a la {TIENDAS[tiendaQr].nombre} para descargar la app.{'\n'}Por ahora disponible para Android y Windows.{'\n'}
           </Text>
+
+          <View style={{ width: '100%', height: 1, backgroundColor: tema.borde, marginVertical: 32 }} />
+
+          {/* ── Donar ── */}
+          <Text style={{ fontSize: 38, marginBottom: 10 }}>💙</Text>
+          <Text style={{ color: tema.texto, fontSize: 18, fontWeight: '700', marginBottom: 10, textAlign: 'center' }}>
+            Donar
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 20 }}>
+            Solo si la app te sirvió y te lo podés permitir.
+          </Text>
+          <TouchableOpacity
+            onPress={() => abrir(PAYPAL_URL)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#0070BA',
+              paddingVertical: 15, paddingHorizontal: 48,
+              borderRadius: 12, width: '100%', alignItems: 'center',
+              shadowColor: '#0070BA', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+              elevation: 4, marginBottom: 12,
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
+              💙  Donar con PayPal
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => abrir(GITHUB_SPONSORS_URL)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#24292F',
+              paddingVertical: 15, paddingHorizontal: 48,
+              borderRadius: 12, width: '100%', alignItems: 'center',
+              shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 }}>
+              🤍  Apoyar en GitHub Sponsors
+            </Text>
+          </TouchableOpacity>
 
           <View style={{ width: '100%', height: 1, backgroundColor: tema.borde, marginVertical: 32 }} />
 

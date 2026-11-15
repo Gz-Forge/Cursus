@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.5.5',
+    items: [
+      '👤 Tus perfiles muestran los créditos y cuándo los modificaste; renombrar y eliminar están en el menú ⋯.',
+      '🔄 Sincronizar es más claro: "Enviar mis datos" o "Recibir datos", y ves en qué paso vas.',
+      '🧩 Si hay materias repetidas, tocás la que querés conservar (o las conservás todas).',
+      '➕ "Agregar materias" ofrece cuatro caminos: a mano, escaneando un QR, armándola con IA o desde un archivo.',
+      '📷 Antes de pedir la cámara te contamos para qué la usamos.',
+      '❤️ En Apoyar aparece primero lo que no cuesta nada: dejar una reseña y compartir la app.',
+    ],
+  },
+  {
     version: '1.5.0',
     items: [
       '🏷️ El tipo de formación se elige con un toque entre botones, y con "＋ Nuevo" creás uno sin salir de la materia.',

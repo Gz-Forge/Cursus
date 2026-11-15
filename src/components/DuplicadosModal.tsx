@@ -1,39 +1,35 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useTema } from '../theme/ThemeContext';
 import { Materia } from '../types';
-import { detectarDuplicados, generarIdUnico } from '../utils/importExport';
+import { gruposDuplicados, tituloGrupo, conservarElegidas, conservarTodas } from '../utils/duplicados';
 
 interface Props {
   visible: boolean;
   materias: Materia[];
-  onEliminar: (id: string, numero: number) => void;
-  onNuevoId: (id: string, numero: number, nuevoId: string) => void;
-  onResolve: () => void;
+  /** Lista ya resuelta: el que abre el modal la guarda donde corresponda y sigue. */
+  onAplicar: (resuelta: Materia[]) => void | Promise<void>;
   onCancel: () => void;
 }
 
-export function DuplicadosModal({ visible, materias, onEliminar, onNuevoId, onResolve, onCancel }: Props) {
+/**
+ * Punto 38: materias repetidas. Se toca la que se conserva en cada grupo
+ * y "Quedarme con la seleccionada" descarta las demás. "Conservar todas"
+ * les da un identificador nuevo a las repetidas.
+ */
+export function DuplicadosModal({ visible, materias, onAplicar, onCancel }: Props) {
   const tema = useTema();
-  const accionesRef = useRef(0);
+  const [elegidas, setElegidas] = useState<Record<string, number>>({});
 
-  const duplicados = detectarDuplicados(materias);
-
-  // Reset action counter each time modal opens
   useEffect(() => {
-    if (visible) { accionesRef.current = 0; }
+    if (visible) setElegidas({});
   }, [visible]);
-
-  // Auto-resolve when all conflicts are fixed (but only after at least one action)
-  useEffect(() => {
-    if (visible && accionesRef.current > 0 && duplicados.size === 0) {
-      onResolve();
-    }
-  }, [materias, visible, onResolve]);
 
   if (!visible) return null;
 
-  const grupos = [...duplicados.entries()];
+  const grupos = gruposDuplicados(materias);
+  const todasElegidas = grupos.length > 0 && grupos.every(g => elegidas[g.id] !== undefined);
+  const acento = tema.acentoFondo ?? tema.acento;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -43,67 +39,94 @@ export function DuplicadosModal({ visible, materias, onEliminar, onNuevoId, onRe
       }}>
         <View style={{
           backgroundColor: tema.superficie ?? tema.tarjeta,
-          borderRadius: 16, padding: 24, width: '100%', maxWidth: 420,
+          borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, maxHeight: '90%',
         }}>
-          <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 8 }}>
-            IDs duplicados detectados
+          <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 6 }}>
+            Materias repetidas
           </Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16, lineHeight: 20 }}>
-            Hay materias con el mismo ID. Resolvé los conflictos antes de continuar.
+          <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 14, lineHeight: 19 }}>
+            Tocá la que querés conservar en cada grupo. Las otras se descartan.
           </Text>
 
-          <ScrollView style={{ maxHeight: 320 }}>
-            {grupos.map(([id, mats]) => (
-              <View key={id} style={{ marginBottom: 16 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
-                  ID: "{id}"
-                </Text>
-                {mats.map(m => (
-                  <View
-                    key={`${m.id}_${m.numero}`}
-                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}
-                  >
-                    <Text style={{ flex: 1, color: tema.texto, fontSize: 13 }}>
-                      {m.nombre} (Sem. {m.semestre})
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        accionesRef.current++;
-                        onEliminar(m.id, m.numero);
-                      }}
-                      style={{
-                        paddingHorizontal: 8, paddingVertical: 5,
-                        borderRadius: 6, backgroundColor: '#F44336',
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Eliminar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        accionesRef.current++;
-                        onNuevoId(m.id, m.numero, generarIdUnico());
-                      }}
-                      style={{
-                        paddingHorizontal: 8, paddingVertical: 5,
-                        borderRadius: 6, backgroundColor: tema.acentoFondo ?? tema.acento,
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Nuevo ID</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ))}
+          <ScrollView style={{ flexGrow: 0 }}>
+            {grupos.map(g => {
+              const mats = g.indices.map(i => materias[i]);
+              return (
+                <View key={g.id} style={{ marginBottom: 16 }}>
+                  <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
+                    {tituloGrupo(mats)}
+                  </Text>
+                  {g.indices.map((indice, k) => {
+                    const m = materias[indice];
+                    const marcada = elegidas[g.id] === indice;
+                    const previas = m.previasNecesarias.length > 0 ? m.previasNecesarias.join(', ') : 'ninguna';
+                    return (
+                      <TouchableOpacity
+                        key={indice}
+                        onPress={() => setElegidas(e => ({ ...e, [g.id]: indice }))}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: marcada }}
+                        aria-checked={marcada}
+                        accessibilityLabel={`Opción ${k + 1}: ${m.numero} ${m.nombre}, semestre ${m.semestre}`}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 10,
+                          padding: 12, borderRadius: 10, marginBottom: 6,
+                          backgroundColor: marcada ? acento + '1F' : tema.tarjeta,
+                          borderWidth: 2, borderColor: marcada ? acento : tema.borde,
+                        }}
+                      >
+                        <View style={{
+                          width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                          borderColor: marcada ? acento : tema.textoSecundario,
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {marcada && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: acento }} />}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>
+                            {m.numero} · {m.nombre}
+                          </Text>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                            Semestre {m.semestre} · {m.creditosQueDA} cr · previas: {previas}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
           </ScrollView>
 
           <TouchableOpacity
-            onPress={onCancel}
+            onPress={() => onAplicar(conservarElegidas(materias, elegidas))}
+            disabled={!todasElegidas}
+            accessibilityState={{ disabled: !todasElegidas }}
             style={{
-              marginTop: 16, alignItems: 'center', padding: 12,
-              borderRadius: 8, backgroundColor: tema.fondo,
+              marginTop: 8, alignItems: 'center', padding: 12, borderRadius: 8,
+              backgroundColor: todasElegidas ? acento : tema.borde,
             }}
           >
-            <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar operación</Text>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>
+              {grupos.length > 1 ? 'Quedarme con las seleccionadas' : 'Quedarme con la seleccionada'}
+            </Text>
+          </TouchableOpacity>
+          {!todasElegidas && (
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+              {grupos.length > 1 ? 'Elegí una en cada grupo' : 'Elegí una para continuar'}
+            </Text>
+          )}
+
+          <TouchableOpacity
+            onPress={() => onAplicar(conservarTodas(materias))}
+            style={{ marginTop: 10, alignItems: 'center', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
+          >
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>Conservar todas</Text>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>Si son materias distintas</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={onCancel} style={{ marginTop: 10, alignItems: 'center', padding: 10 }}>
+            <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
           </TouchableOpacity>
         </View>
       </View>

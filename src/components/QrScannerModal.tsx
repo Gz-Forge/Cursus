@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, Platform, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
@@ -196,18 +196,30 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
   }
 
   if (!permission.granted) {
+    // Punto 56: se explica para qué es la cámara antes de pedir el permiso.
+    // Si ya se negó y el sistema no deja volver a preguntar, se manda a los ajustes del teléfono.
+    const bloqueado = permission.status === 'denied' && !permission.canAskAgain;
     return (
       <Modal visible animationType="slide" transparent onRequestClose={onCerrar}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Text style={{ fontSize: 40, marginBottom: 16 }}>📷</Text>
-          <Text style={{ color: '#fff', fontSize: 16, textAlign: 'center', marginBottom: 24 }}>
-            Se necesita permiso de cámara para escanear QR
+          <Text style={{ fontSize: 48, marginBottom: 12 }}>📷</Text>
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
+            Para leer el QR
           </Text>
+          <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: bloqueado ? 8 : 24, maxWidth: 320 }}>
+            Usamos la cámara solo para escanear. No guardamos imágenes.
+          </Text>
+          {bloqueado && (
+            <Text style={{ color: '#FFB74D', fontSize: 13, textAlign: 'center', lineHeight: 19, marginBottom: 24, maxWidth: 320 }}>
+              El permiso está desactivado. Activalo en los ajustes del teléfono y volvé a intentar.
+            </Text>
+          )}
           <TouchableOpacity
-            onPress={requestPermission}
+            onPress={bloqueado ? () => { Linking.openSettings().catch(() => {}); } : requestPermission}
+            accessibilityRole="button"
             style={{ backgroundColor: tema.acentoFondo ?? tema.acento, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 10, marginBottom: 12 }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Dar permiso</Text>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{bloqueado ? 'Abrir ajustes' : 'Continuar'}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={onCerrar}>
             <Text style={{ color: tema.textoSecundario, marginTop: 8 }}>Cancelar</Text>
