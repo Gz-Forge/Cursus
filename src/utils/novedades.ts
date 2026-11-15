@@ -16,6 +16,19 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.4.0',
+    items: [
+      '🎛️ Búsqueda más limpia: los filtros están en el botón "Filtros", que muestra cuántos tenés activos, y cada uno se quita con su ✕.',
+      '🔢 En la pestaña Semestre saltás a cualquier semestre tocando su número.',
+      '🔵 "Cursando" ahora es un botón de un toque en la tarjeta de la materia.',
+      '🔎 Si una búsqueda no encuentra nada, te lo dice y podés limpiar los filtros con un toque.',
+      '🖍️ Lo que buscás aparece resaltado en el nombre de la materia.',
+      '💡 "Es previa de" y "Sus previas" muestran un ejemplo de qué preguntar.',
+      '⇕ Expandir y colapsar todos los semestres ahora es un ícono, con su descripción.',
+      '⚙️ "Configuración" ahora se llama "Ajustes": entra completo en la barra del celular.',
+    ],
+  },
+  {
     version: '1.3.5',
     items: [
       '🆕 Esta ventana: al actualizar, vas a ver qué cambió.',

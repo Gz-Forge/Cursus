@@ -8,7 +8,7 @@ const TABS = [
   { name: 'Carrera',       icon: '🎓' },
   { name: 'Horarios',      icon: '📅' },
   { name: 'Métricas',      icon: '📊' },
-  { name: 'Configuración', icon: '⚙️' },
+  { name: 'Ajustes',       icon: '⚙️' },
   { name: 'Apoyar',        icon: '❤️' },
 ];
 

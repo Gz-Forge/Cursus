@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { obtenerNotaFinal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
+import { partirCoincidencia } from '../utils/busqueda';
+import { hexOpacity } from '../utils/useFondoPantalla';
 
 
 function badgeCreditos(materia: Materia, config: Config): string {
@@ -41,9 +43,11 @@ interface Props {
   mostrarToggleCursando?: boolean;
   onLongPress?: () => void;
   pinned?: boolean;
+  /** Texto buscado: se resalta en el nombre de la materia. */
+  resaltar?: string;
 }
 
-export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned }: Props) {
+export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned, resaltar }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
   const { getColor, getIcono, getLabel } = useEstadoEstilo();
@@ -101,7 +105,13 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   return (
     <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress} activeOpacity={0.75}>
       <View style={s.fila}>
-          <Text style={s.nombre}>{materia.numero} · {materia.nombre}</Text>
+          <Text style={s.nombre}>
+            {partirCoincidencia(`${materia.numero} · ${materia.nombre}`, resaltar ?? '').map((p, i) => (
+              p.coincide
+                ? <Text key={i} style={{ backgroundColor: (tema.acentoFondo ?? tema.acento) + hexOpacity(35), color: tema.texto, fontWeight: '800' }}>{p.texto}</Text>
+                : <Text key={i}>{p.texto}</Text>
+            ))}
+          </Text>
           <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
         </View>
 
@@ -162,21 +172,34 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
           )}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
-            {(mostrarToggleCursando ?? true) && onToggleCursando && (
-              <View
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
-                onStartShouldSetResponder={() => true}
-              >
-                <Switch
-                  value={materia.cursando ?? false}
-                  onValueChange={onToggleCursando}
-                  trackColor={{ true: getColor('cursando') }}
-                />
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
-                  {materia.cursando ? getLabel('cursando') : `No ${getLabel('cursando').toLowerCase()}`}
-                </Text>
-              </View>
-            )}
+            {(mostrarToggleCursando ?? true) && onToggleCursando && (() => {
+              const activo = materia.cursando ?? false;
+              const colorCursando = getColor('cursando');
+              return (
+                <TouchableOpacity
+                  onPress={() => onToggleCursando(!activo)}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: activo }}
+                  aria-checked={activo}
+                  accessibilityLabel={getLabel('cursando')}
+                  style={{
+                    marginTop: 8, marginRight: 'auto', flexShrink: 1,
+                    flexDirection: 'row', alignItems: 'center', gap: 6,
+                    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
+                    borderWidth: 1, borderColor: colorCursando,
+                    backgroundColor: activo ? colorCursando : 'transparent',
+                  }}
+                >
+                  <View style={{
+                    width: 10, height: 10, borderRadius: 5,
+                    backgroundColor: activo ? '#fff' : colorCursando,
+                  }} />
+                  <Text style={{ color: activo ? '#fff' : colorCursando, fontSize: 13, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                    {activo ? `${getLabel('cursando')} ✓` : getLabel('cursando')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })()}
             <TouchableOpacity style={s.botonEditar} onPress={onEditar}>
               <Text style={{ color: '#fff', fontSize: 13 }}>✏️ Editar</Text>
             </TouchableOpacity>

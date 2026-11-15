@@ -3020,7 +3020,7 @@ export function HorarioScreen() {
               </>
             )}
 
-            {/* ── Página 2: Configuración ── */}
+            {/* ── Página 2: Ajustes ── */}
             {cmbPaso === 2 && (
               <>
                 <ScrollView
