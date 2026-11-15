@@ -151,3 +151,52 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
 
   return payload;
 }
+
+/** Tamaño legible: "≈45 KB", "≈1,2 MB". Nunca muestra menos de 1 KB. */
+export function formatearTamano(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `≈${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+  }
+  return `≈${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/** Bytes del texto en UTF-8 (lo que ocupa el archivo exportado). */
+export function bytesUtf8(texto: string): number {
+  let n = 0;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; } // par sustituto: un solo carácter de 4 bytes
+    else n += 3;
+  }
+  return n;
+}
+
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+
+/**
+ * Resumen de lo que va en la exportación (punto 129), por ejemplo
+ * "26 materias · 120 bloques · 40 evaluaciones · configuración · ≈45 KB".
+ * Solo nombra lo que el archivo realmente lleva.
+ */
+export function resumenExportacion(payload: ExportPayload, bytes: number): string {
+  const perfiles = payload.perfiles;
+  const materias = perfiles.reduce((acc, p) => acc + p.materias.length, 0);
+  const partes: string[] = [];
+  if (perfiles.length > 1) partes.push(plural(perfiles.length, 'perfil', 'perfiles'));
+  partes.push(plural(materias, 'materia', 'materias'));
+  if (perfiles.some(p => p.horarios !== undefined)) {
+    const bloques = perfiles.reduce((acc, p) => acc + (p.horarios?.length ?? 0), 0);
+    partes.push(plural(bloques, 'bloque', 'bloques'));
+  }
+  if (perfiles.some(p => p.evaluaciones !== undefined)) {
+    const evals = perfiles.reduce((acc, p) =>
+      acc + Object.values(p.evaluaciones ?? {}).reduce((a, l) => a + l.length, 0), 0);
+    partes.push(plural(evals, 'evaluación', 'evaluaciones'));
+  }
+  if (perfiles.some(p => p.notas !== undefined)) partes.push('notas');
+  if (perfiles.some(p => p.config !== undefined)) partes.push('configuración');
+  partes.push(formatearTamano(bytes));
+  return partes.join(' · ');
+}

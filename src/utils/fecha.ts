@@ -20,3 +20,14 @@ export function parsearMes(str: string): number | null {
   if (!isNaN(n) && n >= 1 && n <= 12) return n;
   return null;
 }
+
+/**
+ * Tiempo restante como "m:ss" (punto 131), por ejemplo 432000 ms → "7:12".
+ * Redondea hacia arriba para no mostrar "0:00" mientras todavía queda algo.
+ */
+export function formatearCuentaRegresiva(ms: number): string {
+  const totalSeg = Math.max(0, Math.ceil(ms / 1000));
+  const min = Math.floor(totalSeg / 60);
+  const seg = totalSeg % 60;
+  return `${min}:${String(seg).padStart(2, '0')}`;
+}

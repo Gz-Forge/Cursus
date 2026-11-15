@@ -1,4 +1,4 @@
-import { Config, Materia } from '../types';
+import { Config, Materia, Evaluacion, SubEvaluacion } from '../types';
 import { obtenerNotaFinal } from './calculos';
 
 /** Número con coma decimal y como mucho `dec` decimales: 6.6 → "6,6", 12 → "12". */
@@ -69,4 +69,34 @@ export function ejemploAprobadoHabilita(
     ? `Ej.: con ${previa} en "${labelAprobado}", ${materia} se habilita.`
     : `Ej.: con ${previa} en "${labelAprobado}", ${materia} no se habilita: tiene que estar en "${labelExonerado}".`;
   return { previa, materia, texto };
+}
+
+/** "9/10" o "85%", según cómo se cargó la nota. */
+function textoNota(nota: number, tipoNota: string, notaMaxima: number): string {
+  return tipoNota === 'porcentaje' ? `${fmtNum(nota)}%` : `${fmtNum(nota)}/${fmtNum(notaMaxima)}`;
+}
+
+/**
+ * Punto 67: texto de la confirmación al borrar una evaluación, un grupo o una prueba de un grupo.
+ * Devuelve null si no tiene ninguna nota cargada (entonces se borra sin preguntar).
+ */
+export function confirmacionBorrarEvaluacion(
+  ev: Evaluacion | (SubEvaluacion & { tipo?: undefined }),
+  nombrePorDefecto = 'esta evaluación',
+): { titulo: string; mensaje: string } | null {
+  const nombre = ev.nombre?.trim() || nombrePorDefecto;
+  if (ev.tipo === 'grupo') {
+    const total = ev.subEvaluaciones.length;
+    const conNota = ev.subEvaluaciones.filter(s => s.nota !== null && s.nota !== undefined).length;
+    if (conNota === 0) return null;
+    const detalle = conNota === 1
+      ? `Tiene nota cargada en 1 de ${total} prueba${total !== 1 ? 's' : ''}.`
+      : `Tiene notas cargadas en ${conNota} de ${total} pruebas.`;
+    return { titulo: `¿Borrar ${nombre}?`, mensaje: `${detalle} Se pierden al borrarlo.` };
+  }
+  if (ev.nota === null || ev.nota === undefined) return null;
+  return {
+    titulo: `¿Borrar ${nombre}?`,
+    mensaje: `Tiene nota cargada (${textoNota(ev.nota, ev.tipoNota, ev.notaMaxima)}). Se pierde al borrarla.`,
+  };
 }

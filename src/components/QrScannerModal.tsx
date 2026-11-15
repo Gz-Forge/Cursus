@@ -18,7 +18,7 @@ interface Props {
 
 export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, onDeviceSyncDetectado }: Props) {
   const tema = useTema();
-  const { showAlert, showConfirm } = useAlert();
+  const { showAlert, showConfirm, showError } = useAlert();
   const { guardarMateria, config, actualizarConfig } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [totalEsperado, setTotalEsperado] = useState<number | null>(null);
@@ -55,7 +55,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
       );
     } catch (e) {
       if (__DEV__) console.warn('[QrScannerModal] Error al decodificar QR de carrera:', e);
-      showAlert('Error', 'El QR no es válido o está dañado.');
+      showError('QR-01', e);
       procesando.current = false;
     }
   };
@@ -72,7 +72,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
       ) {
         procesando.current = true;
         if (Date.now() > parsed.exp) {
-          showAlert('QR expirado', 'El código de sincronización expiró. Generá uno nuevo en el otro dispositivo.');
+          showError('SYNC-03');
           procesando.current = false;
           return;
         }
@@ -90,7 +90,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           onCerrar();
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar evaluaciones:', e);
-          showAlert('Error', 'El QR no contiene evaluaciones válidas.');
+          showError('QR-02', e);
           procesando.current = false;
         }
         return;
@@ -104,7 +104,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           showAlert('Configuración aplicada', `✅ ${resultado.aplicados.length} campo(s) aplicado(s)`, 'OK', onCerrar);
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar configuración:', e);
-          showAlert('Error', 'El QR no contiene una configuración válida.');
+          showError('QR-03', e);
           procesando.current = false;
         }
         return;
@@ -136,7 +136,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
           }
         } catch (e) {
           if (__DEV__) console.warn('[QrScannerModal] Error al decodificar horario:', e);
-          showAlert('Error', 'El QR de horario no es válido.');
+          showError('QR-04', e);
           procesando.current = false;
         }
         return;

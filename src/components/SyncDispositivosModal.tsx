@@ -1,7 +1,7 @@
 // src/components/SyncDispositivosModal.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, ActivityIndicator,
+  Modal, View, Text, TouchableOpacity,
   Platform, TextInput,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -17,6 +17,10 @@ import {
 import { MAX_PERFILES } from '../utils/perfiles';
 import { QrScannerModal } from './QrScannerModal';
 import { encryptPayload, decryptPayload } from '../utils/crypto';
+import { CodigoError, mensajeTecnico } from '../utils/errores';
+import { formatearCuentaRegresiva } from '../utils/fecha';
+import { ProgresoPasos } from './ProgresoPasos';
+import { ErrorConCodigo } from './ErrorConCodigo';
 
 type Estado =
   | 'idle'
@@ -65,6 +69,9 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
   const [codigoManual, setCodigoManual] = useState('');
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [errorCodigo, setErrorCodigo] = useState<CodigoError>('SYNC-01');
+  const [pasoEmisor, setPasoEmisor] = useState(1);
+  const [ahora, setAhora] = useState(() => Date.now());
   const [pendingPayload, setPendingPayload] = useState<import('../utils/deviceSnapshot').DeviceSyncPayload | null>(null);
   const [pendingCode, setPendingCode] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -79,6 +86,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     setCodigoManual('');
     setMostrarScanner(false);
     setErrorMsg('');
+    setErrorCodigo('SYNC-01');
+    setPasoEmisor(1);
     setPendingPayload(null);
     setPendingCode('');
     setPassphrase('');
@@ -107,14 +116,36 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
     document.head.appendChild(el);
   }, []);
 
+  const fallar = (codigo: CodigoError, e?: unknown) => {
+    if (__DEV__ && e !== undefined) console.warn(`[SyncDispositivosModal] ${codigo}`, e);
+    setErrorCodigo(codigo);
+    setErrorMsg(mensajeTecnico(e) ?? '');
+    setEstado('error');
+  };
+
+  // Cuenta regresiva del código (punto 131): un tic por segundo mientras se muestra
+  useEffect(() => {
+    if (estado !== 'emisor_listo') return;
+    setAhora(Date.now());
+    const id = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [estado]);
+
   // ── EMISOR ──────────────────────────────────────────────────────────────────
 
   const iniciarEmisor = async (claveEmisor: string) => {
+    setPasoEmisor(1);
     setEstado('emisor_subiendo');
+    // Pausas cortas para que React pinte cada paso antes del trabajo pesado
+    const pintar = () => new Promise<void>(r => setTimeout(r, 0));
     try {
+      await pintar();
       const payload = await capturarSnapshot();
       const comprimido = comprimirPayload(payload);
+      setPasoEmisor(2);
+      await pintar();
       const datos = await encryptPayload(comprimido, claveEmisor);
+      setPasoEmisor(3);
       const expira_en = new Date(Date.now() + EXPIRY_MS).toISOString();
 
       let nuevoCode = '';
@@ -137,11 +168,11 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       if (error) throw error;
 
       setExpiryTs(Date.now() + EXPIRY_MS);
+      setAhora(Date.now());
       setCode(nuevoCode);
       setEstado('emisor_listo');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Error subiendo los datos. Verificá tu conexión.');
-      setEstado('error');
+      fallar('SYNC-01', e);
     }
   };
 
@@ -164,14 +195,12 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       if (error) throw error;
 
       if (!data) {
-        setErrorMsg('Código inválido o expirado. Verificá el código e intentá de nuevo.');
-        setEstado('error');
+        fallar('SYNC-02', `Código ${trimmed} sin datos`);
         return;
       }
 
       if (new Date(data.expira_en) < new Date()) {
-        setErrorMsg('El código expiró. El emisor debe generar uno nuevo.');
-        setEstado('error');
+        fallar('SYNC-03', `Venció ${data.expira_en}`);
         return;
       }
 
@@ -182,8 +211,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       setErrorClave('');
       setEstado('receptor_ingresando_clave');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Error descargando los datos. Verificá tu conexión.');
-      setEstado('error');
+      fallar('SYNC-04', e);
     }
   };
 
@@ -215,8 +243,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       setPendingCode('');
       setEstado('receptor_listo');
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Error aplicando los datos.');
-      setEstado('error');
+      fallar('SYNC-05', e);
     }
   };
 
@@ -306,13 +333,38 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
 
       case 'emisor_subiendo':
         return (
-          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
-            <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Subiendo datos...</Text>
-          </View>
+          <ProgresoPasos
+            paso={pasoEmisor}
+            total={3}
+            texto={pasoEmisor === 1 ? 'preparando tus datos' : pasoEmisor === 2 ? 'cifrando' : 'subiendo'}
+            nota={pasoEmisor === 2 ? 'Esto puede tomar unos segundos' : undefined}
+          />
         );
 
-      case 'emisor_listo':
+      case 'emisor_listo': {
+        const restante = Math.max(0, expiryTs - ahora);
+        if (restante <= 0) {
+          return (
+            <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+              <Text style={{ fontSize: 40, marginBottom: 8 }}>⌛</Text>
+              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
+                El código venció
+              </Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+                Los códigos duran 10 minutos. Generá otro para seguir.
+              </Text>
+              <TouchableOpacity
+                onPress={() => { setCode(''); setPassphrase(''); setShowPass(false); setEstado('emisor_ingresando_clave'); }}
+                style={[btnStyle(), { alignSelf: 'stretch' }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Generar otro</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        }
+        const fraccion = restante / EXPIRY_MS;
+        const poco = restante < 60 * 1000;
+        const colorBarra = poco ? '#FF9800' : (tema.acentoFondo ?? tema.acento);
         return (
           <View style={{ alignItems: 'center' }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
@@ -339,9 +391,21 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
                 {code}
               </Text>
             </View>
-            <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Válido por 10 minutos · uso único</Text>
+            <View
+              style={{ width: '100%', maxWidth: 260, alignItems: 'center', marginTop: 4 }}
+              accessibilityRole="timer"
+              accessibilityLabel={`Vence en ${formatearCuentaRegresiva(restante)}`}
+            >
+              <Text style={{ color: poco ? '#FF9800' : tema.textoSecundario, fontSize: 12, fontWeight: poco ? '700' : '400' }}>
+                Vence en {formatearCuentaRegresiva(restante)} · uso único
+              </Text>
+              <View style={{ width: '100%', height: 4, borderRadius: 2, backgroundColor: tema.borde, marginTop: 6, overflow: 'hidden' }}>
+                <View style={{ width: `${fraccion * 100}%`, height: '100%', borderRadius: 2, backgroundColor: colorBarra }} />
+              </View>
+            </View>
           </View>
         );
+      }
 
       case 'receptor_escaneando':
         return (
@@ -384,23 +448,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         );
 
       case 'receptor_descargando':
-        return (
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
-            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Descargando datos...</Text>
-          </View>
-        );
+        return <ProgresoPasos paso={1} total={3} texto="descargando" />;
 
       case 'receptor_desencriptando':
-        return (
-          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
-            <Text style={{ color: tema.texto, fontWeight: '700', marginTop: 12 }}>Desencriptando...</Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-              Esto puede tomar unos segundos
-            </Text>
-          </View>
-        );
+        return <ProgresoPasos paso={2} total={3} texto="descifrando" nota="Esto puede tomar unos segundos" />;
 
       case 'receptor_ingresando_clave':
         return (
@@ -510,12 +561,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       }
 
       case 'receptor_aplicando':
-        return (
-          <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <ActivityIndicator color={tema.acentoFondo ?? tema.acento} size="large" />
-            <Text style={{ color: tema.textoSecundario, marginTop: 12 }}>Aplicando datos...</Text>
-          </View>
-        );
+        return <ProgresoPasos paso={3} total={3} texto="aplicando" />;
 
       case 'receptor_listo':
         return (
@@ -533,13 +579,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'error':
         return (
           <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <Text style={{ fontSize: 40, marginBottom: 8 }}>❌</Text>
-            <Text style={{ color: '#F44336', fontWeight: '700', fontSize: 15, marginBottom: 4 }}>
-              Ocurrió un error
-            </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, textAlign: 'center' }}>
-              {errorMsg}
-            </Text>
+            <ErrorConCodigo codigo={errorCodigo} tecnico={errorMsg || undefined} />
             <TouchableOpacity onPress={resetear} style={{ marginTop: 16 }}>
               <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Intentar de nuevo</Text>
             </TouchableOpacity>

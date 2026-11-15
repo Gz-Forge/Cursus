@@ -1957,15 +1957,11 @@ export function EditMateriaScreen() {
 
         </>)}
 
-        {/* ── Footer siempre visible: autosave + eliminar ── */}
-        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 12, marginTop: 8 }}>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Los cambios se guardan automáticamente</Text>
-        </View>
-
+        {/* ── Footer siempre visible: eliminar ── */}
         {materiaOriginal && (
           <TouchableOpacity
             onPress={handleEliminar}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#F44336' }}
+            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#F44336', marginTop: 8 }}
           >
             <Text style={{ color: '#F44336', fontWeight: '600', fontSize: 15 }}>🗑 Eliminar materia</Text>
           </TouchableOpacity>

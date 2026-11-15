@@ -307,11 +307,16 @@ export function ConfigScreen() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
             <TouchableOpacity
-              onPress={() => actualizarConfig({
-                estadoColoresPersonalizados: undefined,
-                estadoIconosPersonalizados: undefined,
-                estadoNombresPersonalizados: undefined,
-              })}
+              onPress={() => showConfirm(
+                '¿Restaurar todos los estados?',
+                'Se pierden los nombres, colores e íconos personalizados de todos los estados. Esta acción no se puede deshacer.',
+                () => actualizarConfig({
+                  estadoColoresPersonalizados: undefined,
+                  estadoIconosPersonalizados: undefined,
+                  estadoNombresPersonalizados: undefined,
+                }),
+                { labelConfirmar: 'Restaurar', destructivo: true },
+              )}
             >
               <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar todos</Text>
             </TouchableOpacity>

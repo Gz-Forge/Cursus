@@ -10,6 +10,7 @@ import {
   pesoSubEvaluacion,
 } from '../utils/calculos';
 import { parsearMes } from '../utils/fecha';
+import { confirmacionBorrarEvaluacion } from '../utils/ayudas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -340,8 +341,15 @@ interface Props {
 
 export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, onToggleColapso }: Props) {
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const contribucion = calcularPorcentajeEvaluacion(evaluacion);
+
+  // Punto 67: si tiene nota cargada, se confirma antes de borrar
+  const pedirEliminar = () => {
+    const c = confirmacionBorrarEvaluacion(evaluacion, evaluacion.tipo === 'grupo' ? 'este grupo' : 'esta evaluación');
+    if (!c) { onEliminar(); return; }
+    showConfirm(c.titulo, c.mensaje, onEliminar, { labelConfirmar: 'Borrar', destructivo: true });
+  };
   // id (evaluación, grupo o sub-evaluación) cuyo nombre está en edición — null = ninguno
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -394,7 +402,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
 
   const eliminarSub = (idx: number) => {
     const grupo = evaluacion as GrupoEvaluacion;
-    onChange({ ...grupo, subEvaluaciones: grupo.subEvaluaciones.filter((_, i) => i !== idx) });
+    const borrar = () => onChange({ ...grupo, subEvaluaciones: grupo.subEvaluaciones.filter((_, i) => i !== idx) });
+    const c = confirmacionBorrarEvaluacion(grupo.subEvaluaciones[idx], `Prueba ${idx + 1}`);
+    if (!c) { borrar(); return; }
+    showConfirm(c.titulo, c.mensaje, borrar, { labelConfirmar: 'Borrar', destructivo: true });
   };
 
   const agregarSub = () => {
@@ -447,7 +458,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             {contribucion !== null ? `${contribucion.toFixed(2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
           </Text>
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
-          <TouchableOpacity onPress={onEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Text style={{ color: '#F44336' }}>🗑️</Text>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -566,7 +577,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           {parcialGrupo !== null ? `${parcialGrupo.toFixed(2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
         </Text>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
-        <TouchableOpacity onPress={onEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Text style={{ color: '#F44336' }}>🗑️</Text>
         </TouchableOpacity>
       </TouchableOpacity>

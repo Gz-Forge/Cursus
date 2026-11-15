@@ -10,7 +10,8 @@ import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { fileIO } from '../utils/fileIO';
 import { QrScannerModal } from '../components/QrScannerModal';
-import { construirPayload } from '../utils/exportPayload';
+import { construirPayload, resumenExportacion, bytesUtf8 } from '../utils/exportPayload';
+import { ProgresoPasos } from '../components/ProgresoPasos';
 import { cargarPerfilEstado, guardarPerfilEstado, MAX_PERFILES } from '../utils/perfiles';
 import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
@@ -92,7 +93,7 @@ function coloresDesdeJson(d: any, actual: Config): Partial<Config> {
 
 function PanelImportar() {
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showAlert, showError } = useAlert();
   const { reemplazarMaterias, materias, config, actualizarConfig, perfiles, perfilActivoId, crearPerfil, renombrarPerfil } = useStore();
   const [mostrarScanner, setMostrarScanner] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -116,8 +117,8 @@ function PanelImportar() {
     let contenido: string | null = null;
     try {
       contenido = await fileIO.importarArchivo();
-    } catch {
-      showAlert('Error', 'No se pudo abrir el archivo.');
+    } catch (e) {
+      showError('IMP-01', e);
       setCargando(false);
       return;
     }
@@ -127,8 +128,8 @@ function PanelImportar() {
     let datos: unknown;
     try {
       datos = JSON.parse(contenido);
-    } catch {
-      showAlert('Error', 'El archivo no es un JSON válido.');
+    } catch (e) {
+      showError('IMP-02', e);
       return;
     }
 
@@ -195,7 +196,7 @@ function PanelImportar() {
     if (esExportacionCompleta(datos)) {
       const encontrados = leerExportacionCompleta(datos, config.oportunidadesExamenDefault);
       if (encontrados.length === 0) {
-        showAlert('Error', 'No se encontraron perfiles con materias en el archivo.');
+        showError('IMP-03');
         return;
       }
       if (encontrados.length === 1) setPendingPerfilImport(encontrados[0]);
@@ -221,8 +222,8 @@ function PanelImportar() {
             : null,
         ].filter(Boolean).join('\n\n');
         showAlert('Configuración importada', resumen);
-      } catch {
-        showAlert('Error', 'No se pudo aplicar la configuración.');
+      } catch (e) {
+        showError('IMP-04', e);
       }
       return;
     }
@@ -282,8 +283,8 @@ function PanelImportar() {
     try {
       await aplicarPerfilImportado(targetPerfilId, perfil, perfil.materias);
       setPendingPerfilImport(null);
-    } catch {
-      showAlert('Error', 'No se pudo importar el perfil.');
+    } catch (e) {
+      showError('IMP-05', e);
     } finally {
       setCargando(false);
     }
@@ -334,8 +335,8 @@ function PanelImportar() {
       reemplazarMaterias(merged);
       setPendingImport(null);
       showAlert('Importación completa', textoFinImport(pendingImport, merged.length));
-    } catch {
-      showAlert('Error', 'No se pudo completar la importación.');
+    } catch (e) {
+      showError('IMP-06', e);
     } finally {
       setCargando(false);
     }
@@ -359,8 +360,8 @@ function PanelImportar() {
       try {
         await aplicarPerfilImportado(target, perfil, bufferImport);
         setPendingPerfilImport(null);
-      } catch {
-        showAlert('Error', 'No se pudo importar el perfil.');
+      } catch (e) {
+        showError('IMP-05', e);
       } finally {
         setCargando(false);
       }
@@ -812,7 +813,7 @@ function PanelMetodos({
   perfilesSelec, materiasActivas, activo,
 }: PanelMetodosProps) {
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showAlert, showError } = useAlert();
   const [cargando, setCargando] = useState(false);
   const [mostrarQrModal, setMostrarQrModal] = useState(false);
   const [materiasQr, setMateriasQr] = useState<Materia[]>([]);
@@ -822,19 +823,47 @@ function PanelMetodos({
   const [pendingExport, setPendingExport] = useState<'json' | 'clipboard' | null>(null);
 
   const sinPerfiles = perfilesSelec.length === 0;
+  const [progreso, setProgreso] = useState<{ paso: number; total: number; texto: string } | null>(null);
+  const [resumen, setResumen] = useState<string | null>(null);
+  // Pausa corta para que React pinte el paso antes del trabajo pesado
+  const pintar = () => new Promise<void>(r => setTimeout(r, 0));
+
+  // Resumen de lo que se va a exportar (punto 129): se recalcula al cambiar casillas o perfiles
+  const idsPerfiles = perfilesSelec.map(p => p.id).join(',');
+  useEffect(() => {
+    if (sinPerfiles) { setResumen(null); return; }
+    let vigente = true;
+    const id = setTimeout(async () => {
+      try {
+        const payload = await construirPayload({
+          inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
+        });
+        if (vigente) setResumen(resumenExportacion(payload, bytesUtf8(JSON.stringify(payload, null, 2))));
+      } catch {
+        if (vigente) setResumen(null);
+      }
+    }, 150);
+    return () => { vigente = false; clearTimeout(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inclNotas, inclEvaluaciones, inclHorarios, inclConfig, idsPerfiles, activo.materias, activo.config]);
 
   const _doExportJson = async () => {
     setCargando(true);
     try {
+      setProgreso({ paso: 1, total: 2, texto: 'armando el archivo' });
+      await pintar();
       const payload = await construirPayload({
         inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
+      setProgreso({ paso: 2, total: 2, texto: 'guardando' });
+      await pintar();
       await fileIO.exportarArchivo('cursus-exportacion.json', contenido);
-    } catch {
-      showAlert('Error', 'No se pudo generar el archivo.');
+    } catch (e) {
+      showError('EXP-01', e);
     } finally {
       setCargando(false);
+      setProgreso(null);
     }
   };
 
@@ -855,16 +884,21 @@ function PanelMetodos({
   const _doExportClipboard = async () => {
     setCargando(true);
     try {
+      setProgreso({ paso: 1, total: 2, texto: 'armando los datos' });
+      await pintar();
       const payload = await construirPayload({
         inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
+      setProgreso({ paso: 2, total: 2, texto: 'copiando' });
+      await pintar();
       await Clipboard.setStringAsync(contenido);
       showAlert('Copiado', 'El JSON fue copiado al portapapeles.');
-    } catch {
-      showAlert('Error', 'No se pudo copiar el contenido.');
+    } catch (e) {
+      showError('EXP-02', e);
     } finally {
       setCargando(false);
+      setProgreso(null);
     }
   };
 
@@ -897,8 +931,8 @@ function PanelMetodos({
     try {
       setMateriasQr(await materiasDelPrimerPerfil());
       setMostrarQrModal(true);
-    } catch {
-      showAlert('Error', 'No se pudo generar los QRs.');
+    } catch (e) {
+      showError('EXP-03', e);
     }
   };
 
@@ -910,9 +944,15 @@ function PanelMetodos({
     setCargando(true);
     try {
       // Mismo contenido que el QR en pantalla: plan de carrera con créditos, previas y tipo.
+      setProgreso({ paso: 1, total: 3, texto: 'preparando la carrera' });
+      await pintar();
       const encoded = encodeCarrera(materiasAJson(await materiasDelPrimerPerfil()));
       const chunks = splitEnChunks(encoded);
+      setProgreso({ paso: 2, total: 3, texto: `generando ${chunks.length} QR` });
+      await pintar();
       const dataUrls = await generarQrDataUrls(chunks);
+      setProgreso({ paso: 3, total: 3, texto: 'guardando' });
+      await pintar();
 
       if (formato === 'png') await descargarQrsPng(dataUrls, 'cursus');
       else if (formato === 'pdf') await descargarQrsPdf(dataUrls, 'cursus');
@@ -920,18 +960,30 @@ function PanelMetodos({
 
       setMostrarOpcionesQr(false);
     } catch (e) {
-      showAlert('Error', 'No se pudo generar los QRs.');
+      showError('EXP-03', e);
     } finally {
       setCargando(false);
+      setProgreso(null);
     }
   };
 
   return (
     <>
-      {cargando && (
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <ActivityIndicator color={tema.acentoFondo ?? tema.acento} />
-          <Text style={{ color: tema.textoSecundario, marginTop: 8 }}>Generando...</Text>
+      {!sinPerfiles && (
+        <View
+          style={{ backgroundColor: tema.tarjeta, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 10, borderWidth: 1, borderColor: tema.borde }}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 2 }}>Se va a exportar</Text>
+          <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>
+            {resumen ?? 'Calculando…'}
+          </Text>
+        </View>
+      )}
+
+      {progreso && (
+        <View style={{ marginBottom: 8 }}>
+          <ProgresoPasos paso={progreso.paso} total={progreso.total} texto={progreso.texto} />
         </View>
       )}
 
