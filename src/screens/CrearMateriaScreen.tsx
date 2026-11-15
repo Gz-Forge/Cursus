@@ -21,6 +21,9 @@ import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval, normalizarEvaluacionesImportadas } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
+import { EstadoCursandoCard } from '../components/EstadoCursandoCard';
+import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
+import { nivelContador } from '../utils/formulario';
 import { parsearMes } from '../utils/fecha';
 
 
@@ -155,7 +158,6 @@ export function CrearMateriaScreen() {
   const [busquedaPrevia, setBusquedaPrevia] = useState('');
   const [semestreStr, setSemestreStr] = useState('1');
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
-  const [busquedaTipo, setBusquedaTipo] = useState('');
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
     dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string; descripcion: string;
@@ -620,11 +622,18 @@ export function CrearMateriaScreen() {
         keyboardType={numerico ? 'numeric' : 'default'}
         maxLength={maxLength}
       />
-      {maxLength !== undefined && (
-        <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'right', marginTop: 2 }}>
-          {value.length}/{maxLength}
-        </Text>
-      )}
+      {maxLength !== undefined && (() => {
+        // Punto 60: naranja desde el 80 % del máximo, rojo al llegar
+        const nivel = nivelContador(value.length, maxLength);
+        return (
+          <Text style={{
+            color: nivel === 'lleno' ? '#F44336' : nivel === 'cerca' ? '#FF9800' : tema.textoSecundario,
+            fontSize: 11, textAlign: 'right', marginTop: 2, fontWeight: nivel === 'normal' ? '400' : '700',
+          }}>
+            {value.length}/{maxLength}
+          </Text>
+        );
+      })()}
     </View>
   );
 
@@ -633,24 +642,12 @@ export function CrearMateriaScreen() {
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
-        {/* ── Toggle Cursando ── */}
-        <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: tema.texto, fontWeight: '600' }}>{`¿Estado ${getLabel('cursando')}?`}</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
-                {form.cursando
-                  ? `El estado se muestra como ${getLabel('cursando')} sin importar la nota`
-                  : 'El estado se calcula a partir de la nota'}
-              </Text>
-            </View>
-            <Switch
-              value={form.cursando ?? false}
-              onValueChange={handleToggleCursando}
-              trackColor={{ true: tema.acento }}
-            />
-          </View>
-        </View>
+        {/* ── Estado actual + Cursando (punto 61) ── */}
+        <EstadoCursandoCard
+          estado={estado}
+          cursando={form.cursando ?? false}
+          onToggleCursando={handleToggleCursando}
+        />
 
         <TabBarEdit activa={tabActiva} onCambiar={setTabActiva} tema={tema} />
 
@@ -675,54 +672,12 @@ export function CrearMateriaScreen() {
         {campo('Oportunidades restantes', String(form.oportunidadesExamen), v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }, true)}
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>TIPO DE FORMACIÓN</Text>
-        {form.tipoFormacion ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 12 }}>
-            <Text style={{ color: tema.texto, flex: 1 }}>{form.tipoFormacion}</Text>
-            <TouchableOpacity onPress={() => setForm(f => ({ ...f, tipoFormacion: undefined }))}>
-              <Text style={{ color: '#F44336' }}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={{ marginBottom: 16 }}>
-            <TextInput
-              placeholder="Buscar tipo..."
-              placeholderTextColor={tema.textoSecundario}
-              style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 8 }}
-              value={busquedaTipo}
-              onChangeText={setBusquedaTipo}
-            />
-            {busquedaTipo.length > 0 && (
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, marginTop: 4 }}>
-                {config.tiposFormacion
-                  .filter(t => t.toLowerCase().includes(busquedaTipo.toLowerCase()))
-                  .slice(0, 5)
-                  .map((t, i) => (
-                    <TouchableOpacity
-                      key={i}
-                      onPress={() => { setForm(f => ({ ...f, tipoFormacion: t })); setBusquedaTipo(''); }}
-                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                    >
-                      <Text style={{ color: tema.texto }}>{t}</Text>
-                    </TouchableOpacity>
-                  ))
-                }
-                {!config.tiposFormacion.some(t => t.toLowerCase() === busquedaTipo.trim().toLowerCase()) && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      const t = busquedaTipo.trim();
-                      setForm(f => ({ ...f, tipoFormacion: t }));
-                      actualizarConfig({ tiposFormacion: [...config.tiposFormacion, t] });
-                      setBusquedaTipo('');
-                    }}
-                    style={{ padding: 10 }}
-                  >
-                    <Text style={{ color: tema.acento }}>Usar: "{busquedaTipo.trim()}"</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
-        )}
+        <SelectorTipoFormacion
+          tipos={config.tiposFormacion}
+          valor={form.tipoFormacion}
+          onCambiar={t => setForm(f => ({ ...f, tipoFormacion: t }))}
+          onAgregarTipo={t => actualizarConfig({ tiposFormacion: [...useStore.getState().config.tiposFormacion, t] })}
+        />
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>PREVIAS NECESARIAS</Text>
         {form.previasNecesarias.map((num, i) => {
@@ -1697,13 +1652,20 @@ export function CrearMateriaScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: tema.texto, fontSize: 13 }}>
-                        {fmtFechaBloque(falta.fecha)}
-                        <Text style={{ color: tema.acento }}> · {tipoLabel}</Text>
-                        {falta.justificada ? <Text style={{ color: '#4CAF50' }}> · Justificada</Text> : null}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                        <Text style={{ color: tema.texto, fontSize: 13 }}>
+                          {fmtFechaBloque(falta.fecha)}
+                          <Text style={{ color: tema.acento }}> · {tipoLabel}</Text>
+                        </Text>
+                        {falta.justificada ? (
+                          /* Punto 76: chip verde "Justificada" */
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: '#4CAF5026', borderWidth: 1, borderColor: '#4CAF50' }}>
+                            <Text style={{ color: '#4CAF50', fontSize: 11, fontWeight: '700' }}>✓ Justificada</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       {falta.nota ? (
-                        <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
+                        <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 3 }}>
                           {falta.nota}
                         </Text>
                       ) : null}

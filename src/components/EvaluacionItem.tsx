@@ -136,17 +136,31 @@ function FechaHoraPicker({
   const fechaISO = construirFechaISO();
   const labelFecha = fechaISO
     ? `📅 ${isoToDisplay(fechaISO)}${hora !== undefined ? `  ${fmtHoraEval(hora)}` : ''}`
-    : '📅 Sin fecha en horario';
+    : null;
 
   return (
     <View style={{ marginTop: 6 }}>
-      <TouchableOpacity
-        onPress={() => setExpandido(v => !v)}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-      >
-        <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1 }}>{labelFecha}</Text>
-        <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{expandido ? '▲' : '▼'}</Text>
-      </TouchableOpacity>
+      {labelFecha || expandido ? (
+        <TouchableOpacity
+          onPress={() => setExpandido(v => !v)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+        >
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1 }}>{labelFecha ?? '📅 Fecha en el horario'}</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{expandido ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+      ) : (
+        /* Punto 69: sin fecha, un botón claro en vez de "Sin fecha en horario" */
+        <TouchableOpacity
+          onPress={() => setExpandido(true)}
+          accessibilityRole="button"
+          style={{
+            alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+            borderWidth: 1, borderStyle: 'dashed', borderColor: tema.acentoLineas ?? tema.acento,
+          }}
+        >
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '600' }}>＋ Agregar al horario</Text>
+        </TouchableOpacity>
+      )}
 
       {expandido && (
         <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginTop: 6 }}>
@@ -210,7 +224,7 @@ function FechaHoraPicker({
                 placeholderTextColor={tema.textoSecundario}
                 maxLength={20}
               />
-              {mesStr && !isNaN(parseInt(mesStr, 10)) && parseInt(mesStr, 10) >= 1 && parseInt(mesStr, 10) <= 12 && (
+              {!!mesStr && !isNaN(parseInt(mesStr, 10)) && parseInt(mesStr, 10) >= 1 && parseInt(mesStr, 10) <= 12 && (
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 10, marginTop: 2 }}>
                   {MESES[parseInt(mesStr, 10) - 1]}
                 </Text>

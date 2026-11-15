@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.5.0',
+    items: [
+      '🏷️ El tipo de formación se elige con un toque entre botones, y con "＋ Nuevo" creás uno sin salir de la materia.',
+      '🔢 En Ajustes ves cuántas materias usan cada tipo de formación, y si borrás uno te avisa cuántas quedan sin tipo.',
+      '🟠 Arriba de cada materia ves su estado actual, que se actualiza mientras cargás las notas.',
+      '📅 Las evaluaciones sin fecha tienen un botón "＋ Agregar al horario".',
+      '✅ Las faltas justificadas se ven con una etiqueta verde y el motivo debajo.',
+      '✏️ El contador del nombre se pone naranja cuando te acercás al límite.',
+    ],
+  },
+  {
     version: '1.4.5',
     items: [
       '🗑️ Si borrás una evaluación que ya tiene nota, primero te preguntamos.',
