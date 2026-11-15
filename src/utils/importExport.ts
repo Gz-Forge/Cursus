@@ -709,6 +709,9 @@ export function aplicarConfigJson(
   bool('horarioMostrarEvaluaciones');
   bool('horarioMostrarLineaHoraActual');
   bool('barraProgresoEvaluaciones');
+  oneOf('metricasProgresoEstilo', ['lista', 'anillo']);
+  oneOf('notasObtenidasEje', ['con_datos', 'completo']);
+  bool('metricasLineasUmbral');
   oneOf('horarioPrimerDia', ['lunes', 'domingo']);
   oneOf('tarjetaCreditosBadge', ['da', 'necesita', 'ambos']);
   oneOf('tarjetaBadgeOrden', ['da_primero', 'necesita_primero']);
@@ -776,6 +779,9 @@ export function configAJson(config: import('../types').Config): Record<string, u
     tarjetaTipoFormacion: config.tarjetaTipoFormacion,
     tarjetaCreditosExtendida: config.tarjetaCreditosExtendida,
     tarjetaMostrarToggleCursando: config.tarjetaMostrarToggleCursando,
+    metricasProgresoEstilo: config.metricasProgresoEstilo ?? 'lista',
+    notasObtenidasEje: config.notasObtenidasEje ?? 'con_datos',
+    metricasLineasUmbral: config.metricasLineasUmbral ?? true,
   };
 }
 
@@ -886,6 +892,15 @@ CAMPOS DE CONFIGURACIÓN:
 30. barraProgresoEvaluaciones (true/false)
     En la pantalla de edición de una materia, ¿mostrar una barra de progreso con el avance de la nota sobre los umbrales de aprobación y exoneración?
 
+31. metricasProgresoEstilo ("lista" o "anillo")
+    En Métricas, ¿cómo ver el progreso general? "lista": filas con cifras. "anillo": un anillo con el % de créditos y cuatro cifras.
+
+32. notasObtenidasEje ("con_datos" o "completo")
+    En el gráfico "Notas obtenidas" de Métricas: "con_datos" muestra solo las notas que tienen materias; "completo" muestra todas las notas de 0 a la máxima.
+
+33. metricasLineasUmbral (true/false)
+    En "Notas obtenidas", ¿marcar las notas de aprobación y exoneración? (Con eje completo, líneas punteadas; con datos, barras pintadas según la zona.)
+
 ---
 
 FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
@@ -925,7 +940,10 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "tarjetaTipoFormacion": false,
   "tarjetaCreditosExtendida": "ambos",
   "tarjetaMostrarToggleCursando": true,
-  "barraProgresoEvaluaciones": true
+  "barraProgresoEvaluaciones": true,
+  "metricasProgresoEstilo": "anillo",
+  "notasObtenidasEje": "completo",
+  "metricasLineasUmbral": true
 }
 
 ⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;

@@ -197,6 +197,9 @@ export interface Config {
   metricasOrden?: string[];            // orden de las métricas (array de IDs); ausente = orden por defecto
   notasObtenidasRedondeo?: 'abajo' | 'arriba'; // modo de redondeo para métrica "Notas obtenidas"
   notasObtenidasModo?: 'exacta' | 'rangos';    // agrupar notas exactas o en rangos
+  notasObtenidasEje?: 'con_datos' | 'completo'; // 1.6.5: solo notas con materias (default) o de 0 al máximo
+  metricasLineasUmbral?: boolean;     // 1.6.5: referencias de aprobación/exoneración en Notas obtenidas (default true)
+  metricasProgresoEstilo?: 'lista' | 'anillo'; // 1.6.5: estilo de Progreso general (default 'lista')
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
   // Horario — evaluaciones grupales e individuales
