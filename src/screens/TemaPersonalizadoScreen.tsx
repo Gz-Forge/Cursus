@@ -156,7 +156,7 @@ const PANTALLAS: { key: PantallaKey; label: string }[] = [
   { key: 'carrera',  label: 'Carrera' },
   { key: 'horario',  label: 'Horarios'      },
   { key: 'metricas', label: 'Métricas'      },
-  { key: 'config',   label: 'Configuración' },
+  { key: 'config',   label: 'Ajustes' },
 ];
 const FONDO_KEY: Record<PantallaKey, keyof TemaPersonalizado> = {
   carrera:  'fondoCarrera',
@@ -1438,7 +1438,7 @@ export function TemaPersonalizadoScreen() {
               ['carrera',  'Carrera'       ],
               ['horario',  'Horarios'      ],
               ['metricas', 'Métricas'      ],
-              ['config',   'Configuración' ],
+              ['config',   'Ajustes' ],
             ] as const).map(([id, label]) => (
               <TouchableOpacity
                 key={id}

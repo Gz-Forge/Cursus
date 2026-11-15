@@ -25,6 +25,7 @@ export const NOVEDADES: NovedadesVersion[] = [
       '🖍️ Lo que buscás aparece resaltado en el nombre de la materia.',
       '💡 "Es previa de" y "Sus previas" muestran un ejemplo de qué preguntar.',
       '⇕ Expandir y colapsar todos los semestres ahora es un ícono, con su descripción.',
+      '⚙️ "Configuración" ahora se llama "Ajustes": entra completo en la barra del celular.',
     ],
   },
   {
