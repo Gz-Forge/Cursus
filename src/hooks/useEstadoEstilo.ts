@@ -20,6 +20,16 @@ export const ESTADO_NOMBRES: Record<EstadoMateria, string> = {
   recursar:  'Recursar',
 };
 
+/** Nombre de una sola materia en ese estado ("Reprobada"), para chips de una materia. */
+export const ESTADO_NOMBRES_SINGULAR: Record<EstadoMateria, string> = {
+  aprobado:  'Aprobada',
+  exonerado: 'Exonerada',
+  cursando:  'Cursando',
+  por_cursar: 'Por cursar',
+  reprobado: 'Reprobada',
+  recursar:  'Recursar',
+};
+
 export function useEstadoEstilo() {
   const config = useStore(s => s.config);
 
@@ -33,5 +43,9 @@ export function useEstadoEstilo() {
   const getLabel = (estado: EstadoMateria): string =>
     config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES[estado];
 
-  return { getColor, getIcono, getLabel };
+  /** Nombre en singular; si el usuario personalizó el nombre, se usa el suyo tal cual. */
+  const getLabelSingular = (estado: EstadoMateria): string =>
+    config.estadoNombresPersonalizados?.[estado] ?? ESTADO_NOMBRES_SINGULAR[estado];
+
+  return { getColor, getIcono, getLabel, getLabelSingular };
 }

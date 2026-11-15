@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
+import { contarMateriasPorTipo } from '../utils/formulario';
 import { useNavigation } from '@react-navigation/native';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
@@ -152,6 +153,7 @@ export function ConfigScreen() {
   const toggleBloque = (key: string) =>
     setAcordeonBloques(p => ({ ...p, [key]: !p[key] }));
 
+  const usoPorTipo = contarMateriasPorTipo(materias);
   const materiasConHorario = materias.filter(m => {
     if (calcularEstadoFinal(m, config) !== 'cursando') return false;
     const tieneBloques = (m.bloques ?? []).length > 0;
@@ -514,6 +516,7 @@ export function ConfigScreen() {
             )}
             {config.tiposFormacion.map((tipo, i) => {
               const estaEditando = editandoTipo === tipo;
+              const cantidadUso = usoPorTipo[tipo] ?? 0;
 
               const confirmarEdicion = () => {
                 const nuevo = textoEdicion.trim();
@@ -548,8 +551,12 @@ export function ConfigScreen() {
                       </Text>
                     </View>
                   ) : (
-                    <TouchableOpacity style={{ flex: 1 }} onPress={() => { setEditandoTipo(tipo); setTextoEdicion(tipo); }}>
-                      <Text style={{ color: tema.texto, fontSize: 14 }}>{tipo}</Text>
+                    <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={() => { setEditandoTipo(tipo); setTextoEdicion(tipo); }}>
+                      <Text style={{ color: tema.texto, fontSize: 14, flexShrink: 1 }}>{tipo}</Text>
+                      {/* Punto 31: cuántas materias del perfil usan este tipo */}
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                        · {cantidadUso} materia{cantidadUso !== 1 ? 's' : ''}
+                      </Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity onPress={() => {
@@ -565,10 +572,10 @@ export function ConfigScreen() {
                     };
                     if (usadas > 0) {
                       showConfirm(
-                        'Eliminar tipo de formación',
-                        `"${tipo}" está siendo usado por ${usadas} materia${usadas !== 1 ? 's' : ''}. Al eliminar, esas materias quedarán sin tipo de formación asignado.`,
+                        `¿Borrar «${tipo}»?`,
+                        `${usadas} materia${usadas !== 1 ? 's quedan' : ' queda'} sin tipo de formación.`,
                         eliminar,
-                        { labelConfirmar: 'Eliminar', destructivo: true },
+                        { labelConfirmar: 'Borrar', destructivo: true },
                       );
                     } else {
                       eliminar();
