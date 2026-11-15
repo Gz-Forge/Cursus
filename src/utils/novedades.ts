@@ -16,6 +16,16 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.6.0',
+    items: [
+      '📚 En el horario, cada bloque muestra primero la materia y debajo el tipo y el salón.',
+      '↕️ Al estirar o mover un bloque, la hora se ajusta de a 15 minutos.',
+      '🕒 La línea de "ahora" muestra la hora exacta.',
+      '⌨️ En la computadora: ← → cambia de semana y Espacio vuelve a hoy (la ayuda está arriba).',
+      '↩️ En la edición rápida, Enter guarda y Esc cancela.',
+    ],
+  },
+  {
     version: '1.5.5',
     items: [
       '👤 Tus perfiles muestran los créditos y cuándo los modificaste; renombrar y eliminar están en el menú ⋯.',
