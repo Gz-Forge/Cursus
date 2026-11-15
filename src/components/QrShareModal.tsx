@@ -16,7 +16,7 @@ interface Props {
 
 export function QrShareModal({ visible, materias, onCerrar }: Props) {
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showError } = useAlert();
   const [paginaActual, setPaginaActual] = useState(0);
   const [chunks, setChunks] = useState<ChunkQR[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -38,7 +38,7 @@ export function QrShareModal({ visible, materias, onCerrar }: Props) {
         if (__DEV__) console.warn('[QrShareModal] Error al generar QR:', e);
         setChunks([]);
         setCargando(false);
-        showAlert('Error al generar QR', 'No se pudo generar el código QR. Intentá exportar como .json.');
+        showError('QR-05', e);
       }
     }, 50);
     return () => clearTimeout(id);

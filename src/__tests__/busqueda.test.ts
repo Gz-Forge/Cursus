@@ -66,10 +66,13 @@ describe('filtrosAplicados', () => {
   });
 });
 
-describe('novedades 1.4.0', () => {
+describe('novedades', () => {
   it('la versión instalada tiene su entrada de novedades arriba de todo', () => {
-    expect(APP_VERSION).toBe('1.4.0');
-    expect(NOVEDADES[0].version).toBe('1.4.0');
+    expect(NOVEDADES[0].version).toBe(APP_VERSION);
     expect(NOVEDADES[0].items.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('la 1.4.0 sigue en la lista', () => {
+    expect(NOVEDADES.some(n => n.version === '1.4.0')).toBe(true);
   });
 });

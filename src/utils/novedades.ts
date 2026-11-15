@@ -16,6 +16,18 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.4.5',
+    items: [
+      '🗑️ Si borrás una evaluación que ya tiene nota, primero te preguntamos.',
+      '↩️ "Restaurar todos" los estados ahora pide confirmación.',
+      '🧾 Al exportar ves qué va en el archivo y cuánto pesa, antes de tocar el botón.',
+      '⏱️ El código para sincronizar dispositivos muestra cuánto le queda, y si vence podés generar otro.',
+      '📶 Sincronizar y exportar muestran en qué paso van, con una barra de progreso.',
+      '🆘 Los errores dicen qué pasó y qué hacer, con un código y un botón para copiar el detalle si necesitás ayuda.',
+      '🧹 Editar materia queda más limpio: sacamos el aviso de guardado automático.',
+    ],
+  },
+  {
     version: '1.4.0',
     items: [
       '🎛️ Búsqueda más limpia: los filtros están en el botón "Filtros", que muestra cuántos tenés activos, y cada uno se quita con su ✕.',
