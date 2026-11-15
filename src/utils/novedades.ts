@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.6.5',
+    items: [
+      '🍩 Nuevo estilo para el Progreso general: un anillo con el % de créditos y cuatro cifras (elegilo en ⚙️ de Métricas).',
+      '📋 En "Materias por estado", tocá un color o una fila para ver la lista de esas materias.',
+      '📈 En "Promedio por semestre", tocá un punto o el botón del semestre para ver su valor.',
+      '🎯 "Notas obtenidas" marca desde qué nota aprobás y exonerás, y muestra tu promedio. Podés ver solo las notas con materias o la escala completa.',
+      '🙈 Los gráficos que todavía no tienen datos no aparecen.',
+      '👆 La ventana de "Personalizar métricas" se desplaza sin trabarse en el celular.',
+    ],
+  },
+  {
     version: '1.6.0',
     items: [
       '📚 En el horario, cada bloque muestra primero la materia y debajo el tipo y el salón.',
