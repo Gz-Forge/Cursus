@@ -342,7 +342,8 @@ function PanelImportar() {
     }
   };
 
-  const onImportResolve = async () => {
+  /** `lista`: la lista ya sin repetidas (el estado `bufferImport` todavía no se actualizó). */
+  const onImportResolve = async (lista: Materia[] = bufferImport) => {
     setMostrarDuplicadosImport(false);
     const target = pendingImportTarget;
     setPendingImportTarget(null);
@@ -350,15 +351,15 @@ function PanelImportar() {
     if (target === 'merge') {
       if (!pendingImport) return;
       aplicarConfigPendiente(pendingImport);
-      reemplazarMaterias(bufferImport);
+      reemplazarMaterias(lista);
       setPendingImport(null);
-      showAlert('Importación completa', textoFinImport(pendingImport, bufferImport.length));
+      showAlert('Importación completa', textoFinImport(pendingImport, lista.length));
     } else if (target !== null) {
       const perfil = pendingPerfilImport;
       if (!perfil) return;
       setCargando(true);
       try {
-        await aplicarPerfilImportado(target, perfil, bufferImport);
+        await aplicarPerfilImportado(target, perfil, lista);
         setPendingPerfilImport(null);
       } catch (e) {
         showError('IMP-05', e);
@@ -612,15 +613,10 @@ function PanelImportar() {
       <DuplicadosModal
         visible={mostrarDuplicadosImport}
         materias={bufferImport}
-        onEliminar={(id, numero) =>
-          setBufferImport(prev => prev.filter(m => !(m.id === id && m.numero === numero)))
-        }
-        onNuevoId={(id, numero, nuevoId) =>
-          setBufferImport(prev => prev.map(m =>
-            m.id === id && m.numero === numero ? { ...m, id: nuevoId } : m
-          ))
-        }
-        onResolve={onImportResolve}
+        onAplicar={resuelta => {
+          setBufferImport(resuelta);
+          return onImportResolve(resuelta);
+        }}
         onCancel={() => {
           setMostrarDuplicadosImport(false);
           setPendingImportTarget(null);
@@ -818,7 +814,7 @@ function PanelMetodos({
   const [mostrarQrModal, setMostrarQrModal] = useState(false);
   const [materiasQr, setMateriasQr] = useState<Materia[]>([]);
   const [mostrarOpcionesQr, setMostrarOpcionesQr] = useState(false);
-  const { eliminarMateria, reemplazarMaterias, materias: storeMaterias } = useStore();
+  const { reemplazarMaterias, materias: storeMaterias } = useStore();
   const [mostrarDuplicados, setMostrarDuplicados] = useState<boolean>(false);
   const [pendingExport, setPendingExport] = useState<'json' | 'clipboard' | null>(null);
 
@@ -847,13 +843,14 @@ function PanelMetodos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inclNotas, inclEvaluaciones, inclHorarios, inclConfig, idsPerfiles, activo.materias, activo.config]);
 
-  const _doExportJson = async () => {
+  const _doExportJson = async (materiasActivo?: Materia[]) => {
     setCargando(true);
     try {
       setProgreso({ paso: 1, total: 2, texto: 'armando el archivo' });
       await pintar();
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
+        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec,
+        activo: materiasActivo ? { ...activo, materias: materiasActivo } : activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
       setProgreso({ paso: 2, total: 2, texto: 'guardando' });
@@ -881,13 +878,14 @@ function PanelMetodos({
     await _doExportJson();
   };
 
-  const _doExportClipboard = async () => {
+  const _doExportClipboard = async (materiasActivo?: Materia[]) => {
     setCargando(true);
     try {
       setProgreso({ paso: 1, total: 2, texto: 'armando los datos' });
       await pintar();
       const payload = await construirPayload({
-        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec, activo,
+        inclNotas, inclEvaluaciones, inclHorarios, inclConfig, perfilesSelec,
+        activo: materiasActivo ? { ...activo, materias: materiasActivo } : activo,
       });
       const contenido = JSON.stringify(payload, null, 2);
       setProgreso({ paso: 2, total: 2, texto: 'copiando' });
@@ -1089,20 +1087,14 @@ function PanelMetodos({
       <DuplicadosModal
         visible={mostrarDuplicados}
         materias={storeMaterias}
-        onEliminar={(id, numero) => eliminarMateria(id, numero)}
-        onNuevoId={(id, numero, nuevoId) =>
-          reemplazarMaterias(
-            useStore.getState().materias.map(m =>
-              m.id === id && m.numero === numero ? { ...m, id: nuevoId } : m
-            )
-          )
-        }
-        onResolve={async () => {
+        onAplicar={async resuelta => {
+          reemplazarMaterias(resuelta);
           setMostrarDuplicados(false);
           const tipo = pendingExport;
           setPendingExport(null);
-          if (tipo === 'json') await _doExportJson();
-          else if (tipo === 'clipboard') await _doExportClipboard();
+          // `activo` todavía tiene la lista vieja hasta el próximo render
+          if (tipo === 'json') await _doExportJson(resuelta);
+          else if (tipo === 'clipboard') await _doExportClipboard(resuelta);
         }}
         onCancel={() => {
           setMostrarDuplicados(false);

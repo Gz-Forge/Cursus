@@ -12,7 +12,7 @@ import {
 } from '../utils/perfiles';
 import { renumerarMaterias, calcularEstadoFinal } from '../utils/calculos';
 
-const CONFIG_DEFAULT: Config = {
+export const CONFIG_DEFAULT: Config = {
   tema: 'oscuro',
   notaMaxima: 12,
   umbralExoneracion: 85,
@@ -193,7 +193,7 @@ export const useStore = create<Store>((set, get) => ({
     const id = `p${Date.now()}`;
     const nuevoEstado: AppState = { materias: [], config: CONFIG_DEFAULT };
     // guardar estado actual antes de cambiar
-    await guardarPerfilEstado(get().perfilActivoId, { materias: get().materias, config: get().config });
+    await guardarPerfilEstado(get().perfilActivoId, { materias: get().materias, config: get().config }, { marcarModificado: false });
     await guardarPerfilEstado(id, nuevoEstado);
     const nuevaMeta: PerfilesMeta = {
       activoId: id,

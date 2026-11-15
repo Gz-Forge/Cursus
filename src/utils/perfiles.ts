@@ -121,8 +121,27 @@ export async function cargarPerfilEstado(id: string): Promise<AppState> {
   }
 }
 
-export async function guardarPerfilEstado(id: string, estado: AppState): Promise<void> {
-  await storage.setItem(keyPerfil(id), JSON.stringify(estado));
+/**
+ * Guarda el estado de un perfil y anota cuándo se modificó (punto 16).
+ * Con `marcarModificado: false` (guardados de resguardo, sin cambios del
+ * usuario) se conserva la fecha anterior.
+ */
+export async function guardarPerfilEstado(
+  id: string,
+  estado: AppState,
+  opciones: { marcarModificado?: boolean } = {},
+): Promise<void> {
+  let modificadoEn: number | undefined = Date.now();
+  if (opciones.marcarModificado === false) {
+    modificadoEn = estado.modificadoEn;
+    if (modificadoEn === undefined) {
+      try {
+        const previo = await storage.getItem(keyPerfil(id));
+        modificadoEn = previo ? (JSON.parse(previo) as AppState).modificadoEn : undefined;
+      } catch { modificadoEn = undefined; }
+    }
+  }
+  await storage.setItem(keyPerfil(id), JSON.stringify({ ...estado, modificadoEn }));
 }
 
 export async function eliminarPerfilEstado(id: string): Promise<void> {

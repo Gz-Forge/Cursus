@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
@@ -8,7 +8,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
 import { contarMateriasPorTipo } from '../utils/formulario';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { calcularEstadoFinal } from '../utils/calculos';
@@ -136,6 +136,29 @@ export function ConfigScreen() {
   const { getColor, getIcono, getLabel } = useEstadoEstilo();
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const scrollConfigRef = useRef<any>(null);
+  const promptsYRef = useRef<number | null>(null);
+  const [irAPrompts, setIrAPrompts] = useState(false);
+
+  // Punto 57: "Armar con IA" abre Ajustes → Datos en "Prompts para IA"
+  useEffect(() => {
+    const pedido = route.params?.abrir;
+    if (pedido !== 'prompts') return;
+    setTabActiva('datos');
+    setIrAPrompts(true);
+    navigation.setParams({ abrir: undefined });
+  }, [route.params?.abrir]);
+  useEffect(() => {
+    if (!irAPrompts || tabActiva !== 'datos') return;
+    const id = setTimeout(() => {
+      if (promptsYRef.current !== null) {
+        scrollConfigRef.current?.scrollTo?.({ y: Math.max(0, promptsYRef.current - 12), animated: true });
+      }
+      setIrAPrompts(false);
+    }, 250);
+    return () => clearTimeout(id);
+  }, [irAPrompts, tabActiva]);
   // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
   // controlado revierta el texto mientras el usuario escribe (ej: borrar "12" para tipear "5")
   const [notaMaxStr, setNotaMaxStr] = useState(() => String(config.notaMaxima));
@@ -246,6 +269,7 @@ export function ConfigScreen() {
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       <Animated.ScrollView
+        ref={scrollConfigRef}
         contentContainerStyle={{ padding: 16 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollAnim } } }],
@@ -933,7 +957,10 @@ export function ConfigScreen() {
             <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
           </TouchableOpacity>
 
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>PROMPTS PARA IA</Text>
+          <Text
+            onLayout={e => { promptsYRef.current = e.nativeEvent.layout.y; }}
+            style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}
+          >PROMPTS PARA IA</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 14 }}>
             Seleccioná qué querés generar. La IA preguntará solo lo necesario y generará un único JSON para importar.
           </Text>

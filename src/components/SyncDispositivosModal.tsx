@@ -20,6 +20,7 @@ import { encryptPayload, decryptPayload } from '../utils/crypto';
 import { CodigoError, mensajeTecnico } from '../utils/errores';
 import { formatearCuentaRegresiva } from '../utils/fecha';
 import { ProgresoPasos } from './ProgresoPasos';
+import { pasoFlujo } from '../utils/sincronizar';
 import { ErrorConCodigo } from './ErrorConCodigo';
 
 type Estado =
@@ -274,21 +275,22 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               Sincronizar dispositivos
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
-              El emisor tiene los datos que querés copiar. El receptor los recibirá.
+              Pasá tu carrera, notas y horarios de un dispositivo a otro.{'\n'}
+              En el otro dispositivo elegí la opción contraria.
             </Text>
             <TouchableOpacity onPress={() => { setPassphrase(''); setShowPass(false); setEstado('emisor_ingresando_clave'); }} style={btnStyle()}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>📤  Soy el EMISOR</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>📤  Enviar mis datos</Text>
               <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 }}>
-                Mis datos se copiarán al otro dispositivo
+                Desde este dispositivo al otro
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setEstado('receptor_escaneando')}
               style={[btnStyle(), { backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }]}
             >
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Soy el RECEPTOR</Text>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 15 }}>📥  Recibir datos</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
-                Recibiré los datos del otro dispositivo
+                Desde el otro dispositivo a este
               </Text>
             </TouchableOpacity>
           </View>
@@ -302,7 +304,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
               Elegí una clave temporal para proteger tus datos.{'\n'}
-              El receptor deberá ingresarla también.
+              En el otro dispositivo vas a tener que escribirla.
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, marginBottom: 16 }}>
               <TextInput
@@ -334,6 +336,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       case 'emisor_subiendo':
         return (
           <ProgresoPasos
+            compacto
             paso={pasoEmisor}
             total={3}
             texto={pasoEmisor === 1 ? 'preparando tus datos' : pasoEmisor === 2 ? 'cifrando' : 'subiendo'}
@@ -371,7 +374,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               Código listo
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16, textAlign: 'center' }}>
-              En el otro dispositivo elegí "Soy el RECEPTOR"{'\n'}
+              En el otro dispositivo elegí "Recibir datos"{'\n'}
               y escaneá el QR o escribí el código.
             </Text>
 
@@ -411,18 +414,18 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         return (
           <View>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 12, textAlign: 'center' }}>
-              Conectar con el emisor
+              Código del otro dispositivo
             </Text>
 
             {/* Escanear QR solo en móvil */}
             {Platform.OS !== 'web' && (
               <TouchableOpacity onPress={() => setMostrarScanner(true)} style={btnStyle()}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>📷  Escanear QR del emisor</Text>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>📷  Escanear el QR</Text>
               </TouchableOpacity>
             )}
 
             <Text style={{ color: tema.textoSecundario, fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
-              {Platform.OS !== 'web' ? 'O ingresá el código manualmente:' : 'Ingresá el código del dispositivo emisor:'}
+              {Platform.OS !== 'web' ? 'O escribí el código:' : 'Escribí el código que muestra el otro dispositivo:'}
             </Text>
             <TextInput
               value={codigoManual}
@@ -448,10 +451,10 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         );
 
       case 'receptor_descargando':
-        return <ProgresoPasos paso={1} total={3} texto="descargando" />;
+        return <ProgresoPasos compacto paso={1} total={1} texto="descargando" />;
 
       case 'receptor_desencriptando':
-        return <ProgresoPasos paso={2} total={3} texto="descifrando" nota="Esto puede tomar unos segundos" />;
+        return <ProgresoPasos compacto paso={1} total={1} texto="descifrando" nota="Esto puede tomar unos segundos" />;
 
       case 'receptor_ingresando_clave':
         return (
@@ -460,14 +463,14 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               Contraseña de sincronización
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
-              Ingresá la contraseña que configuró{'\n'}el dispositivo emisor.
+              Ingresá la contraseña que se eligió{'\n'}en el dispositivo que envía.
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, marginBottom: errorClave ? 8 : 16 }}>
               <TextInput
                 value={passphrase}
                 onChangeText={v => { setPassphrase(v); setErrorClave(''); }}
                 secureTextEntry={!showPass}
-                placeholder="Contraseña del emisor"
+                placeholder="Contraseña del otro dispositivo"
                 placeholderTextColor={tema.textoSecundario}
                 autoFocus
                 style={{ flex: 1, color: tema.texto, padding: 12, fontSize: 16 }}
@@ -561,7 +564,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
       }
 
       case 'receptor_aplicando':
-        return <ProgresoPasos paso={3} total={3} texto="aplicando" />;
+        return <ProgresoPasos compacto paso={1} total={1} texto="aplicando" />;
 
       case 'receptor_listo':
         return (
@@ -571,7 +574,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
               ¡Sincronización completa!
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-              Tus datos han sido reemplazados con los del dispositivo emisor.
+              Los datos del otro dispositivo ya están en este.
             </Text>
           </View>
         );
@@ -613,6 +616,26 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
                 : {}),
             }}
           >
+            {(() => {
+              // Punto 36: paso del recorrido arriba de cada pantalla
+              const p = pasoFlujo(estado);
+              if (!p) return null;
+              return (
+                <View style={{ marginBottom: 16 }} accessibilityLabel={`${p.recorrido}, paso ${p.paso} de 3: ${p.titulo}`}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginBottom: 6 }}>
+                    {p.recorrido} · Paso {p.paso} de 3 · {p.titulo}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6, justifyContent: 'center' }}>
+                    {[1, 2, 3].map(n => (
+                      <View key={n} style={{
+                        width: 28, height: 4, borderRadius: 2,
+                        backgroundColor: n <= p.paso ? (tema.acentoFondo ?? tema.acento) : tema.borde,
+                      }} />
+                    ))}
+                  </View>
+                </View>
+              );
+            })()}
             {renderContenido()}
             {puedeVolver && (
               <TouchableOpacity onPress={onCerrar} style={{ alignItems: 'center', marginTop: 16 }}>
