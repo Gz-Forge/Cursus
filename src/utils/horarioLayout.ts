@@ -41,3 +41,27 @@ export function calcularLayoutSuperposicion(
 
   return result;
 }
+
+/**
+ * Punto 88: al estirar o mover bloques y evaluaciones en la grilla, la hora
+ * se ajusta de a 15 minutos (el mismo paso que el selector de hora).
+ */
+export const PASO_GRILLA_MIN = 15;
+/** Duración mínima de un bloque o evaluación al estirarlo. */
+export const DURACION_MIN_BLOQUE = 15;
+
+/** Redondea minutos al paso más cercano: 08:07 → 08:00, 08:08 → 08:15. */
+export function ajustarAPaso(minutos: number, paso: number = PASO_GRILLA_MIN): number {
+  return Math.round(minutos / paso) * paso;
+}
+
+/**
+ * Punto 91: texto del bloque en dos partes: la materia primero (en negrita)
+ * y debajo el detalle ("T · Aula 12"). Si solo entra una línea, todo junto.
+ */
+export function textoBloque(materia: string, detalle: (string | null | undefined)[]): {
+  titulo: string; detalle: string; unaLinea: string;
+} {
+  const d = detalle.map(x => (x ?? '').trim()).filter(Boolean).join(' · ');
+  return { titulo: materia, detalle: d, unaLinea: d ? `${materia} · ${d}` : materia };
+}

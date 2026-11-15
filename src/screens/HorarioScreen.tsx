@@ -17,7 +17,7 @@ import {
   generarEjemploCSV, generarEjemploTexto,
   type FilaParseada,
 } from '../utils/horarioImportExport';
-import { calcularLayoutSuperposicion, LayoutBloque } from '../utils/horarioLayout';
+import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_BLOQUE, textoBloque } from '../utils/horarioLayout';
 import {
   LongPressGestureHandler,
   PanGestureHandler,
@@ -75,6 +75,49 @@ function addDays(date: Date, n: number): Date {
 function fmtFechaCorta(iso: string): string {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
+}
+
+/**
+ * Punto 91: texto del bloque. Con dos líneas o más: la materia en negrita y
+ * debajo el detalle, más tenue. Con una sola línea: "Materia · detalle".
+ */
+function TextoBloqueVista({ texto, color, lineas, fuente }: {
+  texto: { titulo: string; detalle: string; unaLinea: string };
+  color: string;
+  lineas: number;
+  /** Tamaño de letra del bloque (configurable en Ajustes). */
+  fuente: number;
+}) {
+  const altoLinea = fuente + 4;
+  if (lineas < 2 || !texto.detalle) {
+    return (
+      <Text
+        style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
+        numberOfLines={Math.max(1, lineas)}
+        ellipsizeMode="tail"
+      >
+        {lineas < 2 ? texto.unaLinea : texto.titulo}
+      </Text>
+    );
+  }
+  return (
+    <>
+      <Text
+        style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
+        numberOfLines={Math.max(1, lineas - 1)}
+        ellipsizeMode="tail"
+      >
+        {texto.titulo}
+      </Text>
+      <Text
+        style={{ color, fontSize: fuente - 1, lineHeight: altoLinea, opacity: 0.85 }}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {texto.detalle}
+      </Text>
+    </>
+  );
 }
 
 export function HorarioScreen() {
@@ -227,6 +270,28 @@ export function HorarioScreen() {
   React.useEffect(() => { draftBloqueRef.current = draftBloque; }, [draftBloque]);
   React.useEffect(() => { draftEvalRef.current = draftEval; }, [draftEval]);
 
+  // Punto 100: Enter guarda y Esc cancela la edición rápida (escritorio)
+  const guardarEdicionRapidaRef = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || modalEdicionRapida === null) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setModalEdicionRapida(null);
+        return;
+      }
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+      // En un campo de varias líneas (descripción) Enter sigue siendo salto de línea
+      const activo = document.activeElement as HTMLElement | null;
+      if (activo?.tagName?.toLowerCase() === 'textarea') return;
+      e.preventDefault();
+      guardarEdicionRapidaRef.current?.();
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [modalEdicionRapida]);
+
   // Escape para salir del modo edición en escritorio
   React.useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -243,13 +308,17 @@ export function HorarioScreen() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [cardEnEdicion]);
 
-  // ← → / A D para navegar entre semanas (escritorio)
+  // ← → / A D para navegar entre semanas y Espacio para ir a hoy (escritorio, punto 86)
   React.useEffect(() => {
     if (Platform.OS !== 'web' || !isFocused) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (cardEnEdicion !== null) return; // no interferir con edición de bloques
-      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea') return;
+      // Con una ventana abierta (edición rápida, crear bloque) los atajos no aplican
+      if (modalAbiertaRef.current || modalCrearAbiertaRef.current) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const activo = document.activeElement as HTMLElement | null;
+      const tag = activo?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || activo?.isContentEditable) return;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         setWeekOffset(w => w - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -326,16 +395,16 @@ export function HorarioScreen() {
       if (mode === 'resize-top') {
         if (!resizeStartRef.current) return;
         const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
-        const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
-        const maxInicio   = resizeStartRef.current.horaFin - 30;
+        const nuevoInicio = ajustarAPaso(resizeStartRef.current.horaInicio + deltaMin);
+        const maxInicio   = resizeStartRef.current.horaFin - DURACION_MIN_BLOQUE;
         setDraftBloque(d => d ? {
           ...d, horaInicio: Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio)),
         } : d);
       } else if (mode === 'resize-bottom') {
         if (!resizeStartRef.current) return;
         const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
-        const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
-        const minFin   = resizeStartRef.current.horaInicio + 30;
+        const nuevaFin = ajustarAPaso(resizeStartRef.current.horaFin + deltaMin);
+        const minFin   = resizeStartRef.current.horaInicio + DURACION_MIN_BLOQUE;
         setDraftBloque(d => d ? {
           ...d, horaFin: Math.min(horaFinRef.current, Math.max(nuevaFin, minFin)),
         } : d);
@@ -467,15 +536,15 @@ export function HorarioScreen() {
       if (mode === 'resize-top') {
         if (!resizeStartRef.current) return;
         const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
-        const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
-        const maxInicio   = resizeStartRef.current.horaFin - 30;
+        const nuevoInicio = ajustarAPaso(resizeStartRef.current.horaInicio + deltaMin);
+        const maxInicio   = resizeStartRef.current.horaFin - DURACION_MIN_BLOQUE;
         const clampedInicio = Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio));
         setDraftEval({ id: evalEnDrag, horaI: clampedInicio, horaF: resizeStartRef.current.horaFin });
       } else if (mode === 'resize-bottom') {
         if (!resizeStartRef.current) return;
         const deltaMin = (e.clientY - webDragStartRef.current.y) / PX_POR_MIN;
-        const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
-        const minFin   = resizeStartRef.current.horaInicio + 30;
+        const nuevaFin = ajustarAPaso(resizeStartRef.current.horaFin + deltaMin);
+        const minFin   = resizeStartRef.current.horaInicio + DURACION_MIN_BLOQUE;
         const clampedFin = Math.min(horaFinRef.current, Math.max(nuevaFin, minFin));
         setDraftEval({ id: evalEnDrag, horaI: resizeStartRef.current.horaInicio, horaF: clampedFin });
       } else {
@@ -884,11 +953,11 @@ export function HorarioScreen() {
     }
 
     const minsDesdeInicio = relY / PX_POR_MIN;
-    const nuevaHoraInicio = snap30(hInicio + minsDesdeInicio);
+    const nuevaHoraInicio = ajustarAPaso(hInicio + minsDesdeInicio);
 
     return {
       fecha: fechas[Math.max(0, Math.min(diaIdx, fechas.length - 1))],
-      horaInicio: Math.max(hInicio, Math.min(nuevaHoraInicio, hFin - 30)),
+      horaInicio: Math.max(hInicio, Math.min(nuevaHoraInicio, hFin - DURACION_MIN_BLOQUE)),
     };
   }
 
@@ -947,6 +1016,77 @@ export function HorarioScreen() {
     setModalTipoNota(nuevo);
   };
 
+  // Punto 100: guardar la edición rápida (botón "Guardar" y tecla Enter en escritorio)
+  const guardarEdicionRapida = () => {
+    if (!modalEdicionRapida) return;
+    const m = modalFechaStr.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (!m) {
+      setModalTab('edicion');
+      showAlert('Día inválido', 'Ingresá el día con formato DD/MM en la pestaña Edición.');
+      return;
+    }
+    const [, d, mo] = m;
+    const y = new Date().getFullYear();
+    const nuevaFecha = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    if (isNaN(Date.parse(nuevaFecha + 'T00:00:00'))) {
+      setModalTab('edicion');
+      showAlert('Día inválido', 'Esa fecha no existe. Revisá el día en la pestaña Edición.');
+      return;
+    }
+    const { guardarMateria, materias: mats } = useStore.getState();
+    if (modalEdicionRapida.tipo === 'regular') {
+      const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
+      if (materia) {
+        const descripcion = modalDescStr.trim() || undefined;
+        setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
+        guardarMateria({
+          ...materia,
+          bloques: (materia.bloques ?? []).map(bl =>
+            bl.id === modalEdicionRapida.bloqueId
+              ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined, tipo: modalTipoBloque, descripcion }
+              : bl
+          ),
+        });
+        setCardEnEdicion(null);
+        setDraftBloque(null);
+      }
+    } else {
+      const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
+      if (materia) {
+        const notaTxt = modalNotaStr.trim();
+        const notaVal = notaTxt === '' ? null : parseFloat(notaTxt);
+        if (notaVal !== null && isNaN(notaVal)) {
+          setModalTab('nota');
+          showAlert('Nota inválida', 'Ingresá un número en la pestaña Nota.');
+          return;
+        }
+        const maxParsed = parseFloat(modalNotaMaxStr);
+        const maxVal = modalTipoNota === 'porcentaje'
+          ? 100
+          : (isNaN(maxParsed) ? 10 : Math.min(9999, Math.max(0.01, maxParsed)));
+        const camposNota = { tipoNota: modalTipoNota, nota: notaVal, notaMaxima: maxVal };
+        const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
+          evs.map(ev => {
+            if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) {
+              return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota };
+            }
+            if (ev.tipo === 'grupo') {
+              return { ...ev, subEvaluaciones: ev.subEvaluaciones.map(sub =>
+                sub.id === modalEdicionRapida.bloqueId
+                  ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota }
+                  : sub
+              )};
+            }
+            return ev;
+          });
+        guardarMateria({ ...materia, evaluaciones: patchEval(materia.evaluaciones) });
+        setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
+      }
+    }
+    setModalEdicionRapida(null);
+  };
+  guardarEdicionRapidaRef.current = guardarEdicionRapida;
+
   const innerContent = (
     <View style={{ flex: 1, backgroundColor: fondoPantalla ? 'transparent' : tema.fondo }}>
       {/* Navegación de semana */}
@@ -972,6 +1112,10 @@ export function HorarioScreen() {
                     {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
                   </Text>
                 </TouchableOpacity>
+                {/* Punto 86: ayuda de los atajos de teclado (escritorio) */}
+                <Text style={{ color: tema.textoSecundario, fontSize: 10, marginTop: 2, opacity: 0.8 }}>
+                  ← → semanas · Espacio hoy
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)}>
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
@@ -1181,6 +1325,20 @@ export function HorarioScreen() {
                           width: 8, height: 8, borderRadius: 4,
                           backgroundColor: tema.acentoLineas ?? tema.acento,
                         }} />
+                        {/* Punto 83: la hora al inicio de la línea */}
+                        <View
+                          pointerEvents="none"
+                          accessibilityLabel={`Ahora: ${fmtHora(nowMinutes)}`}
+                          style={{
+                            position: 'absolute', left: 6, top: -8,
+                            paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+                            backgroundColor: tema.acentoFondo ?? tema.acento,
+                          }}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', lineHeight: 12 }}>
+                            {fmtHora(nowMinutes)}
+                          </Text>
+                        </View>
                       </View>
                     )}
                     {/* Líneas de hora */}
@@ -1288,13 +1446,12 @@ export function HorarioScreen() {
 
                                   {/* Zona central — drag para mover */}
                                   <View style={{ flex: 1, padding: 2 }}>
-                                    <Text
-                                      style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                    </Text>
+                                    <TextoBloqueVista
+                                      texto={textoBloque(b.materia.nombre, [sigla(b.tipo), effectiveSalon])}
+                                      color={texto}
+                                      lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                      fuente={BLOCK_FONT}
+                                    />
                                     <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                       {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
                                     </Text>
@@ -1314,13 +1471,12 @@ export function HorarioScreen() {
                                   onPress={enterEditWeb}
                                   style={{ flex: 1, padding: 2 }}
                                 >
-                                  <Text
-                                    style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                  </Text>
+                                  <TextoBloqueVista
+                                    texto={textoBloque(b.materia.nombre, [sigla(b.tipo), effectiveSalon])}
+                                    color={texto}
+                                    lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    fuente={BLOCK_FONT}
+                                  />
                                 </TouchableOpacity>
                               )}
                             </View>
@@ -1364,8 +1520,8 @@ export function HorarioScreen() {
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
                                       if (!resizeStartRef.current) return;
                                       const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
-                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
-                                      const maxInicio   = resizeStartRef.current.horaFin - 30;
+                                      const nuevoInicio = ajustarAPaso(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio   = resizeStartRef.current.horaFin - DURACION_MIN_BLOQUE;
                                       setDraftBloque(d => d ? { ...d, horaInicio: Math.max(horaInicio, Math.min(nuevoInicio, maxInicio)) } : d);
                                     }}
                                     onEnded={() => {
@@ -1447,13 +1603,12 @@ export function HorarioScreen() {
                                     onCancelled={() => setGhostPos(null)}
                                   >
                                     <View style={{ flex: 1, padding: 2 }}>
-                                      <Text
-                                        style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                        numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
-                                        ellipsizeMode="tail"
-                                      >
-                                        {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                      </Text>
+                                      <TextoBloqueVista
+                                        texto={textoBloque(b.materia.nombre, [sigla(b.tipo), effectiveSalon])}
+                                        color={texto}
+                                        lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                        fuente={BLOCK_FONT}
+                                      />
                                       <Text style={{ color: texto, fontSize: BLOCK_FONT - 1, opacity: 0.8 }}>
                                         {fmtHora(bloqueDraft.horaInicio)} – {fmtHora(bloqueDraft.horaFin)}
                                       </Text>
@@ -1469,8 +1624,8 @@ export function HorarioScreen() {
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
                                       if (!resizeStartRef.current) return;
                                       const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
-                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
-                                      const minFin   = resizeStartRef.current.horaInicio + 30;
+                                      const nuevaFin = ajustarAPaso(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin   = resizeStartRef.current.horaInicio + DURACION_MIN_BLOQUE;
                                       setDraftBloque(d => d ? { ...d, horaFin: Math.min(horaFin, Math.max(nuevaFin, minFin)) } : d);
                                     }}
                                     onEnded={() => {
@@ -1498,13 +1653,12 @@ export function HorarioScreen() {
                                   }}
                                 >
                                   <View style={{ padding: 2, flex: 1 }}>
-                                    <Text
-                                      style={{ color: texto, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {[sigla(b.tipo), effectiveSalon, b.materia.nombre].filter(Boolean).join(' - ')}
-                                    </Text>
+                                    <TextoBloqueVista
+                                      texto={textoBloque(b.materia.nombre, [sigla(b.tipo), effectiveSalon])}
+                                      color={texto}
+                                      lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      fuente={BLOCK_FONT}
+                                    />
                                   </View>
                                 </TapGestureHandler>
                               )}
@@ -1538,17 +1692,12 @@ export function HorarioScreen() {
 
                         // Texto del bloque
                         const effectiveSalonEval = salonOverride?.id === ev.id ? salonOverride.salon : ev.salon;
-                        let labelBloque: string;
-                        if (ev.esGrupal) {
-                          // "NombreGrupo / NombreSub - Materia"
-                          labelBloque = [
-                            [ev.grupoNombre, ev.nombre].filter(Boolean).join(' / ') || null,
-                            effectiveSalonEval || null,
-                            ev.materia.nombre,
-                          ].filter(Boolean).join(' - ');
-                        } else {
-                          labelBloque = [ev.nombre || null, effectiveSalonEval || null, ev.materia.nombre].filter(Boolean).join(' - ');
-                        }
+                        // Punto 91: la materia primero y debajo "Parcial 1 · Aula 3" (o "Grupo / Sub · Aula")
+                        const nombreEval = ev.esGrupal
+                          ? [ev.grupoNombre, ev.nombre].filter(Boolean).join(' / ')
+                          : ev.nombre;
+                        const textoEval = textoBloque(ev.materia.nombre, [nombreEval, effectiveSalonEval]);
+                        const labelBloque = textoEval.unaLinea;
 
                         // Persistencia al soltar una evaluación arrastrada
                         const persistirEval = (nuevoFecha: string, nuevaHora: number, nuevaHoraFin: number | undefined) => {
@@ -1629,13 +1778,12 @@ export function HorarioScreen() {
                                     <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
                                   </View>
                                   <View style={{ flex: 1, padding: 2 }}>
-                                    <Text
-                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {labelBloque}
-                                    </Text>
+                                    <TextoBloqueVista
+                                      texto={textoEval}
+                                      color={textoColor}
+                                      lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                      fuente={BLOCK_FONT}
+                                    />
                                   </View>
                                   <View style={{ height: 16, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderBottomColor: textoColor }}>
                                     <View style={{ width: 24, height: 3, backgroundColor: textoColor, borderRadius: 2 }} />
@@ -1647,13 +1795,12 @@ export function HorarioScreen() {
                                   onPress={enterEditEvalWeb}
                                   style={{ flex: 1, padding: 2 }}
                                 >
-                                  <Text
-                                    style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                    numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                    ellipsizeMode="tail"
-                                  >
-                                    {labelBloque}
-                                  </Text>
+                                  <TextoBloqueVista
+                                    texto={textoEval}
+                                    color={textoColor}
+                                    lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                    fuente={BLOCK_FONT}
+                                  />
                                 </TouchableOpacity>
                               )}
                             </View>
@@ -1713,8 +1860,8 @@ export function HorarioScreen() {
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
                                       if (!resizeStartRef.current) return;
                                       const deltaMin    = e.nativeEvent.translationY / PX_POR_MIN;
-                                      const nuevoInicio = snap30(resizeStartRef.current.horaInicio + deltaMin);
-                                      const maxInicio   = resizeStartRef.current.horaFin - 30;
+                                      const nuevoInicio = ajustarAPaso(resizeStartRef.current.horaInicio + deltaMin);
+                                      const maxInicio   = resizeStartRef.current.horaFin - DURACION_MIN_BLOQUE;
                                       setDraftEval({ id: ev.id, horaI: Math.max(horaInicioRef.current, Math.min(nuevoInicio, maxInicio)), horaF: resizeStartRef.current.horaFin });
                                     }}
                                     onEnded={() => {
@@ -1784,13 +1931,12 @@ export function HorarioScreen() {
                                     onCancelled={() => { ghostOriginRef.current = null; evalDragDataRef.current = null; persistirEvalRef.current = null; requestAnimationFrame(() => { setEvalEnDrag(null); setGhostPos(null); }); }}
                                   >
                                     <View style={{ flex: 1, padding: 2 }}>
-                                      <Text
-                                        style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                        numberOfLines={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
-                                        ellipsizeMode="tail"
-                                      >
-                                        {labelBloque}
-                                      </Text>
+                                      <TextoBloqueVista
+                                        texto={textoEval}
+                                        color={textoColor}
+                                        lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
+                                        fuente={BLOCK_FONT}
+                                      />
                                     </View>
                                   </PanGestureHandler>
                                   </TapGestureHandler>
@@ -1803,8 +1949,8 @@ export function HorarioScreen() {
                                     onGestureEvent={(e: PanGestureHandlerGestureEvent) => {
                                       if (!resizeStartRef.current) return;
                                       const deltaMin = e.nativeEvent.translationY / PX_POR_MIN;
-                                      const nuevaFin = snap30(resizeStartRef.current.horaFin + deltaMin);
-                                      const minFin   = resizeStartRef.current.horaInicio + 30;
+                                      const nuevaFin = ajustarAPaso(resizeStartRef.current.horaFin + deltaMin);
+                                      const minFin   = resizeStartRef.current.horaInicio + DURACION_MIN_BLOQUE;
                                       setDraftEval({ id: ev.id, horaI: resizeStartRef.current.horaInicio, horaF: Math.min(horaFinRef.current, Math.max(nuevaFin, minFin)) });
                                     }}
                                     onEnded={() => {
@@ -1835,13 +1981,12 @@ export function HorarioScreen() {
                                   }}
                                 >
                                   <View style={{ flex: 1, padding: 2 }}>
-                                    <Text
-                                      style={{ color: textoColor, fontSize: BLOCK_FONT, fontWeight: '700', lineHeight: BLOCK_LINE_H }}
-                                      numberOfLines={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
-                                      ellipsizeMode="tail"
-                                    >
-                                      {labelBloque}
-                                    </Text>
+                                    <TextoBloqueVista
+                                      texto={textoEval}
+                                      color={textoColor}
+                                      lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
+                                      fuente={BLOCK_FONT}
+                                    />
                                   </View>
                                 </TapGestureHandler>
                               )}
@@ -2562,7 +2707,7 @@ export function HorarioScreen() {
             }}
           >
             <Text style={{ color: texto, fontSize: 8, fontWeight: '700' }}>
-              {[sigla(bloqueVis.tipo), bloqueVis.salon, materia.nombre].filter(Boolean).join(' - ')}
+              {textoBloque(materia.nombre, [sigla(bloqueVis.tipo), bloqueVis.salon]).unaLinea}
             </Text>
           </View>
         );
@@ -2732,80 +2877,17 @@ export function HorarioScreen() {
                 style={{ flex: 1, padding: 10, backgroundColor: tema.fondo, borderRadius: 8, alignItems: 'center' }}
                 onPress={() => setModalEdicionRapida(null)}
               >
-                <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
+                <Text style={{ color: tema.textoSecundario }}>
+                  Cancelar{Platform.OS === 'web' ? <Text style={{ fontSize: 11, opacity: 0.7 }}> · Esc</Text> : null}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 1, padding: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
-                onPress={() => {
-                  if (!modalEdicionRapida) return;
-                  const m = modalFechaStr.match(/^(\d{1,2})\/(\d{1,2})$/);
-                  if (!m) {
-                    setModalTab('edicion');
-                    showAlert('Día inválido', 'Ingresá el día con formato DD/MM en la pestaña Edición.');
-                    return;
-                  }
-                  const [, d, mo] = m;
-                  const y = new Date().getFullYear();
-                  const nuevaFecha = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
-                  if (isNaN(Date.parse(nuevaFecha + 'T00:00:00'))) {
-                    setModalTab('edicion');
-                    showAlert('Día inválido', 'Esa fecha no existe. Revisá el día en la pestaña Edición.');
-                    return;
-                  }
-                  const { guardarMateria, materias: mats } = useStore.getState();
-                  if (modalEdicionRapida.tipo === 'regular') {
-                    const materia = mats.find(mat => mat.bloques?.some(bl => bl.id === modalEdicionRapida.bloqueId));
-                    if (materia) {
-                      const descripcion = modalDescStr.trim() || undefined;
-                      setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
-                      guardarMateria({
-                        ...materia,
-                        bloques: (materia.bloques ?? []).map(bl =>
-                          bl.id === modalEdicionRapida.bloqueId
-                            ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined, tipo: modalTipoBloque, descripcion }
-                            : bl
-                        ),
-                      });
-                      setCardEnEdicion(null);
-                      setDraftBloque(null);
-                    }
-                  } else {
-                    const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
-                    if (materia) {
-                      const notaTxt = modalNotaStr.trim();
-                      const notaVal = notaTxt === '' ? null : parseFloat(notaTxt);
-                      if (notaVal !== null && isNaN(notaVal)) {
-                        setModalTab('nota');
-                        showAlert('Nota inválida', 'Ingresá un número en la pestaña Nota.');
-                        return;
-                      }
-                      const maxParsed = parseFloat(modalNotaMaxStr);
-                      const maxVal = modalTipoNota === 'porcentaje'
-                        ? 100
-                        : (isNaN(maxParsed) ? 10 : Math.min(9999, Math.max(0.01, maxParsed)));
-                      const camposNota = { tipoNota: modalTipoNota, nota: notaVal, notaMaxima: maxVal };
-                      const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
-                        evs.map(ev => {
-                          if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) {
-                            return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota };
-                          }
-                          if (ev.tipo === 'grupo') {
-                            return { ...ev, subEvaluaciones: ev.subEvaluaciones.map(sub =>
-                              sub.id === modalEdicionRapida.bloqueId
-                                ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota }
-                                : sub
-                            )};
-                          }
-                          return ev;
-                        });
-                      guardarMateria({ ...materia, evaluaciones: patchEval(materia.evaluaciones) });
-                      setSalonOverride({ id: modalEdicionRapida.bloqueId, salon: modalSalonStr || undefined });
-                    }
-                  }
-                  setModalEdicionRapida(null);
-                }}
+                onPress={guardarEdicionRapida}
               >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Guardar</Text>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>
+                  Guardar{Platform.OS === 'web' ? <Text style={{ fontSize: 11, opacity: 0.8, fontWeight: '400' }}> · Enter</Text> : null}
+                </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity
