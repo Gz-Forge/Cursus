@@ -11,6 +11,9 @@ import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
+import { QrScannerModal } from '../components/QrScannerModal';
+import { EvaluacionesRecibidasModal } from '../components/EvaluacionesRecibidasModal';
+import { conIdsNuevos } from '../utils/evaluacionesQr';
 import { calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import { ayudaNotaExamen } from '../utils/ayudas';
 import {
@@ -162,6 +165,8 @@ export function CrearMateriaScreen() {
   const [modoImport, setModoImport] = useState<ModoImport | null>(null);
   const [mostrarMenuImport, setMostrarMenuImport] = useState(false);
   const [mostrarEvalQr, setMostrarEvalQr] = useState(false);
+  const [mostrarScannerEval, setMostrarScannerEval] = useState(false);
+  const [evalRecibidas, setEvalRecibidas] = useState<Evaluacion[] | null>(null);
   const [mostrarQrHorario, setMostrarQrHorario] = useState(false);
   const [semanasICS, setSemanasICS] = useState('16');
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
@@ -549,12 +554,8 @@ export function CrearMateriaScreen() {
   };
 
   const handleEvaluacionesDetectadas = (evaluaciones: Evaluacion[]) => {
-    showConfirm(
-      'Evaluaciones recibidas por QR',
-      `Se recibieron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-      () => setForm(f => ({ ...f, evaluaciones })),
-      { labelConfirmar: 'Reemplazar', destructivo: true }
-    );
+    // El escáner se cierra solo; se espera a que termine para no apilar dos Modal (iOS).
+    setTimeout(() => setEvalRecibidas(evaluaciones), 350);
   };
 
   const marcarCursando = () => setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
@@ -816,9 +817,17 @@ export function CrearMateriaScreen() {
             {Platform.OS !== 'web' && (
               <TouchableOpacity
                 onPress={() => setMostrarEvalQr(true)}
+                style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
+              >
+                <Text style={{ color: tema.texto }}>📤 Compartir por QR</Text>
+              </TouchableOpacity>
+            )}
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity
+                onPress={() => setMostrarScannerEval(true)}
                 style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 16 }}
               >
-                <Text style={{ color: tema.texto }}>📷 Compartir por QR</Text>
+                <Text style={{ color: tema.texto }}>📷 Escanear QR</Text>
               </TouchableOpacity>
             )}
           </>
@@ -1573,6 +1582,29 @@ export function CrearMateriaScreen() {
         visible={mostrarEvalQr}
         evaluaciones={form.evaluaciones}
         onCerrar={() => setMostrarEvalQr(false)}
+      />
+
+      <QrScannerModal
+        visible={mostrarScannerEval}
+        onCerrar={() => setMostrarScannerEval(false)}
+        onEvaluacionesDetectadas={handleEvaluacionesDetectadas}
+      />
+
+      <EvaluacionesRecibidasModal
+        cantidadRecibidas={evalRecibidas ? evalRecibidas.length : null}
+        nombreMateria={form.nombre ?? ''}
+        cantidadActuales={form.evaluaciones.length}
+        onAgregar={() => {
+          const recibidas = evalRecibidas ?? [];
+          setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...conIdsNuevos(recibidas)] }));
+          setEvalRecibidas(null);
+        }}
+        onReemplazar={() => {
+          const recibidas = evalRecibidas ?? [];
+          setForm(f => ({ ...f, evaluaciones: recibidas }));
+          setEvalRecibidas(null);
+        }}
+        onCancelar={() => setEvalRecibidas(null)}
       />
 
       {/* ── Modal QR horario ── */}
