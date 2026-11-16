@@ -17,7 +17,7 @@ import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity, useColoresSemestres } from '../utils/useFondoPantalla';
 import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal, agruparPorTipo } from '../utils/calculos';
-import { AnilloProgreso } from '../components/AnilloProgreso';
+import { CifrasCarrera } from '../components/CifrasCarrera';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
 import { EstadoMateria, Materia } from '../types';
@@ -563,38 +563,17 @@ export function CarreraScreen() {
 
       {/* Resumen */}
       {(() => {
-        const estiloCifras = config.carreraCifrasEstilo ?? 'simple';
-        const colAcento = tema.acentoLineas ?? tema.acento;
         const metaCreditos = materias.reduce((acc, m) => acc + m.creditosQueDA, 0);
-        const metaMaterias = materias.length;
-        const pctDe = (v: number, meta: number) => (meta > 0 ? Math.max(0, Math.min(100, (v / meta) * 100)) : 0);
-        const numero = (valor: number, meta?: number) => (
-          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-            <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{valor}</Text>
-            {meta !== undefined && <Text style={{ color: tema.textoSecundario, fontSize: 12, marginLeft: 2 }}>{`/${meta}`}</Text>}
-          </View>
-        );
-        const cifra = (valor: number, meta: number | undefined, etiqueta: string, onPress: () => void) => (
-          <TouchableOpacity onPress={onPress} style={{ alignItems: 'center', justifyContent: 'center' }}>
-            {estiloCifras === 'anillo' && meta !== undefined ? (
-              <AnilloProgreso pct={pctDe(valor, meta)} tamano={56} grosor={5} color={colAcento} colorFondo={tema.borde}>
-                <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700' }}>{valor}</Text>
-              </AnilloProgreso>
-            ) : numero(valor, estiloCifras === 'meta' ? meta : undefined)}
-            {estiloCifras === 'meta' && meta !== undefined && (
-              <View style={{ width: 64, height: 4, borderRadius: 2, backgroundColor: tema.borde, overflow: 'hidden', marginTop: 3 }}>
-                <View style={{ width: `${pctDe(valor, meta)}%`, height: 4, backgroundColor: colAcento }} />
-              </View>
-            )}
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: estiloCifras === 'anillo' && meta !== undefined ? 4 : 0 }}>{etiqueta}</Text>
-          </TouchableOpacity>
-        );
         return (
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: estiloCifras === 'anillo' ? 'center' : 'flex-start', padding: 16, backgroundColor: surfaceBg }}>
-            {cifra(creditos, metaCreditos, 'Créditos', () => setModalCreditos(true))}
-            {cifra(exoneradas, metaMaterias, getLabel('exonerado'), () => setModalExoneradas(true))}
-            {cifra(disponibles, undefined, 'Disponibles', () => setModalDisponibles(true))}
-          </View>
+          <CifrasCarrera
+            estilo={config.carreraCifrasEstilo ?? 'simple'}
+            fondo={surfaceBg}
+            cifras={[
+              { valor: creditos, meta: metaCreditos, etiqueta: 'Créditos', onPress: () => setModalCreditos(true) },
+              { valor: exoneradas, meta: materias.length, etiqueta: getLabel('exonerado'), onPress: () => setModalExoneradas(true) },
+              { valor: disponibles, etiqueta: 'Disponibles', onPress: () => setModalDisponibles(true) },
+            ]}
+          />
         );
       })()}
 

@@ -16,6 +16,7 @@ import { BorrarTodoModal } from '../components/BorrarTodoModal';
 import { calcularEstadoFinal } from '../utils/calculos';
 import { TipoBloque, ColorBloque, EvaluacionSimple, GrupoEvaluacion, EstadoMateria, Materia, Config } from '../types';
 import { ResumenEncabezado } from '../components/SemestreSection';
+import { CifrasCarrera } from '../components/CifrasCarrera';
 import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
 import { estadoColores } from '../theme/colors';
 import { ejemploAprobadoHabilita } from '../utils/ayudas';
@@ -263,7 +264,6 @@ export function ConfigScreen() {
             </TouchableOpacity>
           )}
           {config.tema !== 'personalizado' && <View style={{ marginBottom: 20 }} />}
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>CARRERA</Text>
           {(() => {
             const chip = (activo: boolean, label: string, onPress: () => void) => (
               <TouchableOpacity
@@ -283,40 +283,68 @@ export function ConfigScreen() {
             const cuenta = config.encabezadoSemestreCreditosCuenta ?? 'exonerados';
             const explicacion = cifras === 'meta' ? 'El número con la meta y una barra.'
               : cifras === 'anillo' ? 'Un anillo con el avance y el número adentro.'
-              : 'Como ahora: solo el número.';
+              : 'Solo el número.';
             const colorAc = tema.acentoLineas ?? tema.acento;
+            const titulo = (t: string) => (
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>{t}</Text>
+            );
+            const filaEstilo = (descripcion: string) => (
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ color: tema.texto, fontSize: 14 }}>Estilo</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>{descripcion}</Text>
+              </View>
+            );
+            const cajaEjemplo = { backgroundColor: tema.tarjeta, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 10 } as const;
             return (
-              <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
-                <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Encabezado de semestre</Text>
-                <View style={{
-                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                  paddingVertical: 10, paddingHorizontal: 4, marginBottom: 12,
-                  borderBottomWidth: 2, borderBottomColor: colorAc,
-                }}>
-                  <Text style={{ color: colorAc, fontWeight: '700', fontSize: 15 }}>▼ 3° Semestre</Text>
-                  <ResumenEncabezado materias={materiasEjemplo(config)} config={config} colorAcento={colorAc} />
+              <>
+                {titulo('ENCABEZADO DE SEMESTRE')}
+                {filaEstilo('Qué se ve a la derecha del nombre de cada semestre en Carrera.')}
+                <View style={cajaEjemplo}>
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    paddingVertical: 10, paddingHorizontal: 4,
+                    borderBottomWidth: 2, borderBottomColor: colorAc,
+                  }}>
+                    <Text style={{ color: colorAc, fontWeight: '700', fontSize: 15 }}>▼ 3° Semestre</Text>
+                    <ResumenEncabezado materias={materiasEjemplo(config)} config={config} colorAcento={colorAc} />
+                  </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                  {chip(estiloEnc === 'materias', 'Como ahora', () => actualizarConfig({ encabezadoSemestreEstilo: 'materias' }))}
+                  {chip(estiloEnc === 'materias', 'Simple', () => actualizarConfig({ encabezadoSemestreEstilo: 'materias' }))}
                   {chip(estiloEnc === 'barra', 'Barra', () => actualizarConfig({ encabezadoSemestreEstilo: 'barra' }))}
                   {chip(estiloEnc === 'iconos', 'Íconos', () => actualizarConfig({ encabezadoSemestreEstilo: 'iconos' }))}
                   {chip(estiloEnc === 'anillo', 'Anillo', () => actualizarConfig({ encabezadoSemestreEstilo: 'anillo' }))}
                 </View>
-                {toggle('Mostrar créditos del semestre', 'encabezadoSemestreCreditos')}
+                {toggle('Mostrar créditos del semestre', 'encabezadoSemestreCreditos', 'Suma los créditos obtenidos de cada semestre.')}
                 {config.encabezadoSemestreCreditos && config.usarEstadoAprobado && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                    {chip(cuenta === 'exonerados', 'Solo exonerados', () => actualizarConfig({ encabezadoSemestreCreditosCuenta: 'exonerados' }))}
-                    {chip(cuenta === 'exonerados_aprobados', 'Exonerados y aprobados', () => actualizarConfig({ encabezadoSemestreCreditosCuenta: 'exonerados_aprobados' }))}
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 6 }}>Qué créditos contar</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {chip(cuenta === 'exonerados', `Solo ${getLabel('exonerado')}`, () => actualizarConfig({ encabezadoSemestreCreditosCuenta: 'exonerados' }))}
+                      {chip(cuenta === 'exonerados_aprobados', `${getLabel('exonerado')} y ${getLabel('aprobado')}`, () => actualizarConfig({ encabezadoSemestreCreditosCuenta: 'exonerados_aprobados' }))}
+                    </View>
                   </View>
                 )}
-                <Text style={{ color: tema.texto, fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>Cifras de arriba</Text>
+                <View style={{ marginBottom: 6 }} />
+                {titulo('CIFRAS DE CARRERA')}
+                {filaEstilo(`Los números de arriba de Carrera: créditos, ${getLabel('exonerado').toLowerCase()} y disponibles.`)}
+                <View style={cajaEjemplo}>
+                  <CifrasCarrera
+                    estilo={cifras}
+                    cifras={[
+                      { valor: 47, meta: 146, etiqueta: 'Créditos' },
+                      { valor: 9, meta: 26, etiqueta: getLabel('exonerado') },
+                      { valor: 3, etiqueta: 'Disponibles' },
+                    ]}
+                  />
+                </View>
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
                   {chip(cifras === 'simple', 'Simple', () => actualizarConfig({ carreraCifrasEstilo: 'simple' }))}
                   {chip(cifras === 'meta', 'Con meta', () => actualizarConfig({ carreraCifrasEstilo: 'meta' }))}
                   {chip(cifras === 'anillo', 'Anillo', () => actualizarConfig({ carreraCifrasEstilo: 'anillo' }))}
                 </View>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>{explicacion}</Text>
-              </View>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 20 }}>{explicacion}</Text>
+              </>
             );
           })()}
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
