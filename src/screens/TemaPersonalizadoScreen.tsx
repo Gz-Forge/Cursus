@@ -103,6 +103,9 @@ function FondoEditor({
           </TouchableOpacity>
           {valor?.valor ? (
             <TouchableOpacity
+              accessibilityRole="switch"
+              accessibilityLabel="Imagen que se mueve al hacer scroll"
+              accessibilityState={{ checked: !!valor?.movible }}
               onPress={() => onChange({ ...valor!, movible: !valor?.movible })}
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -300,6 +303,8 @@ function PantallaEditor({
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Disminuir tamaño de letra del horario"
               onPress={() => actualizarConfig({ horarioFontSize: Math.max(6, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) - 1) })}
               disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6}
               style={{
@@ -318,6 +323,8 @@ function PantallaEditor({
             </View>
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar tamaño de letra del horario"
               onPress={() => actualizarConfig({ horarioFontSize: Math.min(20, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) + 1) })}
               disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20}
               style={{

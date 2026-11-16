@@ -26,6 +26,8 @@ export function PromptsIAScreen() {
         <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12 }}>
           {/* Seleccionar todo */}
           <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: modulosSeleccionados.size === TODOS_MODULOS.length }}
             onPress={() => {
               if (modulosSeleccionados.size === TODOS_MODULOS.length) {
                 setModulosSeleccionados(new Set());
@@ -58,6 +60,8 @@ export function PromptsIAScreen() {
           ] as const).map(({ id, label, desc }) => (
             <View key={id}>
               <TouchableOpacity
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: modulosSeleccionados.has(id) }}
                 onPress={() => setModulosSeleccionados(prev => {
                   const next = new Set(prev);
                   if (next.has(id)) next.delete(id); else next.add(id);
@@ -90,6 +94,8 @@ export function PromptsIAScreen() {
                   ]).map(({ valor, label: labelRadio }) => (
                     <TouchableOpacity
                       key={valor}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: modoCarrera === valor }}
                       onPress={() => setModoCarrera(valor)}
                       style={{ flexDirection: 'row', alignItems: 'center' }}
                     >

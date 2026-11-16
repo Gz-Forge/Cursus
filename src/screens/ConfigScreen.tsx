@@ -265,6 +265,9 @@ export function ConfigScreen() {
             )}
           </View>
           <TouchableOpacity
+            accessibilityRole="switch"
+            accessibilityLabel={label}
+            accessibilityState={{ checked: !!val }}
             onPress={() => actualizarConfig({ [key]: !val } as any)}
             style={{
               width: 50, height: 28, borderRadius: 14,
@@ -792,7 +795,7 @@ export function ConfigScreen() {
                       </Text>
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity onPress={() => {
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={estaEditando ? 'Cancelar edición' : `Borrar tipo ${tipo}`} onPress={() => {
                     if (estaEditando) { setEditandoTipo(null); return; }
                     const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
                     const eliminar = () => {

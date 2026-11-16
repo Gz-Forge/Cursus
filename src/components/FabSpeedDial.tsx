@@ -44,7 +44,7 @@ export function FabSpeedDial({ acciones }: Props) {
   return (
     <>
       {abierto && (
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => animar(false)} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Cerrar menú de acciones" style={StyleSheet.absoluteFillObject} onPress={() => animar(false)} />
       )}
 
       <View style={s.contenedor} pointerEvents="box-none">

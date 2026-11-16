@@ -67,7 +67,7 @@ export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar, o
   if (isWeb) {
     return (
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onCerrar}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar"
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
           activeOpacity={1}
           onPress={onCerrar}
@@ -84,7 +84,7 @@ export function AgregarMateriaModal({ visible, onCerrar, onManual, onImportar, o
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
-      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
       <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 32 + safeBottomModal }}>
         {contenido}
       </View>

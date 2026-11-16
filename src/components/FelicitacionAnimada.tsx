@@ -61,7 +61,7 @@ export function FelicitacionAnimada({ visible, titulo, mensaje, onCerrar }: Prop
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={cerrar}>
       <Animated.View style={{ flex: 1, opacity: opacidad, backgroundColor: 'rgba(0,0,0,0.55)' }}>
-        <Pressable
+        <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}
           onPress={cerrar}
         >

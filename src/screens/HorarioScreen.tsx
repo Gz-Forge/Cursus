@@ -1163,7 +1163,7 @@ export function HorarioScreen() {
           <>
             {/* Nav: ocupa el espacio disponible y centra su contenido */}
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana anterior" onPress={() => setWeekOffset(w => w - 1)}>
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
@@ -1183,7 +1183,7 @@ export function HorarioScreen() {
                   ← → semanas · Espacio hoy
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana siguiente" onPress={() => setWeekOffset(w => w + 1)}>
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
               </TouchableOpacity>
             </View>
@@ -1216,7 +1216,7 @@ export function HorarioScreen() {
         ) : (
           <>
             {/* Móvil: layout original */}
-            <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana anterior" onPress={() => setWeekOffset(w => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
@@ -1231,7 +1231,7 @@ export function HorarioScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana siguiente" onPress={() => setWeekOffset(w => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
             </TouchableOpacity>
             <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -2075,7 +2075,7 @@ export function HorarioScreen() {
       </View>
 
       <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => cerrarModal()}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => cerrarModal()}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: Platform.OS !== 'web' ? 16 + safeBottomModal : 16, maxHeight: '80%', width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 520 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
               Exportar horarios
@@ -2168,7 +2168,7 @@ export function HorarioScreen() {
 
       {/* Modal Datos — punto de entrada unificado para Importar/Exportar */}
       <Modal visible={modalDatos} transparent animationType="fade" onRequestClose={() => setModalDatos(false)}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalDatos(false)}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalDatos(false)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, paddingBottom: Platform.OS !== 'web' ? 20 + safeBottomModal : 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 16 }}>
               Datos de horario
@@ -2204,7 +2204,7 @@ export function HorarioScreen() {
 
       {/* Modal importar — multi-formato */}
       <Modal visible={modalImport} transparent animationType="fade" onRequestClose={() => { setModalImport(false); resetImport(); }}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
           justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
           alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
           padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => { setModalImport(false); resetImport(); }}>
@@ -2600,7 +2600,7 @@ export function HorarioScreen() {
 
       {/* Modal Filtro de bloques */}
       <Modal visible={modalFiltro} transparent animationType="fade" onRequestClose={() => setModalFiltro(false)}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalFiltro(false)}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => setModalFiltro(false)}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: tema.superficie, borderRadius: Platform.OS === 'web' ? 16 : 0, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, paddingBottom: Platform.OS !== 'web' ? 20 + safeBottomModal : 20, width: Platform.OS === 'web' ? '100%' : undefined, maxWidth: Platform.OS === 'web' ? 400 : undefined }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
               Mostrar en horario
@@ -2699,7 +2699,7 @@ export function HorarioScreen() {
           En web el useEffect (pointerdown capture en document) maneja el clic fuera.
           El overlay con zIndex:50 bloquea los pointerdown del bloque en edición en web. */}
       {cardEnEdicion !== null && Platform.OS !== 'web' && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancelar edición del bloque"
           activeOpacity={1}
           onPress={() => {
             setCardEnEdicion(null);
@@ -2715,7 +2715,7 @@ export function HorarioScreen() {
 
       {/* Overlay tap-fuera: cancela modo drag de evaluaciones — solo móvil */}
       {evalEnDrag !== null && Platform.OS !== 'web' && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancelar movimiento de la evaluación"
           activeOpacity={1}
           onPress={() => {
             setEvalEnDrag(null);
@@ -2789,7 +2789,7 @@ export function HorarioScreen() {
     {/* Punto 98: calendario para saltar a cualquier semana */}
     <Modal visible={irAFechaAbierto} transparent animationType="fade" onRequestClose={() => setIrAFechaAbierto(false)}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <Pressable
+        <Pressable accessibilityRole="button"
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
           onPress={() => setIrAFechaAbierto(false)}
           accessibilityLabel="Cerrar"
@@ -2822,7 +2822,7 @@ export function HorarioScreen() {
       animationType="fade"
       onRequestClose={() => setModalEdicionRapida(null)}
     >
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar"
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
         activeOpacity={1}
         onPress={() => setModalEdicionRapida(null)}
@@ -3078,7 +3078,7 @@ export function HorarioScreen() {
       animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
       onRequestClose={() => setModalCrearBloque(null)}
     >
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar"
         style={{
           flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
           justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
@@ -3111,7 +3111,7 @@ export function HorarioScreen() {
               borderBottomWidth: 1, borderBottomColor: tema.fondo,
             }}>
               {cmbPaso === 2 ? (
-                <TouchableOpacity onPress={() => setCmbPaso(1)} style={{ marginRight: 10, padding: 2 }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Volver al paso anterior" onPress={() => setCmbPaso(1)} style={{ marginRight: 10, padding: 2 }}>
                   <Text style={{ color: tema.acento, fontSize: 22, lineHeight: 24 }}>←</Text>
                 </TouchableOpacity>
               ) : (
@@ -3130,7 +3130,7 @@ export function HorarioScreen() {
                   </Text>
                 )}
               </View>
-              <TouchableOpacity onPress={() => setModalCrearBloque(null)} style={{ padding: 4 }}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" onPress={() => setModalCrearBloque(null)} style={{ padding: 4 }}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 22, lineHeight: 24 }}>✕</Text>
               </TouchableOpacity>
             </View>

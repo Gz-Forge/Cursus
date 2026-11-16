@@ -712,7 +712,7 @@ export function CarreraScreen() {
         {vista === 'semestre' && (
           <>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 onPress={() => setSemestreActual(s => { const i = semestres.indexOf(s); return i > 0 ? semestres[i - 1] : Math.max(1, s - 1); })}
                 accessibilityLabel="Semestre anterior"
                 style={{ paddingHorizontal: 4 }}
@@ -755,7 +755,7 @@ export function CarreraScreen() {
                   );
                 })}
               </ScrollView>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 onPress={() => setSemestreActual(s => { const i = semestres.indexOf(s); return i >= 0 && i < semestres.length - 1 ? semestres[i + 1] : Math.min(s + 1, semestres.length > 0 ? semestres[semestres.length - 1] : s); })}
                 accessibilityLabel="Semestre siguiente"
                 style={{ paddingHorizontal: 4 }}
@@ -799,7 +799,7 @@ export function CarreraScreen() {
                   autoCorrect={false}
                 />
                 {textoBusqueda.length > 0 && (
-                  <TouchableOpacity onPress={() => { setTextoBusqueda(''); setMateriaPinned(null); }} accessibilityLabel="Borrar búsqueda">
+                  <TouchableOpacity accessibilityRole="button" onPress={() => { setTextoBusqueda(''); setMateriaPinned(null); }} accessibilityLabel="Borrar búsqueda">
                     <Text style={{ color: tema.textoSecundario, fontSize: 18, lineHeight: 20 }}>✕</Text>
                   </TouchableOpacity>
                 )}
@@ -833,7 +833,7 @@ export function CarreraScreen() {
                     ? { label: `${getIcono(filtroEstado)} ${getLabel(filtroEstado)}`, quitar: () => setFiltroEstado(null) }
                     : { label: filtroTipo ?? '', quitar: () => setFiltroTipo(null) };
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button"
                       key={f}
                       onPress={quitar}
                       accessibilityLabel={`Quitar filtro ${label}`}
@@ -981,7 +981,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalCreditos(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalCreditos(false)}
           />
@@ -1078,7 +1078,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalExoneradas(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalExoneradas(false)}
           />
@@ -1144,7 +1144,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalDisponibles(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalDisponibles(false)}
           />
@@ -1266,7 +1266,7 @@ export function CarreraScreen() {
           justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
           padding: isWeb ? 24 : 0,
         }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalFiltrosBusqueda(false)}
           />
@@ -1376,7 +1376,7 @@ export function CarreraScreen() {
           justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
           padding: isWeb ? 24 : 0,
         }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalFiltro(false)}
           />

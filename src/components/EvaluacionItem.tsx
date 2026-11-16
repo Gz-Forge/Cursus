@@ -321,7 +321,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             </Text>
           )}
           {!colapsada && editandoId !== evaluacion.id && (
-            <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre de la evaluación">
               <Text style={{ fontSize: 13 }}>✏️</Text>
             </TouchableOpacity>
           )}
@@ -329,7 +329,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             {contribucion !== null ? `${contribucion.toFixed(2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
           </Text>
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
-          <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${evaluacion.nombre || 'evaluación'}`}>
             <Text style={{ color: '#F44336' }}>🗑️</Text>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -448,7 +448,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           </Text>
         )}
         {!grupoColapsado && editandoId !== grupo.id && (
-          <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre del grupo">
             <Text style={{ fontSize: 13 }}>✏️</Text>
           </TouchableOpacity>
         )}
@@ -456,7 +456,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           {parcialGrupo !== null ? `${parcialGrupo.toFixed(2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
         </Text>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
-        <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${grupo.nombre || 'grupo'}`}>
           <Text style={{ color: '#F44336' }}>🗑️</Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -493,7 +493,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 </Text>
               )}
               {!subColapsada && editandoId !== sub.id && (
-                <TouchableOpacity onPress={() => setEditandoId(sub.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <TouchableOpacity onPress={() => setEditandoId(sub.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre de la prueba">
                   <Text style={{ fontSize: 12 }}>✏️</Text>
                 </TouchableOpacity>
               )}
@@ -501,7 +501,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : `${fmtNum(pesoSub)}%`}
               </Text>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
-              <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${sub.nombre || `Prueba ${i + 1}`}`}>
                 <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>
               </TouchableOpacity>
             </TouchableOpacity>

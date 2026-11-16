@@ -23,7 +23,7 @@ export function ListaMateriasModal({ visible, titulo, subtitulo, color, materias
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCerrar}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-        <Pressable
+        <Pressable accessibilityRole="button"
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
           onPress={onCerrar}
           accessibilityLabel="Cerrar"
