@@ -39,6 +39,8 @@ import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 import { CampoSalon } from '../components/CampoSalon';
+import { EdicionLoteModal } from '../components/EdicionLoteModal';
+import { aplicarLote } from '../utils/bloquesLote';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -87,13 +89,41 @@ function autoFormatFechaBloque(prev: string, next: string): string {
 }
 
 // ── Fila de bloque de horario (memoizada: evita re-renders masivos al tipear) ──
-const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, onEliminar }: {
+const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, onEliminar, seleccion, onToggleSel }: {
   bloque: BloqueHorario;
   tipoLabel: string;
   onEditar: (b: BloqueHorario) => void;
   onEliminar: (id: string) => void;
+  /** Punto 73: undefined = fuera del modo selección */
+  seleccion?: boolean;
+  onToggleSel?: (id: string) => void;
 }) {
   const tema = useTema();
+  if (seleccion !== undefined) {
+    return (
+      <TouchableOpacity
+        onPress={() => onToggleSel?.(bloque.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: seleccion }}
+        accessibilityLabel={`${fmtFechaBloque(bloque.fecha)} ${fmtHora(bloque.horaInicio)}`}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4,
+          borderWidth: 1, borderColor: seleccion ? (tema.acentoLineas ?? tema.acento) : 'transparent' }}
+      >
+        <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+          borderColor: tema.acentoLineas ?? tema.acento, backgroundColor: seleccion ? tema.acento : 'transparent' }}>
+          {seleccion && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: tema.texto, fontSize: 13 }}>
+            {fmtFechaBloque(bloque.fecha)}  {fmtHora(bloque.horaInicio)}–{fmtHora(bloque.horaFin)}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
+            {tipoLabel}{bloque.salon ? ` · ${bloque.salon}` : ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
       <View style={{ flex: 1 }}>
@@ -210,6 +240,17 @@ export function EditMateriaScreen() {
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
+  // Punto 73: selección de bloques para cambiarlos en lote (null = fuera del modo selección)
+  const [seleccionLote, setSeleccionLote] = useState<Set<string> | null>(null);
+  const [modalLote, setModalLote] = useState(false);
+  const toggleSeleccion = useCallback((id: string) => {
+    setSeleccionLote(sel => {
+      if (!sel) return sel;
+      const n = new Set(sel);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -938,6 +979,15 @@ export function EditMateriaScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
           <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
+          {(form.bloques ?? []).length > 1 && (
+            <TouchableOpacity
+              onPress={() => setSeleccionLote(sel => (sel ? null : new Set()))}
+              accessibilityRole="button"
+              style={{ paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 }}
+            >
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>{seleccionLote ? 'Listo' : 'Seleccionar'}</Text>
+            </TouchableOpacity>
+          )}
           {hayFiltrosActivos && (
             <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
               {bloquesFiltrados.length} de {(form.bloques ?? []).length}
@@ -1018,6 +1068,34 @@ export function EditMateriaScreen() {
           </View>
         )}
 
+        {/* Punto 73: acciones del modo selección */}
+        {seleccionLote && (
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 8, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <Text style={{ color: tema.texto, fontSize: 13, flex: 1 }}>
+                {seleccionLote.size} {seleccionLote.size === 1 ? 'seleccionado' : 'seleccionados'}
+              </Text>
+              <TouchableOpacity onPress={() => setSeleccionLote(new Set(bloquesFiltrados.map(b => b.id)))} accessibilityRole="button">
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>Todos los visibles ({bloquesFiltrados.length})</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSeleccionLote(new Set())} accessibilityRole="button">
+                <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Ninguno</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => setModalLote(true)}
+              disabled={seleccionLote.size === 0}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: seleccionLote.size === 0 }}
+              style={{ padding: 10, borderRadius: 8, alignItems: 'center', backgroundColor: seleccionLote.size > 0 ? tema.acento : tema.fondo }}
+            >
+              <Text style={{ color: seleccionLote.size > 0 ? '#fff' : tema.textoSecundario, fontWeight: '700' }}>
+                Cambiar {seleccionLote.size} {seleccionLote.size === 1 ? 'seleccionado' : 'seleccionados'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: 260 }}
@@ -1039,6 +1117,8 @@ export function EditMateriaScreen() {
                 tipoLabel={tiposBloque.find(t => t.key === b.tipo)?.label ?? ''}
                 onEditar={handleEditarBloque}
                 onEliminar={handleEliminarBloque}
+                seleccion={seleccionLote ? seleccionLote.has(b.id) : undefined}
+                onToggleSel={toggleSeleccion}
               />
             </React.Fragment>
           ))}
@@ -1791,6 +1871,18 @@ export function EditMateriaScreen() {
         destructivo
         onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id, form.numero); navigation.goBack(); }}
         onCancelar={() => setShowConfirmEliminar(false)}
+      />
+      <EdicionLoteModal
+        visible={modalLote}
+        cantidad={seleccionLote?.size ?? 0}
+        tiposBloque={tiposBloque}
+        sugeridos={horariosSugeridos(form.bloques ?? [], t => tiposBloque.find(x => x.key === t)?.label ?? t)}
+        onCancelar={() => setModalLote(false)}
+        onAplicar={cambios => {
+          if (seleccionLote) setForm(f => ({ ...f, bloques: aplicarLote(f.bloques ?? [], seleccionLote, cambios) }));
+          setModalLote(false);
+          setSeleccionLote(null);
+        }}
       />
       <AvisoRequisitosModal
         faltantes={avisoRequisitos}
