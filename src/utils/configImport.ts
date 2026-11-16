@@ -29,6 +29,9 @@ const bool: Validador = v => (typeof v === 'boolean' ? v : INVALIDO);
 const num = (min: number, max: number): Validador => v =>
   typeof v === 'number' && isFinite(v) && v >= min && v <= max ? v : INVALIDO;
 
+const entero = (min: number, max: number): Validador => v =>
+  typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : INVALIDO;
+
 const texto = (max = MAX_TEXTO): Validador => v =>
   typeof v === 'string' && v.length <= max ? v : INVALIDO;
 
@@ -186,6 +189,14 @@ const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   disponiblesModalIncluirAprobado: bool,
   disponiblesModalIncluirRecursar: bool,
   barraProgresoEvaluaciones: bool,
+  encabezadoSemestreEstilo: uno('materias', 'barra', 'iconos', 'anillo'),
+  encabezadoSemestreCreditos: bool,
+  encabezadoSemestreCreditosCuenta: uno('exonerados', 'exonerados_aprobados'),
+  carreraCifrasEstilo: uno('simple', 'meta', 'anillo'),
+  creditosModalAgruparTipo: bool,
+  tarjetaDiseno: uno('clasica', 'dos_lineas'),
+  metricasCreditosContar: uno('exonerados', 'exonerados_aprobados', 'ambos'),
+  cuelloBotellaSemestresAdelante: entero(1, 999),
   estadoColoresPersonalizados: mapa(color, ESTADOS),
   estadoIconosPersonalizados: mapa(texto(16), ESTADOS),
   estadoNombresPersonalizados: mapa(texto(40), ESTADOS),

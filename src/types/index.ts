@@ -214,6 +214,14 @@ export interface Config {
   disponiblesModalIncluirAprobado?: boolean;   // toggle "Incluir Aprobado" en el modal de Materias disponibles
   disponiblesModalIncluirRecursar?: boolean;   // toggle "Incluir Recursar" en el modal de Materias disponibles
   barraProgresoEvaluaciones?: boolean;         // default true — barra de progreso de notas en Editar/Crear materia
+  encabezadoSemestreEstilo?: 'materias' | 'barra' | 'iconos' | 'anillo'; // 1.9.0: resumen en el encabezado de cada semestre (default 'materias')
+  encabezadoSemestreCreditos?: boolean;        // 1.9.0: mostrar créditos obtenidos/total en el encabezado del semestre (default false)
+  encabezadoSemestreCreditosCuenta?: 'exonerados' | 'exonerados_aprobados'; // 1.9.0: qué cuenta como crédito obtenido en el encabezado (default 'exonerados')
+  carreraCifrasEstilo?: 'simple' | 'meta' | 'anillo'; // 1.9.0: estilo de las cifras de la carrera (default 'simple')
+  creditosModalAgruparTipo?: boolean;          // 1.9.0: agrupar por tipo de formación en el modal de Créditos (default false)
+  tarjetaDiseno?: 'clasica' | 'dos_lineas';    // 1.9.0: diseño de la tarjeta de materia (default 'clasica')
+  metricasCreditosContar?: 'exonerados' | 'exonerados_aprobados' | 'ambos'; // 1.9.0: qué créditos cuenta Métricas (default 'exonerados_aprobados')
+  cuelloBotellaSemestresAdelante?: number;     // 1.9.0: cuántos semestres incompletos mirar adelante para el cuello de botella (entero ≥ 1, default 1)
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;

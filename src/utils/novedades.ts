@@ -16,6 +16,16 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.9.0',
+    items: [
+      '🎓 En Ajustes → App elegí cómo se ve el encabezado de cada semestre (barra, íconos o anillo, con sus créditos) y el estilo de las cifras de arriba de Carrera, con vista previa.',
+      '🃏 En Configurar tarjetas hay un diseño nuevo "Dos líneas" y una vista previa que muestra cada cambio al instante.',
+      '🗂 En "Créditos obtenidos" podés agrupar las materias por tipo de formación, con el subtotal de cada uno.',
+      '📊 En Métricas elegís qué créditos contar por semestre: exonerados, aprobados o los dos por separado.',
+      '🚧 El cuello de botella explica qué significa, muestra cuántas materias traba cada una y, al tocarla, cuáles son. También podés mirar varios semestres por delante.',
+    ],
+  },
+  {
     version: '1.8.5',
     items: [
       '📦 Ajustes → Datos ahora tiene tarjetas: copia de seguridad, cargar datos, pasar a otro dispositivo y armar tu carrera con IA.',

@@ -10,7 +10,7 @@ import { BarChart, PieChart, LineChart } from 'react-native-gifted-charts';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
-import { obtenerNotaFinal, creditosAcumulados, calcularEstadoFinal } from '../utils/calculos';
+import { obtenerNotaFinal, creditosAcumulados, calcularEstadoFinal, creditosObtenidos, cuellosDeBotella, semestresPorDelante, materiasQueTraba } from '../utils/calculos';
 import { ejemploRedondeo } from '../utils/ayudas';
 import { EstadoMateria, Materia } from '../types';
 import { ListaMateriasModal } from '../components/ListaMateriasModal';
@@ -84,6 +84,8 @@ export function MetricsScreen() {
   const [estadoSeleccionado, setEstadoSeleccionado] = useState<EstadoMateria | null>(null);
   // Punto 106: punto tocado en "Promedio por semestre"
   const [puntoPromedio, setPuntoPromedio] = useState<number | null>(null);
+  // Punto 105: cuello de botella desplegado
+  const [cuelloAbierto, setCuelloAbierto] = useState<string | null>(null);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
@@ -176,36 +178,21 @@ export function MetricsScreen() {
   const umbralCuello = config.cuelloBotellaUmbral ?? 3;
   const soloSiguiente = config.cuelloBotellaSoloSiguiente ?? false;
 
-  // Semestre más bajo con al menos una materia no terminada
-  const siguienteSem = semestres.find(sem =>
-    materias.filter(m => m.semestre === sem).some(m => {
-      const e = calcularEstadoFinal(m, config);
-      return e !== 'aprobado' && e !== 'exonerado';
-    })
-  ) ?? null;
-
+  const semsAdelanteN = Math.min(6, Math.max(1, Math.floor(config.cuelloBotellaSemestresAdelante ?? 1)));
+  const semsAdelante = semestresPorDelante(materias, config);
   const numerosEnSigSem = new Set(
-    siguienteSem !== null
-      ? materias.filter(m => m.semestre === siguienteSem).map(m => m.numero)
-      : []
+    materias.filter(m => semsAdelante.includes(m.semestre)).map(m => m.numero)
   );
+  const textoSemsAdelante = semsAdelante.length <= 1
+    ? `al ${semsAdelante[0]}° sem`
+    : `a los semestres ${semsAdelante.slice(0, -1).map(s => `${s}°`).join(', ')} y ${semsAdelante[semsAdelante.length - 1]}°`;
 
   const materiasPorNumero = new Map(materias.map(m => [m.numero, m]));
+  const cuellosBotella = cuellosDeBotella(materias, config);
 
-  const cuellosBotella = materias
-    .filter(m => {
-      const e = calcularEstadoFinal(m, config);
-      if (e === 'aprobado' || e === 'exonerado') return false;
-      // Con soloSiguiente activo, las cursando siempre aparecen
-      if (soloSiguiente && e === 'cursando' && m.esPreviaDe.length > 0) return true;
-      // Resto: filtro normal de umbral + siguiente semestre
-      if (m.esPreviaDe.length < umbralCuello) return false;
-      if (soloSiguiente && siguienteSem !== null) {
-        return m.esPreviaDe.some(num => numerosEnSigSem.has(num));
-      }
-      return true;
-    })
-    .sort((a, b) => b.esPreviaDe.length - a.esPreviaDe.length);
+  // Punto 104: qué créditos contar (sin "aprobado" siempre es solo exonerados)
+  const modoCredConfig = config.metricasCreditosContar ?? 'exonerados_aprobados';
+  const modoCred = config.usarEstadoAprobado ? modoCredConfig : 'exonerados';
 
   // ── Promedio acumulado ────────────────────────────────────────────────────
   const promedioAcumuladoData = semestres.map(sem => {
@@ -511,6 +498,42 @@ export function MetricsScreen() {
                           trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
                           thumbColor="#fff"
                         />
+                      </View>
+
+                      {/* Semestres por delante (solo con el interruptor activo) */}
+                      {soloSiguiente && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                          <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 12 }}>Semestres por delante</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity
+                              onPress={() => actualizarConfig({ cuelloBotellaSemestresAdelante: Math.max(1, semsAdelanteN - 1) })}
+                              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: tema.borde }}
+                            >
+                              <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>−</Text>
+                            </TouchableOpacity>
+                            <View style={{ paddingHorizontal: 16, alignItems: 'center' }}>
+                              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 24 }}>{semsAdelanteN}</Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => actualizarConfig({ cuelloBotellaSemestresAdelante: Math.min(6, semsAdelanteN + 1) })}
+                              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: tema.borde }}
+                            >
+                              <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Sub-configuración: créditos por semestre (punto 104) */}
+                  {m.id === 'creditos_semestre' && esVisible('creditos_semestre') && config.usarEstadoAprobado && (
+                    <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 6, marginLeft: 16 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 8 }}>Créditos a contar</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {chipOpcion(modoCredConfig === 'exonerados_aprobados', 'Exonerados y aprobados', () => actualizarConfig({ metricasCreditosContar: 'exonerados_aprobados' }))}
+                        {chipOpcion(modoCredConfig === 'exonerados', 'Solo exonerados', () => actualizarConfig({ metricasCreditosContar: 'exonerados' }))}
+                        {chipOpcion(modoCredConfig === 'ambos', 'Ambos por separado', () => actualizarConfig({ metricasCreditosContar: 'ambos' }))}
                       </View>
                     </View>
                   )}
@@ -848,20 +871,32 @@ export function MetricsScreen() {
               if (m.id === 'creditos_semestre') return (
                 <View key="creditos_semestre" style={col}>
                   {seccion('CRÉDITOS POR SEMESTRE')}
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: -6, marginBottom: 8 }}>
+                    {modoCred === 'exonerados' ? 'Solo exonerados' : modoCred === 'ambos' ? 'Exonerados + aprobados por separado' : 'Exonerados y aprobados'}
+                  </Text>
                   <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
                     {semestres.length === 0 && sinDatos('Sin materias cargadas aún')}
                     {semestres.map(sem => {
                       const mats = materias.filter(m => m.semestre === sem);
-                      const crObt = mats.reduce((a, mat) => {
-                        const e = calcularEstadoFinal(mat, config);
-                        return (e === 'aprobado' || e === 'exonerado') ? a + mat.creditosQueDA : a;
-                      }, 0);
-                      const crTotal = mats.reduce((a, mat) => a + mat.creditosQueDA, 0);
+                      const cr = creditosObtenidos(mats, config);
+                      const crTotal = cr.total;
+                      const crObt = modoCred === 'exonerados' ? cr.exonerados : cr.exonerados + cr.aprobados;
                       const icono = crObt === crTotal && crTotal > 0 ? '✅' : crObt > 0 ? '🔵' : '⬜';
+                      const textoCr = modoCred === 'ambos'
+                        ? `${cr.exonerados} + ${cr.aprobados} / ${crTotal}`
+                        : `${crObt} / ${crTotal}`;
                       return (
-                        <View key={sem} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <Text style={{ color: tema.texto }}>{sem}° Semestre</Text>
-                          <Text style={{ color: tema.textoSecundario }}>{crObt} / {crTotal} {icono}</Text>
+                        <View key={sem} style={{ marginBottom: 6 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: tema.texto }}>{sem}° Semestre</Text>
+                            <Text style={{ color: tema.textoSecundario }}>{textoCr} {icono}</Text>
+                          </View>
+                          {modoCred === 'ambos' && (
+                            <View style={{ width: '100%', height: 5, borderRadius: 3, backgroundColor: tema.borde, overflow: 'hidden', flexDirection: 'row', marginTop: 3 }}>
+                              <View style={{ width: `${crTotal > 0 ? (cr.exonerados / crTotal) * 100 : 0}%`, backgroundColor: getColor('exonerado') }} />
+                              <View style={{ width: `${crTotal > 0 ? (cr.aprobados / crTotal) * 100 : 0}%`, backgroundColor: getColor('aprobado') }} />
+                            </View>
+                          )}
                         </View>
                       );
                     })}
@@ -873,16 +908,21 @@ export function MetricsScreen() {
                 <View key="cuello_botella" style={col}>
                   {seccion('CUELLO DE BOTELLA')}
                   <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
+                      Estas materias traban más correlativas: priorizalas.
+                    </Text>
                     <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
-                      {soloSiguiente && siguienteSem !== null
-                        ? `${getLabel('cursando')} + previa de ≥${umbralCuello} que afectan al ${siguienteSem}° sem`
+                      {soloSiguiente && semsAdelante.length > 0
+                        ? `${getLabel('cursando')} + previa de ≥${umbralCuello} que afectan ${textoSemsAdelante}`
                         : `Previa de ${umbralCuello} o más materias (sin aprobar)`}
                     </Text>
 
                     {cuellosBotella.length === 0 ? (
                       sinDatos(
                         soloSiguiente
-                          ? 'Ningún cuello de botella afecta al próximo semestre'
+                          ? (semsAdelanteN > 1
+                            ? `Ningún cuello de botella afecta a los próximos ${semsAdelanteN} semestres`
+                            : 'Ningún cuello de botella afecta al próximo semestre')
                           : `No hay materias sin aprobar que sean previa de ${umbralCuello} o más`
                       )
                     ) : (
@@ -892,13 +932,19 @@ export function MetricsScreen() {
                           .map(n => materiasPorNumero.get(n))
                           .filter((x): x is NonNullable<typeof x> => !!x);
                         const enSigSem = matDesbloquea.filter(x => numerosEnSigSem.has(x.numero));
+                        const abierta = cuelloAbierto === mat.id;
 
                         return (
-                          <View key={mat.id} style={{
-                            marginBottom: 10, paddingBottom: 10,
-                            borderBottomWidth: 1, borderBottomColor: tema.borde,
-                          }}>
-                            {/* Nombre + badge ×N */}
+                          <TouchableOpacity
+                            key={mat.id}
+                            activeOpacity={0.7}
+                            onPress={() => setCuelloAbierto(abierta ? null : mat.id)}
+                            style={{
+                              marginBottom: 10, paddingBottom: 10,
+                              borderBottomWidth: 1, borderBottomColor: tema.borde,
+                            }}
+                          >
+                            {/* Nombre + "traba N" */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
                               <View style={{
                                 width: 10, height: 10, borderRadius: 5,
@@ -912,9 +958,10 @@ export function MetricsScreen() {
                                 paddingHorizontal: 8, paddingVertical: 2,
                               }}>
                                 <Text style={{ color: '#FF9800', fontSize: 11, fontWeight: '700' }}>
-                                  ×{mat.esPreviaDe.length}
+                                  traba {mat.esPreviaDe.length}
                                 </Text>
                               </View>
+                              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{abierta ? '▴' : '▾'}</Text>
                             </View>
 
                             {/* Detalle */}
@@ -930,7 +977,18 @@ export function MetricsScreen() {
                                 {'► Sig. sem: '}{enSigSem.map(x => x.nombre).join(', ')}
                               </Text>
                             )}
-                          </View>
+
+                            {/* Lista desplegable de materias que traba */}
+                            {abierta && (
+                              <View style={{ marginLeft: 18, marginTop: 6, gap: 3 }}>
+                                {materiasQueTraba(mat, materias).map(x => (
+                                  <Text key={x.id} style={{ color: tema.texto, fontSize: 12 }}>
+                                    {getIcono(calcularEstadoFinal(x, config))} {x.nombre} · {x.semestre}° sem
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+                          </TouchableOpacity>
                         );
                       })
                     )}
