@@ -50,7 +50,7 @@ interface Props {
 export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned, resaltar }: Props) {
   const [expandida, setExpandida] = useState(false);
   const tema = useTema();
-  const { getColor, getIcono, getLabel } = useEstadoEstilo();
+  const { getColor, getIcono, getLabel, getLabelSingular } = useEstadoEstilo();
 
   const notaPct = obtenerNotaFinal(materia);
   const estado = calcularEstadoFinal(materia, config);
@@ -114,7 +114,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   const partesLinea2: React.ReactNode[] = [];
   if (dosLineas) {
     partesLinea2.push(
-      <Text key="estado">{icono} <Text style={{ color }}>{getLabel(estado)}</Text></Text>,
+      <Text key="estado">{icono} <Text style={{ color }}>{getLabelSingular(estado)}</Text></Text>,
     );
     if ((config.tarjetaMostrarNota ?? true) && notaPct !== null) {
       partesLinea2.push(<Text key="nota">{notaDisplayTarjeta(notaPct, config)}</Text>);
@@ -129,7 +129,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
       if (notaPct !== null) clave = `${notaPct.toFixed(0)}% acumulado`;
     } else if (estado === 'por_cursar') {
       if (previasPendientes.length > 0) {
-        clave = `faltan ${previasPendientes.length} ${previasPendientes.length === 1 ? 'previa' : 'previas'}`;
+        clave = previasPendientes.length === 1 ? 'falta 1 previa' : `faltan ${previasPendientes.length} previas`;
       }
     }
     if (clave) partesLinea2.push(<Text key="clave">{clave}</Text>);
