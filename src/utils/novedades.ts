@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.9.5',
+    items: [
+      'Las felicitaciones ahora son una animación corta que se cierra sola, y quedan guardadas en Ajustes → Datos → Registro de logros.',
+      'En el horario, cada evaluación muestra cuántos días faltan ("en 5 días", "mañana", "hoy"). Se puede apagar en general o en cada evaluación.',
+      'Temas listos para usar: Oscuro, Claro, Alto contraste, Océano, Bosque y Atardecer, con una vista previa de cómo queda la app.',
+      'Arriba de Ajustes hay un buscador: escribí lo que buscás y te lleva directo a ese ajuste.',
+      'Podés elegir no ver esta ventana de novedades cuando se actualiza la app (Ajustes → App).',
+      'Los botones que solo tienen un ícono ahora tienen una descripción para lectores de pantalla.',
+    ],
+  },
+  {
     version: '1.9.0',
     items: [
       '🎓 En Ajustes → App elegí cómo se ve el encabezado de cada semestre (barra, íconos o anillo, con sus créditos) y el estilo de las cifras de arriba de Carrera, con vista previa.',
@@ -207,4 +218,36 @@ export async function marcarVersionVista(version: string = APP_VERSION): Promise
   } catch {
     // Si falla, la ventana vuelve a aparecer la próxima vez: no es grave.
   }
+}
+
+/**
+ * Decide si hay que abrir la ventana de novedades al iniciar.
+ * - `mostrarAlActualizar === false`: nunca (el enlace manual "Qué hay de nuevo" no pasa por acá).
+ * - `ultimaVista` null: no se decide acá (instalación nueva o sin registro); lo resuelve `novedadesPendientes`.
+ * - Si no: solo cuando la versión instalada es posterior a la última vista.
+ */
+export function debeMostrarNovedades(
+  ultimaVista: string | null,
+  versionActual: string,
+  mostrarAlActualizar: boolean,
+): boolean {
+  if (!mostrarAlActualizar) return false;
+  if (ultimaVista === null) return true;
+  return compararVersiones(versionActual, ultimaVista) > 0;
+}
+
+/**
+ * Variante de `novedadesPendientes` que respeta la preferencia "Mostrar novedades al actualizar".
+ * Con la preferencia apagada devuelve []. En ese caso, la pantalla debe llamar igual a
+ * `marcarVersionVista(actual)` para que, al volver a activarla, no aparezcan versiones viejas.
+ */
+export function novedadesAMostrar(
+  ultimaVista: string | null,
+  tieneDatos: boolean,
+  mostrarAlActualizar: boolean,
+  actual: string = APP_VERSION,
+  lista: NovedadesVersion[] = NOVEDADES,
+): NovedadesVersion[] {
+  if (!debeMostrarNovedades(ultimaVista, actual, mostrarAlActualizar)) return [];
+  return novedadesPendientes(ultimaVista, tieneDatos, actual, lista);
 }

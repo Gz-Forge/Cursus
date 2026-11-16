@@ -347,7 +347,7 @@ export function MetricsScreen() {
   // ── Modal Personalizar ────────────────────────────────────────────────────
   // Botones ↑↓ reutilizables para reordenar métricas
   const botonOrden = (id: string, dir: 'arriba' | 'abajo', disabled: boolean) => (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={dir === 'arriba' ? 'Subir métrica' : 'Bajar métrica'}
       onPress={() => !disabled && moverMetrica(id, dir)}
       disabled={disabled}
       style={{
@@ -389,7 +389,7 @@ export function MetricsScreen() {
       >
         {/* Punto 101: fondo Pressable aparte y hoja como View, para que el ScrollView no compita por los toques */}
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
             onPress={() => setModalPersonalizar(false)}
             accessibilityLabel="Cerrar"
@@ -407,7 +407,7 @@ export function MetricsScreen() {
             {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16 }}>Personalizar métricas</Text>
-              <TouchableOpacity onPress={() => setModalPersonalizar(false)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" onPress={() => setModalPersonalizar(false)}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 22 }}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -461,7 +461,7 @@ export function MetricsScreen() {
 
                       {/* Control +/- umbral */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Disminuir umbral de cuello de botella"
                           onPress={() => actualizarConfig({ cuelloBotellaUmbral: Math.max(1, umbralCuello - 1) })}
                           style={{
                             width: 34, height: 34, borderRadius: 17,
@@ -475,7 +475,7 @@ export function MetricsScreen() {
                           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 24 }}>{umbralCuello}</Text>
                           <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>materias</Text>
                         </View>
-                        <TouchableOpacity
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Aumentar umbral de cuello de botella"
                           onPress={() => actualizarConfig({ cuelloBotellaUmbral: umbralCuello + 1 })}
                           style={{
                             width: 34, height: 34, borderRadius: 17,
@@ -505,7 +505,7 @@ export function MetricsScreen() {
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
                           <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 12 }}>Semestres por delante</Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <TouchableOpacity
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Disminuir semestres hacia adelante"
                               onPress={() => actualizarConfig({ cuelloBotellaSemestresAdelante: Math.max(1, semsAdelanteN - 1) })}
                               style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: tema.borde }}
                             >
@@ -514,7 +514,7 @@ export function MetricsScreen() {
                             <View style={{ paddingHorizontal: 16, alignItems: 'center' }}>
                               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700', fontSize: 24 }}>{semsAdelanteN}</Text>
                             </View>
-                            <TouchableOpacity
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Aumentar semestres hacia adelante"
                               onPress={() => actualizarConfig({ cuelloBotellaSemestresAdelante: Math.min(6, semsAdelanteN + 1) })}
                               style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: tema.superficie, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: tema.borde }}
                             >
@@ -688,7 +688,7 @@ export function MetricsScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Personalizar métricas"
           onPress={() => setModalPersonalizar(true)}
           style={{ paddingHorizontal: 14, paddingVertical: 10 }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1092,7 +1092,7 @@ export function MetricsScreen() {
                               <Text style={{ color: tema.textoSecundario, fontSize: 10, width: 22 }}>{sem}°</Text>
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, flex: 1 }}>
                                 {materias.filter(mat => mat.semestre === sem).map(mat => (
-                                  <TouchableOpacity
+                                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={mat.nombre}
                                     key={mat.id}
                                     onPress={() => setMateriaMapaSeleccionada(mat)}
                                     style={{
@@ -1138,7 +1138,7 @@ export function MetricsScreen() {
                                   </View>
                                   <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderLeftWidth: 1, borderBottomWidth: 1, borderColor: tema.borde }}>
                                     {barrasNotas.map(b => (
-                                      <TouchableOpacity
+                                      <TouchableOpacity accessibilityRole="button"
                                         key={b.clave}
                                         disabled={b.materiasList.length === 0}
                                         onPress={() => setNotaBarraSeleccionada({
@@ -1331,7 +1331,7 @@ export function MetricsScreen() {
         onRequestClose={() => setMateriaMapaSeleccionada(null)}
       >
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
             onPress={() => setMateriaMapaSeleccionada(null)}
             accessibilityLabel="Cerrar"

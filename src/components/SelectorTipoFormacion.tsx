@@ -81,6 +81,7 @@ export function SelectorTipoFormacion({ tipos, valor, onCambiar, onAgregarTipo }
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => { setTexto(''); setEscribiendo(false); }}
+            accessibilityRole="button"
             accessibilityLabel="Cancelar tipo nuevo"
             style={{ justifyContent: 'center', paddingHorizontal: 4 }}
           >

@@ -146,12 +146,16 @@ const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, o
       <TouchableOpacity
         style={{ paddingHorizontal: 10, paddingVertical: 4 }}
         onPress={() => onEditar(bloque)}
+        accessibilityRole="button"
+        accessibilityLabel="Editar horario"
       >
         <Text style={{ color: tema.acento, fontSize: 15 }}>✎</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={{ paddingHorizontal: 6, paddingVertical: 4 }}
         onPress={() => onEliminar(bloque.id)}
+        accessibilityRole="button"
+        accessibilityLabel="Borrar horario"
       >
         <Text style={{ color: '#F44336' }}>✕</Text>
       </TouchableOpacity>
@@ -1174,6 +1178,9 @@ export function EditMateriaScreen() {
             <TouchableOpacity
               disabled={paginaActual === 0}
               onPress={() => setPaginaHorario(paginaActual - 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Página anterior"
+              accessibilityState={{ disabled: paginaActual === 0 }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8,
                 backgroundColor: tema.tarjeta, opacity: paginaActual === 0 ? 0.4 : 1 }}
             >
@@ -1185,6 +1192,9 @@ export function EditMateriaScreen() {
             <TouchableOpacity
               disabled={paginaActual >= totalPaginas - 1}
               onPress={() => setPaginaHorario(paginaActual + 1)}
+              accessibilityRole="button"
+              accessibilityLabel="Página siguiente"
+              accessibilityState={{ disabled: paginaActual >= totalPaginas - 1 }}
               style={{ paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8,
                 backgroundColor: tema.tarjeta, opacity: paginaActual >= totalPaginas - 1 ? 0.4 : 1 }}
             >
@@ -1855,6 +1865,9 @@ export function EditMateriaScreen() {
                     </View>
                     <TouchableOpacity
                       onPress={() => setForm(f => ({ ...f, faltas: (f.faltas ?? []).filter(x => x.id !== falta.id) }))}
+                    
+                      accessibilityRole="button"
+                      accessibilityLabel={`Borrar falta del ${fmtFechaBloque(falta.fecha)}`}
                     >
                       <Text style={{ color: '#F44336' }}>✕</Text>
                     </TouchableOpacity>

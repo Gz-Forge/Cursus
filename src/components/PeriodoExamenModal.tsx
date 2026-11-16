@@ -172,7 +172,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
                   {displayF}{yaEjecutada ? '  ✓' : ''}
                 </Text>
                 {!yaEjecutada && (
-                  <TouchableOpacity onPress={() => eliminarFecha(f)} style={{ padding: 4 }}>
+                  <TouchableOpacity onPress={() => eliminarFecha(f)} accessibilityRole="button" accessibilityLabel={`Borrar fecha ${displayF}`} style={{ padding: 4 }}>
                     <Text style={{ color: '#F44336', fontSize: 16 }}>✕</Text>
                   </TouchableOpacity>
                 )}
@@ -213,6 +213,8 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
         <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
           activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar"
           onPress={onCerrar}
         >
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
@@ -230,7 +232,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCerrar}>
-      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} onPress={onCerrar} />
+      <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} activeOpacity={1} accessibilityRole="button" accessibilityLabel="Cerrar" onPress={onCerrar} />
       <View style={{ backgroundColor: tema.superficie, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32 + safeBottomModal }}>
         <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
           Períodos de examen

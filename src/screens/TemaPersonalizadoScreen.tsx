@@ -6,7 +6,12 @@ import {
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
-import { useTema } from '../theme/ThemeContext';
+import { useTema, ThemeContext, sanitizarTema } from '../theme/ThemeContext';
+import { TEMAS_PREARMADOS, aplicarTemaPrearmado, temaPrearmadoActivo } from '../theme/temasPrearmados';
+import { MateriaCard } from '../components/MateriaCard';
+import { SemestreSection } from '../components/SemestreSection';
+import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
+import { Materia } from '../types';
 import { temaOscuro, estadoColores } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
@@ -98,6 +103,9 @@ function FondoEditor({
           </TouchableOpacity>
           {valor?.valor ? (
             <TouchableOpacity
+              accessibilityRole="switch"
+              accessibilityLabel="Imagen que se mueve al hacer scroll"
+              accessibilityState={{ checked: !!valor?.movible }}
               onPress={() => onChange({ ...valor!, movible: !valor?.movible })}
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -295,6 +303,8 @@ function PantallaEditor({
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Disminuir tamaño de letra del horario"
               onPress={() => actualizarConfig({ horarioFontSize: Math.max(6, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) - 1) })}
               disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) <= 6}
               style={{
@@ -313,6 +323,8 @@ function PantallaEditor({
             </View>
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Aumentar tamaño de letra del horario"
               onPress={() => actualizarConfig({ horarioFontSize: Math.min(20, (appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) + 1) })}
               disabled={(appConfig.horarioFontSize ?? (Platform.OS === 'web' ? 12 : 8)) >= 20}
               style={{
@@ -995,17 +1007,6 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
 
   return (
     <PreviewWrapper draft={draft} fondo={fondo}>
-      {/* CUENTA Y SYNC */}
-      <SecTitulo title="CUENTA Y SYNC" />
-      <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 10 }}>
-          Iniciá sesión para sincronizar tus perfiles entre dispositivos.
-        </Text>
-        <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 12, borderRadius: 8, alignItems: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Iniciar sesión / Registrarse</Text>
-        </View>
-      </View>
-
       {/* APARIENCIA */}
       <SecTitulo title="APARIENCIA" />
       <View style={{ flexDirection: 'row', backgroundColor: t.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
@@ -1134,17 +1135,94 @@ function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fond
   );
 }
 
+// ── Vista previa con componentes reales de la app (datos ficticios) ──────────
+function materiaEjemplo(p: Partial<Materia> & Pick<Materia, 'id' | 'numero' | 'nombre' | 'semestre'>): Materia {
+  return {
+    creditosQueDA: 8, creditosNecesarios: 0, previasNecesarias: [], esPreviaDe: [],
+    cursando: false, usarNotaManual: false, notaManual: null, tipoNotaManual: 'numero',
+    evaluaciones: [], oportunidadesExamen: 3,
+    ...p,
+  };
+}
+
+const MATERIAS_EJEMPLO: Materia[] = [
+  materiaEjemplo({
+    id: 'demo-1', numero: 1, nombre: 'Álgebra I', semestre: 1, usarNotaManual: true, notaManual: 92, tipoNotaManual: 'porcentaje',
+  }),
+  materiaEjemplo({ id: 'demo-2', numero: 2, nombre: 'Programación I', semestre: 1, cursando: true, creditosQueDA: 10 }),
+];
+
+const MATERIA_CON_NOTAS: Materia = materiaEjemplo({
+  id: 'demo-3', numero: 3, nombre: 'Cálculo II', semestre: 2, cursando: true, creditosQueDA: 9,
+  evaluaciones: [
+    { id: 'e1', tipo: 'simple', nombre: 'Parcial 1', pesoEnMateria: 40, tipoNota: 'porcentaje', nota: 65, notaMaxima: 100 },
+    { id: 'e2', tipo: 'simple', nombre: 'Parcial 2', pesoEnMateria: 40, tipoNota: 'porcentaje', nota: null, notaMaxima: 100 },
+    { id: 'e3', tipo: 'simple', nombre: 'Entrega final', pesoEnMateria: 20, tipoNota: 'porcentaje', nota: null, notaMaxima: 100 },
+  ],
+});
+
+function ComponentesPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
+  const config = useStore(s => s.config);
+  const temaEnEdicion = sanitizarTema(draft);
+  const acentoFondo = temaEnEdicion.acentoFondo ?? temaEnEdicion.acento;
+  const acentoTexto = temaEnEdicion.acentoTexto ?? temaEnEdicion.acento;
+  const acentoLineas = temaEnEdicion.acentoLineas ?? temaEnEdicion.acento;
+  const todas = [...MATERIAS_EJEMPLO, MATERIA_CON_NOTAS];
+
+  return (
+    <ThemeContext.Provider value={temaEnEdicion}>
+      <PreviewWrapper draft={draft} fondo={fondo}>
+        <SemestreSection
+          semestre={1}
+          materias={MATERIAS_EJEMPLO}
+          todasLasMaterias={todas}
+          config={config}
+          colorAcento={temaEnEdicion.semestres[0]}
+          onEditar={() => {}}
+        />
+
+        <Text style={{ color: temaEnEdicion.textoSecundario, fontSize: 12, marginTop: 12, marginBottom: 4 }}>
+          Materia con evaluaciones
+        </Text>
+        <MateriaCard
+          materia={MATERIA_CON_NOTAS}
+          todasLasMaterias={todas}
+          config={config}
+          onEditar={() => {}}
+          mostrarToggleCursando={false}
+        />
+
+        <View style={{ marginTop: 16 }}>
+          <BarraProgresoNotas evaluaciones={MATERIA_CON_NOTAS.evaluaciones} oportunidadesExamen={3} />
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+          <View style={{ flex: 1, backgroundColor: acentoFondo, padding: 12, borderRadius: 8, alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Guardar</Text>
+          </View>
+          <View style={{
+            flex: 1, backgroundColor: temaEnEdicion.tarjeta, padding: 12, borderRadius: 8, alignItems: 'center',
+            borderWidth: 1, borderColor: acentoLineas,
+          }}>
+            <Text style={{ color: acentoTexto, fontWeight: '700', fontSize: 13 }}>Cancelar</Text>
+          </View>
+        </View>
+      </PreviewWrapper>
+    </ThemeContext.Provider>
+  );
+}
+
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export function TemaPersonalizadoScreen() {
   const { config, actualizarConfig } = useStore();
   const tema = useTema();
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
 
   const [draft, setDraft] = useState<TemaPersonalizado>(
     () => config.temaPersonalizado ?? { ...temaOscuro }
   );
   const [panel, setPanel] = useState<'personalizar' | 'preview'>('personalizar');
-  const [paginaPreview, setPaginaPreview] = useState<PantallaKey>('carrera');
+  const [paginaPreview, setPaginaPreview] = useState<PantallaKey | 'componentes'>('componentes');
   const [pantallaEditando, setPantallaEditando] = useState<PantallaKey>('carrera');
   const [cambiosSinGuardar, setCambiosSinGuardar] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
@@ -1166,7 +1244,7 @@ export function TemaPersonalizadoScreen() {
       );
       return;
     }
-    actualizarConfig({ temaPersonalizado: draft });
+    actualizarConfig({ tema: 'personalizado', temaPersonalizado: draft });
     setCambiosSinGuardar(false);
     setGuardadoOk(true);
     setTimeout(() => setGuardadoOk(false), 2500);
@@ -1181,6 +1259,30 @@ export function TemaPersonalizadoScreen() {
       case 'horario':  return draft.fondoHorario;
       case 'metricas': return draft.fondoMetricas;
       case 'config':   return draft.fondoConfig;
+      default:         return undefined;
+    }
+  };
+
+  const temaActivoId = temaPrearmadoActivo(config);
+  const esPropio = temaActivoId === null && config.tema === 'personalizado';
+  const aplicarPrearmado = (id: string) => {
+    const t = TEMAS_PREARMADOS.find(x => x.id === id);
+    if (!t) return;
+    const aplicar = () => {
+      actualizarConfig(aplicarTemaPrearmado(id));
+      setDraft({ ...t.colores });
+      setCambiosSinGuardar(false);
+      setGuardadoOk(false);
+    };
+    if (esPropio) {
+      showConfirm(
+        'Reemplazar tu tema',
+        `Tu tema personalizado se va a reemplazar por "${t.nombre}". Esta acción no se puede deshacer.`,
+        aplicar,
+        { labelConfirmar: 'Reemplazar', destructivo: true },
+      );
+    } else {
+      aplicar();
     }
   };
 
@@ -1217,6 +1319,44 @@ export function TemaPersonalizadoScreen() {
       {panel === 'personalizar' && (
         <ScrollView contentContainerStyle={{ padding: 16 }}>
           <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
+
+            {/* Temas prearmados */}
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>Temas</Text>
+            <ScrollView
+              horizontal showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+            >
+              {TEMAS_PREARMADOS.map(t => {
+                const activo = temaActivoId === t.id;
+                const c = t.colores;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => aplicarPrearmado(t.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Tema ${t.nombre}${activo ? ', activo' : ''}`}
+                    style={{ width: 96, alignItems: 'center' }}
+                  >
+                    <View style={{
+                      width: 96, height: 64, borderRadius: 10, padding: 8, backgroundColor: c.fondo,
+                      borderWidth: 2, borderColor: activo ? tema.acento : tema.borde, justifyContent: 'space-between',
+                    }}>
+                      <View style={{ height: 16, borderRadius: 4, backgroundColor: c.tarjeta, borderWidth: 1, borderColor: c.borde }} />
+                      <View style={{ height: 4, width: '60%', borderRadius: 2, backgroundColor: c.acento }} />
+                      <View style={{ height: 4, width: '85%', borderRadius: 2, backgroundColor: c.texto }} />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: activo ? tema.acento : tema.textoSecundario, fontSize: 12, fontWeight: activo ? '700' : '400', marginTop: 6 }}
+                    >
+                      {t.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>Personalizar</Text>
 
             {/* Banner cambios sin guardar */}
             {cambiosSinGuardar && (
@@ -1398,6 +1538,7 @@ export function TemaPersonalizadoScreen() {
           {/* Selector de página */}
           <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, padding: 8, gap: 6 }}>
             {([
+              ['componentes', 'General'     ],
               ['carrera',  'Carrera'       ],
               ['horario',  'Horarios'      ],
               ['metricas', 'Métricas'      ],
@@ -1433,6 +1574,7 @@ export function TemaPersonalizadoScreen() {
 
           <ScrollView contentContainerStyle={{ padding: 16 }} style={{ flex: 1 }}>
             <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
+              {paginaPreview === 'componentes' && <ComponentesPreview draft={mergeScreenColors(draft, 'carrera')} fondo={draft.fondoCarrera} />}
               {paginaPreview === 'carrera'  && <CarreraPreview  draft={mergeScreenColors(draft, 'carrera')}  fondo={fondoDePreview()} />}
               {paginaPreview === 'horario'  && <HorarioPreview  draft={mergeScreenColors(draft, 'horario')}  fondo={fondoDePreview()} />}
               {paginaPreview === 'metricas' && <MetricasPreview draft={mergeScreenColors(draft, 'metricas')} fondo={fondoDePreview()} />}

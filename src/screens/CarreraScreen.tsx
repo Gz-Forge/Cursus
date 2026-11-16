@@ -20,7 +20,10 @@ import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal, agruparPo
 import { CifrasCarrera } from '../components/CifrasCarrera';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
-import { EstadoMateria, Materia } from '../types';
+import { EstadoMateria, Materia, Logro } from '../types';
+import { FelicitacionAnimada } from '../components/FelicitacionAnimada';
+import { registrarLogro } from '../utils/logros';
+import { hoyIso } from '../utils/calendario';
 import { useAlert } from '../contexts/AlertContext';
 import { temaOscuro } from '../theme/colors';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
@@ -400,12 +403,20 @@ export function CarreraScreen() {
     anosCompletadosRef.current = anosCompletos;
 
     const mensajes: { titulo: string; frase: string }[] = [];
+    const logrosNuevos: Pick<Logro, 'tipo' | 'numero'>[] = [];
+    const registrarLogros = (nuevos: Pick<Logro, 'tipo' | 'numero'>[]) => {
+      const fecha = hoyIso();
+      const logrosActuales = useStore.getState().config.logros;
+      const logros = nuevos.reduce((acc, l) => registrarLogro(acc, { ...l, fecha }), logrosActuales);
+      actualizarConfig({ logros });
+    };
 
     // ── Prioridad 1: carrera completa (todos los semestres exonerados) ────────
     const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
     const carreraAntesFaltaba = prevSems.size < totalSems;
     if (carreraCompleta && carreraAntesFaltaba) {
       setColaFelicitaciones(q => [...q, { titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
+      registrarLogros([{ tipo: 'carrera', numero: 1 }]);
       return;
     }
 
@@ -423,6 +434,7 @@ export function CarreraScreen() {
             actualizarConfig({ frasesUsadas: nuevasUsadas });
             mensajes.push({ titulo: `🎉 ¡${sem}° semestre completo!`, frase });
           }
+          logrosNuevos.push({ tipo: 'semestre', numero: sem });
           break;
         }
       }
@@ -440,6 +452,7 @@ export function CarreraScreen() {
             actualizarConfig({ frasesAnioUsadas: nuevasUsadas });
             mensajes.push({ titulo: `🎉 ¡Año ${anio}° completo!`, frase });
           }
+          logrosNuevos.push({ tipo: 'anio', numero: anio });
           break;
         }
       }
@@ -448,6 +461,7 @@ export function CarreraScreen() {
     if (mensajes.length > 0) {
       setColaFelicitaciones(q => [...q, ...mensajes]);
     }
+    if (logrosNuevos.length > 0) registrarLogros(logrosNuevos);
   }, [materias, config]);
 
   const handleImportar = async () => {
@@ -698,7 +712,7 @@ export function CarreraScreen() {
         {vista === 'semestre' && (
           <>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 onPress={() => setSemestreActual(s => { const i = semestres.indexOf(s); return i > 0 ? semestres[i - 1] : Math.max(1, s - 1); })}
                 accessibilityLabel="Semestre anterior"
                 style={{ paddingHorizontal: 4 }}
@@ -741,7 +755,7 @@ export function CarreraScreen() {
                   );
                 })}
               </ScrollView>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 onPress={() => setSemestreActual(s => { const i = semestres.indexOf(s); return i >= 0 && i < semestres.length - 1 ? semestres[i + 1] : Math.min(s + 1, semestres.length > 0 ? semestres[semestres.length - 1] : s); })}
                 accessibilityLabel="Semestre siguiente"
                 style={{ paddingHorizontal: 4 }}
@@ -785,7 +799,7 @@ export function CarreraScreen() {
                   autoCorrect={false}
                 />
                 {textoBusqueda.length > 0 && (
-                  <TouchableOpacity onPress={() => { setTextoBusqueda(''); setMateriaPinned(null); }} accessibilityLabel="Borrar búsqueda">
+                  <TouchableOpacity accessibilityRole="button" onPress={() => { setTextoBusqueda(''); setMateriaPinned(null); }} accessibilityLabel="Borrar búsqueda">
                     <Text style={{ color: tema.textoSecundario, fontSize: 18, lineHeight: 20 }}>✕</Text>
                   </TouchableOpacity>
                 )}
@@ -819,7 +833,7 @@ export function CarreraScreen() {
                     ? { label: `${getIcono(filtroEstado)} ${getLabel(filtroEstado)}`, quitar: () => setFiltroEstado(null) }
                     : { label: filtroTipo ?? '', quitar: () => setFiltroTipo(null) };
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button"
                       key={f}
                       onPress={quitar}
                       accessibilityLabel={`Quitar filtro ${label}`}
@@ -952,13 +966,11 @@ export function CarreraScreen() {
         onCancelar={() => setShowConfirmPeriodo(false)}
       />
 
-      <ConfirmModal
+      <FelicitacionAnimada
         visible={colaFelicitaciones.length > 0}
         titulo={colaFelicitaciones[0]?.titulo ?? ''}
         mensaje={colaFelicitaciones[0]?.frase ?? ''}
-        labelConfirmar="¡Gracias!"
-        onConfirmar={() => setColaFelicitaciones(q => q.slice(1))}
-        onCancelar={() => setColaFelicitaciones(q => q.slice(1))}
+        onCerrar={() => setColaFelicitaciones(q => q.slice(1))}
       />
 
       {/* ── Modal: Créditos obtenidos ── */}
@@ -969,7 +981,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalCreditos(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalCreditos(false)}
           />
@@ -1066,7 +1078,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalExoneradas(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalExoneradas(false)}
           />
@@ -1132,7 +1144,7 @@ export function CarreraScreen() {
         onRequestClose={() => setModalDisponibles(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalDisponibles(false)}
           />
@@ -1254,7 +1266,7 @@ export function CarreraScreen() {
           justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
           padding: isWeb ? 24 : 0,
         }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalFiltrosBusqueda(false)}
           />
@@ -1364,7 +1376,7 @@ export function CarreraScreen() {
           justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
           padding: isWeb ? 24 : 0,
         }}>
-          <Pressable
+          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
             onPress={() => setModalFiltro(false)}
           />

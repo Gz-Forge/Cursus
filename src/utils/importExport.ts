@@ -392,6 +392,11 @@ CARRERA Y MÉTRICAS (1.9.0):
 - metricasCreditosContar ("exonerados", "exonerados_aprobados" o "ambos"): qué créditos cuenta Métricas como obtenidos.
 - cuelloBotellaSemestresAdelante (entero ≥ 1): cuántos semestres incompletos hacia adelante se miran en los cuellos de botella.
 
+HORARIO, IDIOMA Y NOVEDADES (1.9.5):
+- horarioCuentaRegresiva (true/false): mostrar en el horario cuánto falta para cada evaluación (hoy, mañana, en N días).
+- idioma ("es"): idioma de la app. Por ahora solo español.
+- mostrarNovedadesAlActualizar (true/false): abrir la ventana de novedades cuando la app se actualiza.
+
 ════════════════════════════
 EJEMPLO COMPLETO
 ════════════════════════════
@@ -786,6 +791,9 @@ export function aplicarConfigJson(
   bool('horarioMostrarEvaluaciones');
   bool('horarioMostrarLineaHoraActual');
   bool('barraProgresoEvaluaciones');
+  bool('horarioCuentaRegresiva');
+  oneOf('idioma', ['es']);
+  bool('mostrarNovedadesAlActualizar');
   oneOf('metricasProgresoEstilo', ['lista', 'anillo']);
   oneOf('notasObtenidasEje', ['con_datos', 'completo']);
   bool('metricasLineasUmbral');
@@ -852,6 +860,9 @@ export function configAJson(config: import('../types').Config): Record<string, u
     horarioPrimerDia: config.horarioPrimerDia,
     horarioMostrarLineaHoraActual: config.horarioMostrarLineaHoraActual,
     barraProgresoEvaluaciones: config.barraProgresoEvaluaciones,
+    horarioCuentaRegresiva: config.horarioCuentaRegresiva ?? true,
+    idioma: config.idioma ?? 'es',
+    mostrarNovedadesAlActualizar: config.mostrarNovedadesAlActualizar ?? true,
     tarjetaCreditosBadge: config.tarjetaCreditosBadge,
     tarjetaBadgeOrden: config.tarjetaBadgeOrden,
     tarjetaMostrarNota: config.tarjetaMostrarNota,
@@ -1018,6 +1029,15 @@ CAMPOS DE CONFIGURACIÓN:
 41. cuelloBotellaSemestresAdelante (número entero, 1 o más)
     Con "solo siguiente" activado en los cuellos de botella, ¿cuántos semestres incompletos hacia adelante se miran? 1 es solo el siguiente.
 
+42. horarioCuentaRegresiva (true/false)
+    En el horario, ¿mostrar cuánto falta para cada evaluación (hoy, mañana, en N días)?
+
+43. idioma ("es")
+    Idioma de la app. Por ahora solo existe español ("es").
+
+44. mostrarNovedadesAlActualizar (true/false)
+    Cuando la app se actualiza, ¿abrir automáticamente la ventana con las novedades?
+
 ---
 
 FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
@@ -1068,7 +1088,10 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "creditosModalAgruparTipo": false,
   "tarjetaDiseno": "clasica",
   "metricasCreditosContar": "exonerados_aprobados",
-  "cuelloBotellaSemestresAdelante": 1
+  "cuelloBotellaSemestresAdelante": 1,
+  "horarioCuentaRegresiva": true,
+  "idioma": "es",
+  "mostrarNovedadesAlActualizar": true
 }
 
 ⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;
@@ -1295,7 +1318,10 @@ Campos disponibles (los más comunes):
 - tarjetaMostrarNota (true/false), tarjetaNota ("numero" o "porcentaje"): nota en tarjeta.
 - tarjetaPrevias ("todas", "faltantes" o "ninguna"): previas visibles en tarjeta.
 - tarjetaCreditosBadge ("da", "necesita" o "ambos"): badge de créditos en tarjeta.
-- barraProgresoEvaluaciones (true/false): barra de progreso de notas al editar una materia.`;
+- barraProgresoEvaluaciones (true/false): barra de progreso de notas al editar una materia.
+- horarioCuentaRegresiva (true/false): cuenta regresiva en las evaluaciones del horario.
+- idioma ("es"): idioma de la app.
+- mostrarNovedadesAlActualizar (true/false): abrir las novedades al actualizar la app.`;
   }
 
   const seccionColores = modulos.has('colores') ? buildSeccionColores(config, materias) : '';

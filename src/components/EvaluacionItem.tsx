@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoNota } from '../types';
 import { useTema } from '../theme/ThemeContext';
+import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
 import {
   calcularPorcentajeEvaluacion,
@@ -45,11 +46,14 @@ function FechaHoraPicker({
   ocupadosDe,
   excluirId,
   diasMarcados,
+  ocultarCuenta,
 }: {
   fecha?: string;
   hora?: number;
   horaFin?: number;
-  onActualizar: (p: { fecha?: string; hora?: number; horaFin?: number }) => void;
+  onActualizar: (p: { fecha?: string; hora?: number; horaFin?: number; ocultarCuentaRegresiva?: boolean }) => void;
+  /** Punto 27: la evaluación oculta su cuenta regresiva en el horario. */
+  ocultarCuenta?: boolean;
   sugeridos?: HorarioSugerido[];
   /** Horarios ocupados en una fecha (otros bloques y evaluaciones), sin esta evaluación. */
   ocupadosDe?: (fecha: string, excluirId?: string) => { inicio: number; fin: number }[];
@@ -57,6 +61,7 @@ function FechaHoraPicker({
   diasMarcados?: string[];
 }) {
   const tema = useTema();
+  const horarioCuentaRegresiva = useStore(st => st.config.horarioCuentaRegresiva) ?? true;
   const [expandido, setExpandido] = useState(false);
   const tieneFecha = esIsoValida(fecha);
 
@@ -121,6 +126,18 @@ function FechaHoraPicker({
               <Text style={{ color: '#F44336', fontSize: 12 }}>Quitar del horario</Text>
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {/* Punto 27: cuenta regresiva en el bloque del horario (solo si hay fecha y está activa en Ajustes) */}
+      {tieneFecha && horarioCuentaRegresiva && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 8 }}>Mostrar cuenta regresiva</Text>
+          <Switch
+            value={!ocultarCuenta}
+            onValueChange={v => onActualizar({ ocultarCuentaRegresiva: v ? undefined : true })}
+            trackColor={{ true: tema.acentoFondo ?? tema.acento }}
+          />
         </View>
       )}
     </View>
@@ -304,7 +321,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             </Text>
           )}
           {!colapsada && editandoId !== evaluacion.id && (
-            <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre de la evaluación">
               <Text style={{ fontSize: 13 }}>✏️</Text>
             </TouchableOpacity>
           )}
@@ -312,7 +329,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             {contribucion !== null ? `${contribucion.toFixed(2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
           </Text>
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
-          <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${evaluacion.nombre || 'evaluación'}`}>
             <Text style={{ color: '#F44336' }}>🗑️</Text>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -386,6 +403,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           sugeridos={horariosSugeridos}
           ocupadosDe={ocupadosDe}
           excluirId={evaluacion.id}
+          ocultarCuenta={evaluacion.ocultarCuentaRegresiva}
           diasMarcados={diasConClase}
         />
         <View style={{ marginTop: 6 }}>
@@ -430,7 +448,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           </Text>
         )}
         {!grupoColapsado && editandoId !== grupo.id && (
-          <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre del grupo">
             <Text style={{ fontSize: 13 }}>✏️</Text>
           </TouchableOpacity>
         )}
@@ -438,7 +456,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           {parcialGrupo !== null ? `${parcialGrupo.toFixed(2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
         </Text>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
-        <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${grupo.nombre || 'grupo'}`}>
           <Text style={{ color: '#F44336' }}>🗑️</Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -475,7 +493,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 </Text>
               )}
               {!subColapsada && editandoId !== sub.id && (
-                <TouchableOpacity onPress={() => setEditandoId(sub.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <TouchableOpacity onPress={() => setEditandoId(sub.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre de la prueba">
                   <Text style={{ fontSize: 12 }}>✏️</Text>
                 </TouchableOpacity>
               )}
@@ -483,7 +501,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : `${fmtNum(pesoSub)}%`}
               </Text>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
-              <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${sub.nombre || `Prueba ${i + 1}`}`}>
                 <Text style={{ color: '#F44336', fontSize: 13 }}>✕</Text>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -538,6 +556,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
               sugeridos={horariosSugeridos}
               ocupadosDe={ocupadosDe}
               excluirId={sub.id}
+              ocultarCuenta={sub.ocultarCuentaRegresiva}
               diasMarcados={diasConClase}
             />
             <View style={{ marginTop: 6 }}>

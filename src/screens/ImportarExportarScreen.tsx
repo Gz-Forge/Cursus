@@ -727,6 +727,8 @@ function PanelExportar() {
     label, value, onChange, disabled,
   }: { label: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) => (
     <TouchableOpacity
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: value, disabled: !!disabled }}
       onPress={() => !disabled && onChange(!value)}
       style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}
     >
@@ -773,6 +775,8 @@ function PanelExportar() {
         {perfiles.map(p => (
           <TouchableOpacity
             key={p.id}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: perfilesSelec.includes(p.id) }}
             onPress={() => togglePerfil(p.id)}
             style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
           >

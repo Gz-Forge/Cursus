@@ -70,7 +70,7 @@ export function WebSidebar({ navRef }: Props) {
       {TABS.map(tab => {
         const isActive = activeRoute === tab.name;
         return (
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={tab.name} accessibilityState={{ selected: isActive }}
             key={tab.name}
             onPress={() => navigate(tab.name)}
             style={{
@@ -99,7 +99,7 @@ export function WebSidebar({ navRef }: Props) {
 
       {/* Botón para contraer / expandir */}
       <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 16 }}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={collapsed ? 'Expandir menú' : 'Contraer menú'}
           onPress={toggle}
           style={{
             alignItems: collapsed ? 'center' : 'flex-end',

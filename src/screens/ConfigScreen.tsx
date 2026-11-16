@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, TextInput, Modal, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
 import { useStore } from '../store/useStore';
@@ -22,6 +22,44 @@ import { estadoColores } from '../theme/colors';
 import { ejemploAprobadoHabilita } from '../utils/ayudas';
 import { APP_VERSION } from '../utils/novedades';
 import { abrirNovedadesActuales } from '../components/NovedadesModal';
+import { SelectorDesplegable } from '../components/SelectorDesplegable';
+import { buscarAjustes, NOMBRE_PANEL } from '../utils/buscadorAjustes';
+import { logrosOrdenados, textoLogro } from '../utils/logros';
+
+// ── Anclas: cada ajuste del buscador registra su posición para poder llevar el scroll hasta él ──
+interface AnclasCtxValor {
+  registrar: (id: string, y: number) => void;
+  /** En web se guarda el nodo para usar scrollIntoView (onLayout no siempre informa la posición ahí). */
+  registrarNodo: (id: string, nodo: any) => void;
+  olvidar: (id: string) => void;
+  resaltado: string | null;
+  colorResaltado: string;
+}
+const AnclasCtx = React.createContext<AnclasCtxValor>({
+  registrar: () => {}, registrarNodo: () => {}, olvidar: () => {}, resaltado: null, colorResaltado: 'transparent',
+});
+
+/** Envuelve un ajuste: guarda su `y` (relativa al contenedor del panel) y lo resalta si es el elegido en el buscador. */
+function Ancla({ id, children }: { id: string; children: React.ReactNode }) {
+  const { registrar, registrarNodo, olvidar, resaltado, colorResaltado } = useContext(AnclasCtx);
+  // registrar/olvidar son estables: el efecto solo corre al montar/desmontar el ancla.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => olvidar(id), [id]);
+  return (
+    <View
+      ref={nodo => { if (nodo) registrarNodo(id, nodo); }}
+      onLayout={e => registrar(id, e.nativeEvent.layout.y)}
+      style={{ borderRadius: 10, backgroundColor: resaltado === id ? colorResaltado : 'transparent' }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function formatearFecha(iso: string): string {
+  const [a, m, d] = iso.split('-');
+  return a && m && d ? `${d}/${m}/${a}` : iso;
+}
 
 // ── Paleta de colores predeterminados (misma que HorarioScreen) ──────────────
 const COLORES_BLOQUES_DEFAULT = [
@@ -110,6 +148,57 @@ export function ConfigScreen() {
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
   const scrollConfigRef = useRef<any>(null);
+  const [mostrarLogros, setMostrarLogros] = useState(false);
+  // Buscador de ajustes + anclas
+  const [busqueda, setBusqueda] = useState('');
+  const [resaltado, setResaltado] = useState<string | null>(null);
+  const [irA, setIrA] = useState<{ id: string; n: number } | null>(null);
+  const anclasY = useRef<Record<string, number>>({});
+  const anclasNodo = useRef<Record<string, any>>({});
+  const contenedorY = useRef(0);
+  const registrarAncla = useCallback((id: string, y: number) => { anclasY.current[id] = y; }, []);
+  const registrarNodoAncla = useCallback((id: string, nodo: any) => { anclasNodo.current[id] = nodo; }, []);
+  const olvidarAncla = useCallback((id: string) => { delete anclasY.current[id]; delete anclasNodo.current[id]; }, []);
+  const anclasCtx = useMemo<AnclasCtxValor>(() => ({
+    registrar: registrarAncla,
+    registrarNodo: registrarNodoAncla,
+    olvidar: olvidarAncla,
+    resaltado,
+    colorResaltado: (tema.acentoFondo ?? tema.acento) + '33',
+  }), [resaltado, tema.acentoFondo, tema.acento]);
+  const buscando = busqueda.trim().length > 0;
+  const resultadosBusqueda = buscarAjustes(busqueda);
+  const irAAjuste = (id: string, panel: Tab) => {
+    setBusqueda('');
+    setTabActiva(panel);
+    setIrA({ id, n: Date.now() });
+  };
+  // Espera a que se rendericen las anclas del panel, baja hasta el ajuste y lo resalta ~1,5 s
+  useEffect(() => {
+    if (!irA) return;
+    let intentos = 0;
+    let t1: any;
+    let t2: any;
+    const intentar = () => {
+      const y = anclasY.current[irA.id];
+      const nodoWeb = Platform.OS === 'web' ? anclasNodo.current[irA.id] : null;
+      if (y == null && !nodoWeb && intentos < 10) { intentos++; t1 = setTimeout(intentar, 100); return; }
+      if (nodoWeb?.scrollIntoView) {
+        nodoWeb.scrollIntoView({ block: 'start' }); // suave se cancela mientras el panel recién montado termina de dibujarse
+      } else if (y != null) {
+        const destino = Math.max(0, contenedorY.current + y - 12);
+        // El ref de Animated.ScrollView no siempre expone scrollTo (en web puede ser el envoltorio animado).
+        const sv: any = scrollConfigRef.current;
+        const nodo: any = sv?.scrollTo ? sv : sv?.getNode?.() ?? sv?.getScrollResponder?.();
+        if (nodo?.scrollTo) nodo.scrollTo({ y: destino, animated: true });
+        else if (Platform.OS === 'web') sv?.getScrollableNode?.()?.scrollTo?.({ top: destino, behavior: 'smooth' });
+      }
+      setResaltado(irA.id);
+      t2 = setTimeout(() => setResaltado(null), 1500);
+    };
+    t1 = setTimeout(intentar, 80);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [irA]);
   const [mostrarBorrar, setMostrarBorrar] = useState(false);
   const perfiles = useStore(st => st.perfiles);
   const perfilActivoId = useStore(st => st.perfilActivoId);
@@ -179,8 +268,8 @@ export function ConfigScreen() {
     );
   };
 
-  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual' | 'barraProgresoEvaluaciones' | 'encabezadoSemestreCreditos', descripcion?: string, ejemplo?: string) => {
-    const val = config[key];
+  const toggle = (label: string, key: 'usarEstadoAprobado' | 'aprobadoHabilitaPrevias' | 'mostrarNombreCompletoEnBloque' | 'mostrarFelicitaciones' | 'mostrarFelicitacionesAnio' | 'horarioMostrarLineaHoraActual' | 'barraProgresoEvaluaciones' | 'encabezadoSemestreCreditos' | 'horarioCuentaRegresiva' | 'mostrarNovedadesAlActualizar', descripcion?: string, ejemplo?: string) => {
+    const val = config[key] ?? (key === 'horarioCuentaRegresiva' || key === 'mostrarNovedadesAlActualizar');
     return (
       <View style={{ marginBottom: 14 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -194,6 +283,9 @@ export function ConfigScreen() {
             )}
           </View>
           <TouchableOpacity
+            accessibilityRole="switch"
+            accessibilityLabel={label}
+            accessibilityState={{ checked: !!val }}
             onPress={() => actualizarConfig({ [key]: !val } as any)}
             style={{
               width: 50, height: 28, borderRadius: 14,
@@ -233,37 +325,86 @@ export function ConfigScreen() {
         scrollEventThrottle={16}
         onContentSizeChange={(_, h) => setContentHeight(h)}
       >
-        <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
+        <AnclasCtx.Provider value={anclasCtx}>
+        <View
+          onLayout={e => { contenedorY.current = e.nativeEvent.layout.y; }}
+          style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}
+        >
+
+          {/* Buscador de ajustes: arriba de las pestañas, así se ve desde cualquier panel */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 10, borderWidth: 1, borderColor: tema.borde, paddingHorizontal: 12, marginBottom: 12 }}>
+            <TextInput
+              value={busqueda}
+              onChangeText={setBusqueda}
+              placeholder="Buscar un ajuste…"
+              placeholderTextColor={tema.textoSecundario}
+              accessibilityLabel="Buscar un ajuste"
+              style={{ flex: 1, color: tema.texto, paddingVertical: 10, fontSize: 14 }}
+            />
+            {busqueda.length > 0 && (
+              <TouchableOpacity onPress={() => setBusqueda('')} accessibilityRole="button" accessibilityLabel="Borrar búsqueda" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {buscando && (
+            <View style={{ marginBottom: 16 }}>
+              {resultadosBusqueda.length === 0 ? (
+                <Text style={{ color: tema.textoSecundario, fontSize: 13, paddingVertical: 8 }}>No hay ajustes con ese nombre.</Text>
+              ) : (
+                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, borderWidth: 1, borderColor: tema.borde, overflow: 'hidden' }}>
+                  {resultadosBusqueda.map((a, i) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      onPress={() => irAAjuste(a.id, a.panel)}
+                      accessibilityRole="button"
+                      style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: tema.borde }}
+                    >
+                      <Text style={{ flex: 1, color: tema.texto, fontSize: 14 }}>
+                        {a.texto}<Text style={{ color: tema.textoSecundario }}> · {NOMBRE_PANEL[a.panel]}</Text>
+                      </Text>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 20, marginLeft: 8 }}>›</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
 
           <TabBar activa={tabActiva} onCambiar={setTabActiva} tema={tema} />
 
-          {tabActiva === 'app' && (
+          {!buscando && tabActiva === 'app' && (
           <>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
-          <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
-            {(['oscuro', 'claro', 'personalizado'] as const).map(t => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => actualizarConfig({ tema: t })}
-                style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: config.tema === t ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
-              >
-                <Text style={{ color: config.tema === t ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 12 }}>
-                  {t === 'claro' ? 'Claro' : t === 'oscuro' ? 'Oscuro' : 'Custom'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {config.tema === 'personalizado' && (
+          <Ancla id="apariencia">
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>APARIENCIA</Text>
+          </Ancla>
+          <Ancla id="tema">
+            <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+              {(['oscuro', 'claro', 'personalizado'] as const).map(t => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => actualizarConfig({ tema: t })}
+                  style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: config.tema === t ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
+                >
+                  <Text style={{ color: config.tema === t ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 12 }}>
+                    {t === 'claro' ? 'Claro' : t === 'oscuro' ? 'Oscuro' : 'Custom'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Ancla>
+          {/* Reemplaza al botón "Entrar a personalizar" (que solo se veía con Custom y llevaba a la misma pantalla) */}
+          <Ancla id="temas-prearmados">
             <TouchableOpacity
               onPress={() => navigation.navigate('TemaPersonalizado' as never)}
-              style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center',
-                marginBottom: 20, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: tema.borde }}
             >
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '700' }}>🎨  Entrar a personalizar →</Text>
+              <Text style={{ flex: 1, color: tema.texto, fontWeight: '600' }}>Más temas y personalización</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
-          )}
-          {config.tema !== 'personalizado' && <View style={{ marginBottom: 20 }} />}
+          </Ancla>
           {(() => {
             const chip = (activo: boolean, label: string, onPress: () => void) => (
               <TouchableOpacity
@@ -297,6 +438,7 @@ export function ConfigScreen() {
             const cajaEjemplo = { backgroundColor: tema.tarjeta, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 10 } as const;
             return (
               <>
+                <Ancla id="encabezado-semestre">
                 {titulo('ENCABEZADO DE SEMESTRE')}
                 {filaEstilo('Qué se ve a la derecha del nombre de cada semestre en Carrera.')}
                 <View style={cajaEjemplo}>
@@ -315,6 +457,8 @@ export function ConfigScreen() {
                   {chip(estiloEnc === 'iconos', 'Íconos', () => actualizarConfig({ encabezadoSemestreEstilo: 'iconos' }))}
                   {chip(estiloEnc === 'anillo', 'Anillo', () => actualizarConfig({ encabezadoSemestreEstilo: 'anillo' }))}
                 </View>
+                </Ancla>
+                <Ancla id="creditos-semestre">
                 {toggle('Mostrar créditos del semestre', 'encabezadoSemestreCreditos', 'Suma los créditos obtenidos de cada semestre.')}
                 {config.encabezadoSemestreCreditos && config.usarEstadoAprobado && (
                   <View style={{ marginBottom: 14 }}>
@@ -325,7 +469,9 @@ export function ConfigScreen() {
                     </View>
                   </View>
                 )}
+                </Ancla>
                 <View style={{ marginBottom: 6 }} />
+                <Ancla id="cifras-carrera">
                 {titulo('CIFRAS DE CARRERA')}
                 {filaEstilo(`Los números de arriba de Carrera: créditos, ${getLabel('exonerado').toLowerCase()} y disponibles.`)}
                 <View style={cajaEjemplo}>
@@ -344,30 +490,38 @@ export function ConfigScreen() {
                   {chip(cifras === 'anillo', 'Anillo', () => actualizarConfig({ carreraCifrasEstilo: 'anillo' }))}
                 </View>
                 <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 20 }}>{explicacion}</Text>
+                </Ancla>
               </>
             );
           })()}
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('TarjetaConfig')}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}
-          >
-            <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
-          </TouchableOpacity>
+          <Ancla id="tarjetas-materia">
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TARJETAS DE MATERIA</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('TarjetaConfig')}
+              style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}
+            >
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
+            </TouchableOpacity>
+          </Ancla>
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>MOTIVACIÓN</Text>
-          {toggle(
-            'Felicitaciones por semestre completo',
-            'mostrarFelicitaciones',
-            'Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre',
-            '🎉 "¡2° semestre completo!"',
-          )}
-          {toggle(
-            'Felicitaciones por año completo',
-            'mostrarFelicitacionesAnio',
-            'Mostrá un mensaje motivacional cuando exonerás todas las materias de un año académico',
-            '🎉 "¡Año 1° completo!"',
-          )}
+          <Ancla id="felicitaciones-semestre">
+            {toggle(
+              'Felicitaciones por semestre completo',
+              'mostrarFelicitaciones',
+              'Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre',
+              '🎉 "¡2° semestre completo!"',
+            )}
+          </Ancla>
+          <Ancla id="felicitaciones-anio">
+            {toggle(
+              'Felicitaciones por año completo',
+              'mostrarFelicitacionesAnio',
+              'Mostrá un mensaje motivacional cuando exonerás todas las materias de un año académico',
+              '🎉 "¡Año 1° completo!"',
+            )}
+          </Ancla>
           {/* ── ESTADOS DE MATERIA ──────────────────────── */}
+          <Ancla id="restaurar-estados">
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600' }}>ESTADOS DE MATERIA</Text>
             <TouchableOpacity
@@ -385,7 +539,9 @@ export function ConfigScreen() {
               <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Restaurar todos</Text>
             </TouchableOpacity>
           </View>
+          </Ancla>
 
+          <Ancla id="estados-materia">
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, marginBottom: 20, overflow: 'hidden' }}>
             {ORDEN_ESTADOS_CONFIG.map((estado, idx) => {
               const color = getColor(estado);
@@ -529,47 +685,84 @@ export function ConfigScreen() {
               );
             })}
           </View>
+          </Ancla>
+
+          {/* ── GENERAL ─────────────────────────────────── */}
+          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>GENERAL</Text>
+          <Ancla id="idioma">
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ color: tema.texto, fontSize: 14 }}>Idioma</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>Por ahora la app está solo en español.</Text>
+              </View>
+              <View style={{ width: 140 }}>
+                <SelectorDesplegable
+                  accesible="Idioma"
+                  valor={config.idioma ?? 'es'}
+                  onCambiar={k => actualizarConfig({ idioma: k })}
+                  opciones={[{ key: 'es', label: 'Español' }]}
+                />
+              </View>
+            </View>
+          </Ancla>
+          <Ancla id="novedades-al-actualizar">
+            {toggle('Mostrar novedades al actualizar', 'mostrarNovedadesAlActualizar', 'Al abrir una versión nueva, muestra qué cambió.')}
+          </Ancla>
           </>
           )}
 
-          {tabActiva === 'notas' && (
+          {!buscando && tabActiva === 'notas' && (
           <>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
-          {campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}
-          {campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}
+          <Ancla id="sistema-de-notas">
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
+          </Ancla>
+          <Ancla id="nota-maxima">{campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}</Ancla>
+          <Ancla id="oportunidades-examen">{campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}</Ancla>
 
-          <TouchableOpacity
-            onPress={() => setMostrarPeriodo(true)}
-            style={{ backgroundColor: tema.tarjeta, padding: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: tema.borde, marginBottom: 6 }}
-          >
-            <Text style={{ color: tema.texto, fontWeight: '600' }}>📅  Configurar períodos de examen</Text>
-          </TouchableOpacity>
-          <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginBottom: 14 }}>
-            Modo actual: {config.modoExamen === 'manual' ? 'Manual' : 'Automático'}
-          </Text>
+          <Ancla id="periodos-examen">
+            <TouchableOpacity
+              onPress={() => setMostrarPeriodo(true)}
+              style={{ backgroundColor: tema.tarjeta, padding: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: tema.borde, marginBottom: 6 }}
+            >
+              <Text style={{ color: tema.texto, fontWeight: '600' }}>📅  Configurar períodos de examen</Text>
+            </TouchableOpacity>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, textAlign: 'center', marginBottom: 14 }}>
+              Modo actual: {config.modoExamen === 'manual' ? 'Manual' : 'Automático'}
+            </Text>
+          </Ancla>
 
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
-          {/* Punto 3: barra y tabla de umbrales (% ↔ nota) */}
-          <TablaUmbrales />
-          {campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}
+          <Ancla id="umbrales-estado">
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
+            {/* Punto 3: barra y tabla de umbrales (% ↔ nota) */}
+            <TablaUmbrales />
+          </Ancla>
+          <Ancla id="nota-minima-examen">{campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}</Ancla>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
-          {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
-          {config.usarEstadoAprobado && toggle(
-            `"${getLabel('aprobado')}" habilita previas`,
-            'aprobadoHabilitaPrevias',
-            'Si está desactivado, solo exonerado desbloquea materias siguientes',
-            ejemploAprobadoHabilita(config.aprobadoHabilitaPrevias, materias, getLabel('aprobado'), getLabel('exonerado')).texto,
-          )}
+          <Ancla id="estado-aprobado">
+            {toggle(`Usar estado "${getLabel('aprobado')}"`, 'usarEstadoAprobado', 'Algunas carreras van directo a exonerado o recursar')}
+          </Ancla>
+          {/* Siempre montada (alto 0 si el ajuste está oculto) para que el buscador pueda llevar hasta acá */}
+          <Ancla id="aprobado-habilita-previas">
+            {config.usarEstadoAprobado && toggle(
+              `"${getLabel('aprobado')}" habilita previas`,
+              'aprobadoHabilitaPrevias',
+              'Si está desactivado, solo exonerado desbloquea materias siguientes',
+              ejemploAprobadoHabilita(config.aprobadoHabilitaPrevias, materias, getLabel('aprobado'), getLabel('exonerado')).texto,
+            )}
+          </Ancla>
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>EVALUACIONES</Text>
-          {toggle(
-            'Barra de progreso de notas',
-            'barraProgresoEvaluaciones',
-            'Muestra en Editar materia una barra con tu avance sobre los umbrales de aprobación y exoneración',
-          )}
+          <Ancla id="barra-progreso-notas">
+            {toggle(
+              'Barra de progreso de notas',
+              'barraProgresoEvaluaciones',
+              'Muestra en Editar materia una barra con tu avance sobre los umbrales de aprobación y exoneración',
+            )}
+          </Ancla>
 
+          <Ancla id="tipos-formacion">
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>TIPOS DE FORMACIÓN</Text>
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
             {config.tiposFormacion.length === 0 && (
@@ -620,7 +813,7 @@ export function ConfigScreen() {
                       </Text>
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity onPress={() => {
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={estaEditando ? 'Cancelar edición' : `Borrar tipo ${tipo}`} onPress={() => {
                     if (estaEditando) { setEditandoTipo(null); return; }
                     const usadas = materias.filter(m => m.tipoFormacion === tipo).length;
                     const eliminar = () => {
@@ -677,11 +870,13 @@ export function ConfigScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </Ancla>
           </>
           )}
 
-          {tabActiva === 'horario' && (
+          {!buscando && tabActiva === 'horario' && (
           <>
+          <Ancla id="tipos-bloque-horario">
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 6 }}>TIPOS DE BLOQUE DE HORARIO</Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 10 }}>
             Editá el nombre completo y la abreviatura (máx. 3 caracteres) de cada tipo.
@@ -723,16 +918,30 @@ export function ConfigScreen() {
               </View>
             ))}
           </View>
-          {toggle(
-            'Mostrar nombre completo en el horario',
-            'mostrarNombreCompletoEnBloque',
-            'Si está activo, muestra "Teórica" en vez de "T" en los bloques',
-          )}
-          {toggle(
-            'Línea de hora actual',
-            'horarioMostrarLineaHoraActual',
-            'Muestra una línea horizontal en el día de hoy marcando la hora actual del dispositivo',
-          )}
+          </Ancla>
+          <Ancla id="nombre-completo-horario">
+            {toggle(
+              'Mostrar nombre completo en el horario',
+              'mostrarNombreCompletoEnBloque',
+              'Si está activo, muestra "Teórica" en vez de "T" en los bloques',
+            )}
+          </Ancla>
+          <Ancla id="linea-hora-actual">
+            {toggle(
+              'Línea de hora actual',
+              'horarioMostrarLineaHoraActual',
+              'Muestra una línea horizontal en el día de hoy marcando la hora actual del dispositivo',
+            )}
+          </Ancla>
+          <Ancla id="cuenta-regresiva-evaluaciones">
+            {toggle(
+              'Cuenta regresiva en evaluaciones',
+              'horarioCuentaRegresiva',
+              'Muestra cuántos días faltan en cada evaluación del horario.',
+              'en 5 días',
+            )}
+          </Ancla>
+          <Ancla id="primer-dia-semana">
           <View style={{ marginBottom: 14 }}>
             <Text style={{ color: tema.texto, fontSize: 14, marginBottom: 6 }}>Primer día de la semana</Text>
             <View style={{ flexDirection: 'row', backgroundColor: tema.tarjeta, borderRadius: 8, overflow: 'hidden' }}>
@@ -755,12 +964,15 @@ export function ConfigScreen() {
               ))}
             </View>
           </View>
+          </Ancla>
 
           <View style={{ marginBottom: 14 }} />
 
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>
-            CONFIGURACIÓN DE COLORES EN HORARIO
-          </Text>
+          <Ancla id="colores-horario">
+            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>
+              CONFIGURACIÓN DE COLORES EN HORARIO
+            </Text>
+          </Ancla>
 
           {materiasConHorario.length === 0 ? (
             <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
@@ -1013,8 +1225,9 @@ export function ConfigScreen() {
           </>
           )}
 
-          {tabActiva === 'datos' && (
+          {!buscando && tabActiva === 'datos' && (
           <>
+            <Ancla id="copia-de-seguridad">
             <TouchableOpacity
               onPress={() => navigation.navigate('ImportarExportar', { tab: 'exportar' })}
               accessibilityRole="button"
@@ -1027,6 +1240,8 @@ export function ConfigScreen() {
               </View>
               <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
+            </Ancla>
+            <Ancla id="cargar-datos">
             <TouchableOpacity
               onPress={() => navigation.navigate('ImportarExportar', { tab: 'importar' })}
               accessibilityRole="button"
@@ -1039,6 +1254,8 @@ export function ConfigScreen() {
               </View>
               <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
+            </Ancla>
+            <Ancla id="pasar-otro-dispositivo">
             <TouchableOpacity
               onPress={() => setMostrarSync(true)}
               accessibilityRole="button"
@@ -1051,6 +1268,8 @@ export function ConfigScreen() {
               </View>
               <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
+            </Ancla>
+            <Ancla id="armar-carrera-ia">
             <TouchableOpacity
               onPress={() => navigation.navigate('PromptsIA')}
               accessibilityRole="button"
@@ -1063,7 +1282,27 @@ export function ConfigScreen() {
               </View>
               <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
+            </Ancla>
+            <Ancla id="registro-logros">
+              <TouchableOpacity
+                onPress={() => setMostrarLogros(true)}
+                accessibilityRole="button"
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, borderRadius: 12, padding: 14, marginBottom: 10 }}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 17, marginRight: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: tema.acentoFondo ?? tema.acento }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{(config.logros ?? []).length}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Registro de logros</Text>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>
+                    {(config.logros ?? []).length === 0 ? 'Todavía no hay logros' : `${(config.logros ?? []).length} logro${(config.logros ?? []).length !== 1 ? 's' : ''}`}
+                  </Text>
+                </View>
+                <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
+              </TouchableOpacity>
+            </Ancla>
 
+          <Ancla id="borrar-todo">
           <Text style={{ color: '#FF5722', fontSize: 12, fontWeight: '700', marginTop: 24, marginBottom: 8 }}>ZONA DE PELIGRO</Text>
           <TouchableOpacity
             onPress={() => setMostrarBorrar(true)}
@@ -1075,19 +1314,51 @@ export function ConfigScreen() {
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 6, marginBottom: 20 }}>
             {`Borra las materias y la configuración del perfil "${nombrePerfilActivo}". Los otros perfiles no se tocan.`}
           </Text>
+          </Ancla>
           </>
           )}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 28, marginBottom: 8 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Cursus {APP_VERSION} · </Text>
-            <TouchableOpacity onPress={abrirNovedadesActuales} accessibilityRole="link" accessibilityLabel="Ver qué hay de nuevo en esta versión">
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '600' }}>Qué hay de nuevo</Text>
-            </TouchableOpacity>
-          </View>
+          <Ancla id="que-hay-de-nuevo">
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 28, marginBottom: 8 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Cursus {APP_VERSION} · </Text>
+              <TouchableOpacity onPress={abrirNovedadesActuales} accessibilityRole="link" accessibilityLabel="Ver qué hay de nuevo en esta versión">
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '600' }}>Qué hay de nuevo</Text>
+              </TouchableOpacity>
+            </View>
+          </Ancla>
 
         </View>
+        </AnclasCtx.Provider>
       </Animated.ScrollView>
 
+      <Modal visible={mostrarLogros} transparent animationType="fade" onRequestClose={() => setMostrarLogros(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: tema.superficie ?? tema.tarjeta, borderRadius: 16, padding: 22, width: '100%', maxWidth: 420, maxHeight: '85%' }}>
+            <Text style={{ color: tema.texto, fontSize: 18, fontWeight: '700', marginBottom: 12 }}>Registro de logros</Text>
+            {(config.logros ?? []).length === 0 ? (
+              <Text style={{ color: tema.textoSecundario, fontSize: 14, lineHeight: 20, marginBottom: 16 }}>
+                Todavía no hay logros. Aparecen acá cuando completás un semestre, un año o la carrera.
+              </Text>
+            ) : (
+              <ScrollView style={{ flexGrow: 0, marginBottom: 16 }}>
+                {logrosOrdenados(config.logros).map(l => (
+                  <View key={`${l.tipo}-${l.numero}`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+                    <Text style={{ color: tema.texto, fontSize: 14, flex: 1, marginRight: 8 }}>{textoLogro(l)}</Text>
+                    <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>{formatearFecha(l.fecha)}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              onPress={() => setMostrarLogros(false)}
+              accessibilityRole="button"
+              style={{ backgroundColor: tema.acentoFondo ?? tema.acento, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
       <SyncDispositivosModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
       <BorrarTodoModal

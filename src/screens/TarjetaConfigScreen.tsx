@@ -43,6 +43,9 @@ function ToggleFila({ label, valor, onChange, descripcion }: {
         {descripcion && <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>{descripcion}</Text>}
       </View>
       <TouchableOpacity
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: valor }}
         onPress={() => onChange(!valor)}
         style={{ width: 50, height: 28, borderRadius: 14,
           backgroundColor: valor ? tema.acento : tema.borde,

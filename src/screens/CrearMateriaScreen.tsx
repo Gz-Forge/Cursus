@@ -933,6 +933,8 @@ export function CrearMateriaScreen() {
               </View>
               <TouchableOpacity
                 style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel="Editar horario"
                 onPress={() => {
                   setBloqueNuevo({
                     fecha: b.fecha,
@@ -952,6 +954,8 @@ export function CrearMateriaScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel="Borrar horario"
                 onPress={() => setForm(f => ({ ...f, bloques: (f.bloques ?? []).filter(x => x.id !== b.id) }))}
               >
                 <Text style={{ color: '#F44336' }}>✕</Text>
@@ -1561,6 +1565,8 @@ export function CrearMateriaScreen() {
                     </View>
                     <TouchableOpacity
                       onPress={() => setForm(f => ({ ...f, faltas: (f.faltas ?? []).filter(x => x.id !== falta.id) }))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Borrar falta del ${fmtFechaBloque(falta.fecha)}`}
                     >
                       <Text style={{ color: '#F44336' }}>✕</Text>
                     </TouchableOpacity>

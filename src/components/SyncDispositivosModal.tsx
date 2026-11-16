@@ -316,7 +316,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
                 autoFocus
                 style={{ flex: 1, color: tema.texto, padding: 12, fontSize: 16 }}
               />
-              <TouchableOpacity onPress={() => setShowPass(v => !v)} style={{ paddingHorizontal: 12 }}>
+              <TouchableOpacity onPress={() => setShowPass(v => !v)} accessibilityRole="button" accessibilityLabel={showPass ? 'Ocultar clave' : 'Mostrar clave'} style={{ paddingHorizontal: 12 }}>
                 <Text style={{ fontSize: 18 }}>{showPass ? '🙈' : '👁'}</Text>
               </TouchableOpacity>
             </View>
@@ -475,7 +475,7 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
                 autoFocus
                 style={{ flex: 1, color: tema.texto, padding: 12, fontSize: 16 }}
               />
-              <TouchableOpacity onPress={() => setShowPass(v => !v)} style={{ paddingHorizontal: 12 }}>
+              <TouchableOpacity onPress={() => setShowPass(v => !v)} accessibilityRole="button" accessibilityLabel={showPass ? 'Ocultar clave' : 'Mostrar clave'} style={{ paddingHorizontal: 12 }}>
                 <Text style={{ fontSize: 18 }}>{showPass ? '🙈' : '👁'}</Text>
               </TouchableOpacity>
             </View>
@@ -602,6 +602,8 @@ export function SyncDispositivosModal({ visible, onCerrar }: Props) {
         <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
           activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar"
           onPress={onCerrar}
         >
           <TouchableOpacity
