@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
 import { Evaluacion, EvaluacionSimple, GrupoEvaluacion, SubEvaluacion, TipoNota } from '../types';
 import { useTema } from '../theme/ThemeContext';
+import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
 import {
   calcularPorcentajeEvaluacion,
@@ -45,11 +46,14 @@ function FechaHoraPicker({
   ocupadosDe,
   excluirId,
   diasMarcados,
+  ocultarCuenta,
 }: {
   fecha?: string;
   hora?: number;
   horaFin?: number;
-  onActualizar: (p: { fecha?: string; hora?: number; horaFin?: number }) => void;
+  onActualizar: (p: { fecha?: string; hora?: number; horaFin?: number; ocultarCuentaRegresiva?: boolean }) => void;
+  /** Punto 27: la evaluación oculta su cuenta regresiva en el horario. */
+  ocultarCuenta?: boolean;
   sugeridos?: HorarioSugerido[];
   /** Horarios ocupados en una fecha (otros bloques y evaluaciones), sin esta evaluación. */
   ocupadosDe?: (fecha: string, excluirId?: string) => { inicio: number; fin: number }[];
@@ -57,6 +61,7 @@ function FechaHoraPicker({
   diasMarcados?: string[];
 }) {
   const tema = useTema();
+  const horarioCuentaRegresiva = useStore(st => st.config.horarioCuentaRegresiva) ?? true;
   const [expandido, setExpandido] = useState(false);
   const tieneFecha = esIsoValida(fecha);
 
@@ -121,6 +126,18 @@ function FechaHoraPicker({
               <Text style={{ color: '#F44336', fontSize: 12 }}>Quitar del horario</Text>
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {/* Punto 27: cuenta regresiva en el bloque del horario (solo si hay fecha y está activa en Ajustes) */}
+      {tieneFecha && horarioCuentaRegresiva && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 8 }}>Mostrar cuenta regresiva</Text>
+          <Switch
+            value={!ocultarCuenta}
+            onValueChange={v => onActualizar({ ocultarCuentaRegresiva: v ? undefined : true })}
+            trackColor={{ true: tema.acentoFondo ?? tema.acento }}
+          />
         </View>
       )}
     </View>
@@ -386,6 +403,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           sugeridos={horariosSugeridos}
           ocupadosDe={ocupadosDe}
           excluirId={evaluacion.id}
+          ocultarCuenta={evaluacion.ocultarCuentaRegresiva}
           diasMarcados={diasConClase}
         />
         <View style={{ marginTop: 6 }}>
@@ -538,6 +556,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
               sugeridos={horariosSugeridos}
               ocupadosDe={ocupadosDe}
               excluirId={sub.id}
+              ocultarCuenta={sub.ocultarCuentaRegresiva}
               diasMarcados={diasConClase}
             />
             <View style={{ marginTop: 6 }}>

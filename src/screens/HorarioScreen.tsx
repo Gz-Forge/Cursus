@@ -21,6 +21,7 @@ import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_B
 import { SelectorHorario } from '../components/SelectorHorario';
 import { SelectorFecha } from '../components/SelectorFecha';
 import { semanasEntre } from '../utils/calendario';
+import { mostrarCuentaRegresiva, textoCuentaRegresiva } from '../utils/cuentaRegresiva';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import {
   LongPressGestureHandler,
@@ -86,30 +87,48 @@ function fmtFechaCorta(iso: string): string {
  * Punto 91: texto del bloque. Con dos líneas o más: la materia en negrita y
  * debajo el detalle, más tenue. Con una sola línea: "Materia · detalle".
  */
-function TextoBloqueVista({ texto, color, lineas, fuente }: {
+function TextoBloqueVista({ texto, color, lineas, fuente, cuenta }: {
   texto: { titulo: string; detalle: string; unaLinea: string };
   color: string;
   lineas: number;
   /** Tamaño de letra del bloque (configurable en Ajustes). */
   fuente: number;
+  /** Punto 27: cuenta regresiva de una evaluación; solo se muestra si sobra lugar (nunca le quita lugar al nombre). */
+  cuenta?: string | null;
 }) {
   const altoLinea = fuente + 4;
-  if (lineas < 2 || !texto.detalle) {
+  // Se prioriza el nombre: la cuenta necesita al menos 3 líneas (con detalle) o 2 (sin detalle).
+  const hayDetalle = !!texto.detalle;
+  const mostrarCuenta = !!cuenta && (hayDetalle ? lineas >= 3 : lineas >= 2);
+  const lineasNombre = Math.max(1, lineas - (mostrarCuenta ? 1 : 0));
+  const lineaCuenta = mostrarCuenta ? (
+    <Text
+      style={{ color, fontSize: fuente - 1, lineHeight: altoLinea, opacity: 0.85 }}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+    >
+      {cuenta}
+    </Text>
+  ) : null;
+  if (lineas < 2 || !hayDetalle) {
     return (
-      <Text
-        style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
-        numberOfLines={Math.max(1, lineas)}
-        ellipsizeMode="tail"
-      >
-        {lineas < 2 ? texto.unaLinea : texto.titulo}
-      </Text>
+      <>
+        <Text
+          style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
+          numberOfLines={lineasNombre}
+          ellipsizeMode="tail"
+        >
+          {lineas < 2 ? texto.unaLinea : texto.titulo}
+        </Text>
+        {lineaCuenta}
+      </>
     );
   }
   return (
     <>
       <Text
         style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
-        numberOfLines={Math.max(1, lineas - 1)}
+        numberOfLines={Math.max(1, lineasNombre - 1)}
         ellipsizeMode="tail"
       >
         {texto.titulo}
@@ -121,6 +140,7 @@ function TextoBloqueVista({ texto, color, lineas, fuente }: {
       >
         {texto.detalle}
       </Text>
+      {lineaCuenta}
     </>
   );
 }
@@ -1746,6 +1766,10 @@ export function HorarioScreen() {
                           : ev.nombre;
                         const textoEval = textoBloque(ev.materia.nombre, [nombreEval, effectiveSalonEval]);
                         const labelBloque = textoEval.unaLinea;
+                        // Punto 27: cuenta regresiva ("hoy", "mañana", "en N días"); null si ya pasó o está oculta
+                        const cuentaEval = mostrarCuentaRegresiva(config, ev.ocultarCuentaRegresiva)
+                          ? textoCuentaRegresiva(ev.fecha!)
+                          : null;
 
                         // Persistencia al soltar una evaluación arrastrada
                         const persistirEval = (nuevoFecha: string, nuevaHora: number, nuevaHoraFin: number | undefined) => {
@@ -1827,7 +1851,7 @@ export function HorarioScreen() {
                                   </View>
                                   <View style={{ flex: 1, padding: 2 }}>
                                     <TextoBloqueVista
-                                      texto={textoEval}
+                                      texto={textoEval} cuenta={cuentaEval}
                                       color={textoColor}
                                       lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                       fuente={BLOCK_FONT}
@@ -1844,7 +1868,7 @@ export function HorarioScreen() {
                                   style={{ flex: 1, padding: 2 }}
                                 >
                                   <TextoBloqueVista
-                                    texto={textoEval}
+                                    texto={textoEval} cuenta={cuentaEval}
                                     color={textoColor}
                                     lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                     fuente={BLOCK_FONT}
@@ -1980,7 +2004,7 @@ export function HorarioScreen() {
                                   >
                                     <View style={{ flex: 1, padding: 2 }}>
                                       <TextoBloqueVista
-                                        texto={textoEval}
+                                        texto={textoEval} cuenta={cuentaEval}
                                         color={textoColor}
                                         lineas={Math.max(1, Math.floor((height - 36) / BLOCK_LINE_H))}
                                         fuente={BLOCK_FONT}
@@ -2030,7 +2054,7 @@ export function HorarioScreen() {
                                 >
                                   <View style={{ flex: 1, padding: 2 }}>
                                     <TextoBloqueVista
-                                      texto={textoEval}
+                                      texto={textoEval} cuenta={cuentaEval}
                                       color={textoColor}
                                       lineas={Math.max(1, Math.floor((height - 4) / BLOCK_LINE_H))}
                                       fuente={BLOCK_FONT}
