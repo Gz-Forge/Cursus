@@ -35,16 +35,12 @@ export const INDICE_AJUSTES: AjusteIndexado[] = [
   { id: 'linea-hora-actual', texto: 'Línea de hora actual', panel: 'horario', claves: ['ahora', 'reloj', 'hora'] },
   { id: 'primer-dia-semana', texto: 'Primer día de la semana', panel: 'horario', claves: ['lunes', 'domingo', 'calendario'] },
   { id: 'cuenta-regresiva-evaluaciones', texto: 'Cuenta regresiva en evaluaciones', panel: 'horario', claves: ['dias que faltan', 'hoy', 'mañana', 'examen', 'fecha'] },
-  { id: 'colores-horario', texto: 'Colores en horario', panel: 'horario', claves: ['color', 'bloques', 'materias', 'fondo', 'texto'] },
-  { id: 'colores-grupos-evaluacion', texto: 'Colores de grupos de evaluación', panel: 'horario', claves: ['color', 'evaluaciones', 'grupos'] },
-  { id: 'colores-evaluaciones-individuales', texto: 'Colores de evaluaciones individuales', panel: 'horario', claves: ['color', 'evaluaciones', 'aplicar a todas'] },
-  { id: 'resetear-colores-materia', texto: 'Resetear colores de una materia', panel: 'horario', claves: ['restaurar', 'color', 'horario'] },
+  { id: 'colores-horario', texto: 'Colores en horario', panel: 'horario', claves: ['color', 'bloques', 'materias', 'fondo', 'texto', 'grupos de evaluacion', 'evaluaciones individuales', 'aplicar a todas', 'resetear', 'restaurar'] },
 
   // ── App ──────────────────────────────────────────────────────────────────
   { id: 'apariencia', texto: 'Apariencia', panel: 'app', claves: ['claro', 'oscuro', 'modo', 'aspecto'] },
   { id: 'tema', texto: 'Tema', panel: 'app', claves: ['claro', 'oscuro', 'personalizado', 'custom', 'colores'] },
-  { id: 'temas-prearmados', texto: 'Temas prearmados', panel: 'app', claves: ['tema', 'paleta', 'estilo', 'predefinidos'] },
-  { id: 'tema-personalizado', texto: 'Personalizar tema', panel: 'app', claves: ['custom', 'colores', 'fondo', 'imagen', 'acento'] },
+  { id: 'temas-prearmados', texto: 'Temas prearmados', panel: 'app', claves: ['tema', 'paleta', 'estilo', 'predefinidos', 'personalizar', 'custom', 'colores', 'fondo', 'imagen', 'acento'] },
   { id: 'encabezado-semestre', texto: 'Encabezado de semestre', panel: 'app', claves: ['carrera', 'barra', 'anillo', 'iconos', 'resumen'] },
   { id: 'creditos-semestre', texto: 'Mostrar créditos del semestre', panel: 'app', claves: ['encabezado', 'obtenidos', 'carrera'] },
   { id: 'cifras-carrera', texto: 'Cifras de Carrera', panel: 'app', claves: ['numeros', 'creditos', 'meta', 'anillo', 'estilo'] },

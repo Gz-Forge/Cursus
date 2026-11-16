@@ -5,7 +5,7 @@ import { useTema } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import {
   APP_VERSION, NOVEDADES, NovedadesVersion,
-  leerUltimaVersionVista, marcarVersionVista, novedadesPendientes,
+  leerUltimaVersionVista, marcarVersionVista, novedadesAMostrar,
 } from '../utils/novedades';
 
 interface NovedadesState {
@@ -41,7 +41,8 @@ export function NovedadesModal() {
       const ultima = await leerUltimaVersionVista();
       if (cancelado || ultima === APP_VERSION) return;
       const { materias, perfiles } = useStore.getState();
-      const pendientes = novedadesPendientes(ultima, materias.length > 0 || perfiles.length > 1);
+      const mostrarAlActualizar = useStore.getState().config.mostrarNovedadesAlActualizar !== false;
+      const pendientes = novedadesAMostrar(ultima, materias.length > 0 || perfiles.length > 1, mostrarAlActualizar);
       if (pendientes.length > 0) useNovedades.getState().abrir(pendientes);
       else await marcarVersionVista();
     })();
