@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Platform,
   ActivityIndicator, Modal,
@@ -17,7 +17,7 @@ import { encodeCarrera, splitEnChunks } from '../utils/qrPayload';
 import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config } from '../types';
-import { detectarDuplicados, extraerTiposNuevos, aplicarConfigJson, mergeImportar, materiasAJson } from '../utils/importExport';
+import { detectarDuplicados, extraerTiposNuevos, aplicarConfigJson, mergeImportar, materiasAJson, previsualizarImportacion } from '../utils/importExport';
 import { leerExportacionCompleta, esExportacionCompleta, combinarConfig, resumenConfig, type PerfilImportable } from '../utils/importCompleto';
 import { sanitizarConfigImportada } from '../utils/configImport';
 import { DuplicadosModal } from '../components/DuplicadosModal';
@@ -111,6 +111,29 @@ function PanelImportar() {
   const [mostrarDuplicadosImport, setMostrarDuplicadosImport] = useState(false);
   // 'merge' = came from doImport path; otherwise = perfilId (string) from ejecutarImportPerfil
   const [pendingImportTarget, setPendingImportTarget] = useState<'merge' | string | null>(null);
+  // Vista previa de la importación de materias: modo elegido y fila desplegada.
+  const [modoElegido, setModoElegido] = useState<ModoImport>('solo_nuevas');
+  const [filaAbierta, setFilaAbierta] = useState<'nuevas' | 'cambian' | 'borran' | null>(null);
+  useEffect(() => {
+    setModoElegido('solo_nuevas');
+    setFilaAbierta(null);
+  }, [pendingImport]);
+  const previa = useMemo(() => {
+    if (!pendingImport) return null;
+    try {
+      return {
+        datos: previsualizarImportacion(
+          materias,
+          pendingImport.json,
+          modoElegido,
+          pendingImport.configUpdate?.oportunidadesExamenDefault ?? config.oportunidadesExamenDefault,
+        ),
+        error: null as string | null,
+      };
+    } catch (e) {
+      return { datos: null, error: e instanceof Error ? e.message : String(e) };
+    }
+  }, [pendingImport, materias, modoElegido, config.oportunidadesExamenDefault]);
 
   const handleImportarJson = async () => {
     setCargando(true);
@@ -400,54 +423,109 @@ function PanelImportar() {
       </View>
 
       {pendingImport && (() => {
-        const nuevoCount = pendingImport.json.filter(
-          d => !materias.some(m => m.nombre.trim().toLowerCase() === d.nombre.trim().toLowerCase()),
-        ).length;
-        const existenteCount = pendingImport.json.length - nuevoCount;
-        const optStyle = {
-          backgroundColor: tema.fondo,
-          borderRadius: 10, padding: 14, marginBottom: 8,
-          borderWidth: 1, borderColor: tema.borde,
-        };
+        const cantConfig = Object.keys(pendingImport.configUpdate ?? {}).length;
+        const modos: { id: ModoImport; label: string; desc: string }[] = [
+          { id: 'solo_nuevas', label: 'Solo nuevas', desc: 'Agrega las materias nuevas, las existentes no se modifican' },
+          { id: 'actualizar', label: 'Actualizar estructura', desc: 'Actualiza semestre / créditos / previas. Preserva notas, evaluaciones y horarios' },
+          { id: 'reemplazar', label: 'Reemplazar todo', desc: 'Borra las materias actuales y carga solo las del archivo' },
+        ];
+        const modoInfo = modos.find(m => m.id === modoElegido)!;
+        const esReemplazo = modoElegido === 'reemplazar';
+        const colorAcento = tema.acentoTexto ?? tema.acento;
+        const d = previa?.datos ?? null;
+        const filas: { id: 'nuevas' | 'cambian' | 'borran'; label: string; color: string; nombres: string[] }[] = d ? [
+          { id: 'nuevas', label: `＋ ${d.nuevas.length} nuevas`, color: '#4CAF50', nombres: d.nuevas },
+          { id: 'cambian', label: `✎ ${d.cambian.length} ${esReemplazo ? 'se reemplazan' : 'cambian'}`, color: colorAcento, nombres: d.cambian },
+          { id: 'borran', label: `✕ ${d.borran.length} se borran`, color: '#FF5722', nombres: d.borran },
+        ] : [];
         return (
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 12, padding: 14, marginTop: 12 }}>
-            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 2 }}>
+            <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 10 }}>
               {pendingImport.json.length} materias encontradas
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: Object.keys(pendingImport.configUpdate ?? {}).length > 0 ? 6 : 14 }}>
-              {nuevoCount} nuevas · {existenteCount} ya existentes
-            </Text>
-            {Object.keys(pendingImport.configUpdate ?? {}).length > 0 && (
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, marginBottom: 14 }}>
-                ⚙️ También se aplicarán {Object.keys(pendingImport.configUpdate ?? {}).length} campo(s) de configuración al elegir una opción
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {modos.map(m => {
+                const sel = m.id === modoElegido;
+                const col = m.id === 'reemplazar' ? '#FF5722' : colorAcento;
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => setModoElegido(m.id)}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1,
+                      borderColor: sel ? col : tema.borde,
+                      backgroundColor: sel ? col + '22' : tema.fondo,
+                    }}
+                  >
+                    <Text style={{ color: sel ? col : tema.textoSecundario, fontWeight: sel ? '700' : '500', fontSize: 13 }}>
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 12 }}>{modoInfo.desc}</Text>
+
+            {previa?.error && (
+              <Text style={{ color: '#FF5722', fontSize: 13, marginBottom: 12 }}>{previa.error}</Text>
+            )}
+
+            {d && (
+              <View style={{ marginBottom: 12 }}>
+                {filas.map(f => {
+                  const n = f.nombres.length;
+                  const abierta = filaAbierta === f.id && n > 0;
+                  return (
+                    <View key={f.id} style={{ marginBottom: 6, opacity: n === 0 ? 0.4 : 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ color: f.color, fontWeight: '600', fontSize: 14 }}>{f.label}</Text>
+                        {n > 0 && (
+                          <TouchableOpacity onPress={() => setFilaAbierta(abierta ? null : f.id)}>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                              {abierta ? 'ocultar ▴' : 'ver ▾'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {abierta && (
+                        <View style={{ marginTop: 4, paddingLeft: 10 }}>
+                          {f.nombres.slice(0, 30).map((nombre, i) => (
+                            <Text key={i} style={{ color: tema.texto, fontSize: 12, marginBottom: 2 }}>• {nombre}</Text>
+                          ))}
+                          {n > 30 && (
+                            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>y {n - 30} más…</Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+                {d.sinCambios > 0 && (
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>{d.sinCambios} quedan igual</Text>
+                )}
+              </View>
+            )}
+
+            {cantConfig > 0 && (
+              <Text style={{ color: colorAcento, fontSize: 13, marginBottom: 12 }}>
+                ⚙️ También se aplicarán {cantConfig} campo(s) de configuración al importar
               </Text>
             )}
 
-            <TouchableOpacity onPress={() => doImport('solo_nuevas')} style={optStyle}>
-              <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>Solo nuevas</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-                Agrega las {nuevoCount} materias nuevas, las existentes no se modifican
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => doImport('actualizar')} style={optStyle}>
-              <Text style={{ color: tema.texto, fontWeight: '600', marginBottom: 2 }}>Actualizar estructura</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-                Actualiza semestre / créditos / previas. Preserva notas, evaluaciones y horarios
-              </Text>
-            </TouchableOpacity>
-
             <TouchableOpacity
-              onPress={() => doImport('reemplazar')}
-              style={[optStyle, { borderColor: '#FF5722' }]}
+              disabled={!d}
+              onPress={() => doImport(modoElegido)}
+              style={{
+                backgroundColor: esReemplazo ? '#FF5722' : (tema.acentoFondo ?? tema.acento),
+                padding: 14, borderRadius: 10, alignItems: 'center',
+                opacity: d ? 1 : 0.5,
+              }}
             >
-              <Text style={{ color: '#FF5722', fontWeight: '600', marginBottom: 2 }}>Reemplazar todo</Text>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-                Borra las materias actuales y carga solo las del archivo
-              </Text>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{esReemplazo ? 'Reemplazar todo' : 'Importar'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setPendingImport(null)} style={{ alignItems: 'center', marginTop: 6 }}>
+            <TouchableOpacity onPress={() => setPendingImport(null)} style={{ alignItems: 'center', marginTop: 10 }}>
               <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Cancelar</Text>
             </TouchableOpacity>
           </View>

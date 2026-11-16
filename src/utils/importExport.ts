@@ -571,6 +571,62 @@ export function mergeImportar(
   return deriveRelaciones(resultado);
 }
 
+export interface PreviaImportacion {
+  /** Materias que se crean. */
+  nuevas: string[];
+  /** Materias existentes que se modifican (en 'reemplazar': las que están en ambos lados). */
+  cambian: string[];
+  /** Materias actuales que desaparecen. */
+  borran: string[];
+  /** Existentes que quedan igual. */
+  sinCambios: number;
+}
+
+/** Calcula qué haría `mergeImportar` sin aplicar nada. Propaga los errores de validación. */
+export function previsualizarImportacion(
+  actuales: Materia[],
+  nuevas: MateriaJson[],
+  modo: ModoImport,
+  oportunidades: number,
+): PreviaImportacion {
+  const key = (s: string) => s.trim().toLowerCase();
+  const resultado = mergeImportar(actuales, nuevas, modo, oportunidades);
+
+  const actualesPorNombre = new Map<string, Materia>(actuales.map(m => [key(m.nombre), m]));
+  const resultadoPorNombre = new Map<string, Materia>(resultado.map(m => [key(m.nombre), m]));
+
+  const nombresPrevias = (m: Materia, lista: Materia[]): string => {
+    const porNumero = new Map<number, string>(lista.map(x => [x.numero, key(x.nombre)]));
+    return m.previasNecesarias
+      .map(n => porNumero.get(n))
+      .filter((n): n is string => n !== undefined)
+      .sort()
+      .join('|');
+  };
+
+  const cambio = (a: Materia, r: Materia): boolean =>
+    a.semestre !== r.semestre ||
+    a.creditosQueDA !== r.creditosQueDA ||
+    a.creditosNecesarios !== r.creditosNecesarios ||
+    (a.tipoFormacion ?? '') !== (r.tipoFormacion ?? '') ||
+    nombresPrevias(a, actuales) !== nombresPrevias(r, resultado);
+
+  const out: PreviaImportacion = { nuevas: [], cambian: [], borran: [], sinCambios: 0 };
+  resultadoPorNombre.forEach((r, k) => {
+    const a = actualesPorNombre.get(k);
+    if (!a) out.nuevas.push(r.nombre);
+    else if (modo === 'reemplazar' || cambio(a, r)) out.cambian.push(r.nombre);
+    else out.sinCambios++;
+  });
+  actualesPorNombre.forEach((a, k) => {
+    if (!resultadoPorNombre.has(k)) out.borran.push(a.nombre);
+  });
+
+  const ordenar = (xs: string[]) => xs.sort((x, y) => x.localeCompare(y, 'es'));
+  ordenar(out.nuevas); ordenar(out.cambian); ordenar(out.borran);
+  return out;
+}
+
 export function materiasAJson(materias: Materia[]): MateriaJson[] {
   const numeroANombre = new Map<number, string>();
   materias.forEach(m => numeroANombre.set(m.numero, m.nombre));
