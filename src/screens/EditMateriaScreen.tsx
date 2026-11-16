@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { ZonaArchivo } from '../components/ZonaArchivo';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -531,13 +532,17 @@ export function EditMateriaScreen() {
   });
 
   const importarDesdeCSV = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['text/csv', 'text/plain', '*/*']);
       if (!texto) return;
+      procesarCSV(texto);
+    } catch (e: any) {
+      showAlert('Error al abrir CSV', e.message);
+    }
+  };
+
+  const procesarCSV = (texto: string) => {
+    try {
       setTextoTabla(texto);
       setFilasParseadas(parsearCSV(texto));
       setModoImport('csv');
@@ -547,13 +552,17 @@ export function EditMateriaScreen() {
   };
 
   const importarDesdeJSON = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
+      procesarJSONHorario(texto);
+    } catch (e: any) {
+      showAlert('Error al importar JSON', e.message);
+    }
+  };
+
+  const procesarJSONHorario = (texto: string) => {
+    try {
       const bloques = parsearJSONMateria(texto);
       setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
@@ -562,13 +571,17 @@ export function EditMateriaScreen() {
   };
 
   const importarDesdeICS = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['text/calendar', '*/*']);
       if (!texto) return;
+      procesarICS(texto);
+    } catch (e: any) {
+      showAlert('Error al importar ICS', e.message);
+    }
+  };
+
+  const procesarICS = (texto: string) => {
+    try {
       const eventos = extraerEventosICS(texto);
       if (eventos.length === 0) {
         showAlert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
@@ -635,13 +648,17 @@ export function EditMateriaScreen() {
   };
 
   const importarEvaluaciones = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'Importá desde la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
+      procesarEvaluaciones(texto);
+    } catch (e: any) {
+      showAlert('Error al importar', e.message);
+    }
+  };
+
+  const procesarEvaluaciones = (texto: string) => {
+    try {
       const parsed = JSON.parse(texto);
       if (!Array.isArray(parsed)) {
         showAlert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
@@ -956,12 +973,16 @@ export function EditMateriaScreen() {
                 <Text style={{ color: tema.texto }}>↑ Exportar evaluaciones (.json)</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              onPress={importarEvaluaciones}
-              style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
-            >
-              <Text style={{ color: tema.texto }}>📥 Importar evaluaciones (.json)</Text>
-            </TouchableOpacity>
+            <View style={{ marginBottom: 6 }}>
+              <ZonaArchivo
+                compacta
+                extensiones={['.json']}
+                etiquetaBoton="📥 Importar evaluaciones (.json)"
+                estiloBoton="secundario"
+                onElegir={importarEvaluaciones}
+                onArchivo={t => procesarEvaluaciones(t)}
+              />
+            </View>
             {Platform.OS !== 'web' && (
               <TouchableOpacity
                 onPress={() => setMostrarEvalQr(true)}
@@ -1389,11 +1410,15 @@ export function EditMateriaScreen() {
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               {filasParseadas.length === 0 ? (
-                <TouchableOpacity
-                  onPress={importarDesdeCSV}
-                  style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo CSV</Text>
-                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <ZonaArchivo
+                    compacta
+                    extensiones={['.csv', '.txt']}
+                    etiquetaBoton="📂 Abrir archivo CSV"
+                    onElegir={importarDesdeCSV}
+                    onArchivo={t => procesarCSV(t)}
+                  />
+                </View>
               ) : (
                 <TouchableOpacity
                   onPress={() => {
@@ -1462,11 +1487,15 @@ export function EditMateriaScreen() {
                 style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={async () => { setMostrarAcordeonCSV(false); await importarDesdeJSON(); setModoImport(null); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo JSON</Text>
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <ZonaArchivo
+                  compacta
+                  extensiones={['.json']}
+                  etiquetaBoton="📂 Abrir archivo JSON"
+                  onElegir={async () => { setMostrarAcordeonCSV(false); await importarDesdeJSON(); setModoImport(null); }}
+                  onArchivo={async t => { setMostrarAcordeonCSV(false); procesarJSONHorario(t); setModoImport(null); }}
+                />
+              </View>
             </View>
           </View>
         )}
@@ -1487,11 +1516,15 @@ export function EditMateriaScreen() {
                     style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                     <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={importarDesdeICS}
-                    style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo ICS</Text>
-                  </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <ZonaArchivo
+                      compacta
+                      extensiones={['.ics']}
+                      etiquetaBoton="📂 Abrir archivo ICS"
+                      onElegir={importarDesdeICS}
+                      onArchivo={t => procesarICS(t)}
+                    />
+                  </View>
                 </View>
               </>
             ) : (

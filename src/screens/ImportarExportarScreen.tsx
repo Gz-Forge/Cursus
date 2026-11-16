@@ -21,6 +21,7 @@ import { detectarDuplicados, extraerTiposNuevos, aplicarConfigJson, mergeImporta
 import { leerExportacionCompleta, esExportacionCompleta, combinarConfig, resumenConfig, type PerfilImportable } from '../utils/importCompleto';
 import { sanitizarConfigImportada } from '../utils/configImport';
 import { DuplicadosModal } from '../components/DuplicadosModal';
+import { ZonaArchivo } from '../components/ZonaArchivo';
 import type { MateriaJson, ModoImport } from '../utils/importExport';
 import { calcularEstadoFinal } from '../utils/calculos';
 import LZString from 'lz-string';
@@ -147,7 +148,10 @@ function PanelImportar() {
     }
     setCargando(false);
     if (!contenido) return;
+    procesarContenido(contenido);
+  };
 
+  const procesarContenido = (contenido: string) => {
     let datos: unknown;
     try {
       datos = JSON.parse(contenido);
@@ -406,20 +410,13 @@ function PanelImportar() {
           💡 Encontrás los prompts en{' '}
           <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Ajustes → Prompts para IA</Text>
         </Text>
-        <TouchableOpacity
-          onPress={handleImportarJson}
-          disabled={cargando}
-          style={{
-            backgroundColor: tema.acentoFondo ?? tema.acento,
-            padding: 14, borderRadius: 10,
-            alignItems: 'center',
-          }}
-        >
-          {cargando
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={{ color: '#fff', fontWeight: '700' }}>📂 Seleccionar archivo .json</Text>
-          }
-        </TouchableOpacity>
+        <ZonaArchivo
+          extensiones={['.json']}
+          etiquetaBoton="📂 Elegir archivo .json"
+          cargando={cargando}
+          onElegir={handleImportarJson}
+          onArchivo={t => procesarContenido(t)}
+        />
       </View>
 
       {pendingImport && (() => {
