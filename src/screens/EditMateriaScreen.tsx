@@ -33,6 +33,7 @@ import { esIsoValida } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
 import { PreviasEditor } from '../components/PreviasEditor';
+import { MedidorAsistencia } from '../components/MedidorAsistencia';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 
@@ -204,6 +205,7 @@ export function EditMateriaScreen() {
 
   // ── Asistencia ──
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -1526,68 +1528,21 @@ export function EditMateriaScreen() {
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
 
-        {/* Límites por tipo */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
-          {(
-            [
-              { label: config.labelTeorica || 'Teórica', key: 'faltasMaxTeorica' as const },
-              { label: config.labelPractica || 'Práctica', key: 'faltasMaxPractica' as const },
-            ] as const
-          ).map(({ label, key }) => (
-            <View key={key} style={{ flex: 1 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
-                Máx. faltas {label}
-              </Text>
-              <TextInput
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8 }}
-                value={form[key] !== undefined ? String(form[key]) : ''}
-                onChangeText={v => {
-                  const n = parseInt(v, 10);
-                  setForm(f => ({ ...f, [key]: v === '' ? undefined : isNaN(n) ? f[key] : n }));
-                }}
-                onBlur={() => {
-                  const val = form[key];
-                  if (val !== undefined) {
-                    setForm(f => ({ ...f, [key]: Math.max(1, Math.min(99, val)) }));
-                  }
-                }}
-                keyboardType="number-pad"
-                placeholder="Sin límite"
-                placeholderTextColor={tema.textoSecundario}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Contadores con barra de progreso */}
+        {/* Punto 7: una tarjeta por tipo, con el máximo de faltas adentro */}
         {(
           [
-            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, max: form.faltasMaxTeorica },
-            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
+            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, key: 'faltasMaxTeorica' as const },
+            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, key: 'faltasMaxPractica' as const },
           ] as const
-        ).map(({ label, tipo, max }) => {
-          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length;
-          if (max === undefined && cantidad === 0) return null;
-          const pct = max ? Math.min(cantidad / max, 1) : 0;
-          const colorBarra = max === undefined
-            ? tema.acento
-            : pct >= 1 ? '#F44336' : pct >= 0.7 ? '#FF9800' : '#4CAF50';
-          return (
-            <View key={tipo} style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-                <Text style={{ color: colorBarra, fontSize: 13, fontWeight: '700' }}>
-                  {cantidad}{max !== undefined ? ` / ${max}` : ' falta(s)'}
-                </Text>
-              </View>
-              {max !== undefined && (
-                <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, overflow: 'hidden' }}>
-                  <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colorBarra, borderRadius: 3 }} />
-                </View>
-              )}
-            </View>
-          );
-        })}
+        ).map(({ label, tipo, key }) => (
+          <MedidorAsistencia
+            key={tipo}
+            label={label}
+            faltas={(form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length}
+            max={form[key]}
+            onCambiarMax={max => setForm(f => ({ ...f, [key]: max }))}
+          />
+        ))}
 
         {/* Formulario de nueva falta */}
         {mostrarFormFalta && (
@@ -1738,10 +1693,17 @@ export function EditMateriaScreen() {
         {/* Historial de faltas */}
         {(form.faltas ?? []).length > 0 && (
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
-              Historial — {(form.faltas ?? []).length} falta(s) registrada(s)
-            </Text>
-            {[...(form.faltas ?? [])]
+            <TouchableOpacity
+              onPress={() => setHistorialAbierto(v => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: historialAbierto }}
+              style={{ paddingVertical: 6, marginBottom: 4 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Historial · {(form.faltas ?? []).length} {(form.faltas ?? []).length === 1 ? 'falta' : 'faltas'} {historialAbierto ? '▴' : '▾'}
+              </Text>
+            </TouchableOpacity>
+            {historialAbierto && [...(form.faltas ?? [])]
               .sort((a, b) => b.fecha.localeCompare(a.fecha))
               .map(falta => {
                 const tipoLabel = falta.tipo === 'teorica'
