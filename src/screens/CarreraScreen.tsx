@@ -11,6 +11,8 @@ import { QrShareModal } from '../components/QrShareModal';
 import { QrScannerModal } from '../components/QrScannerModal';
 import { PerfilSheet } from '../components/PerfilSheet';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { AvisoRequisitosModal } from '../components/AvisoRequisitosModal';
+import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity, useColoresSemestres } from '../utils/useFondoPantalla';
@@ -307,35 +309,28 @@ export function CarreraScreen() {
 
   const irAEditar = (m: Materia) => navigation.navigate('EditMateria', { materiaId: m.id });
 
+  // Punto 17: aviso con las previas faltantes y opción de marcar igual
+  const [avisoRequisitos, setAvisoRequisitos] = useState<{ materia: Materia; faltantes: RequisitosFaltantes } | null>(null);
+  const marcarCursandoCard = (materia: Materia) =>
+    guardarMateria({ ...materia, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault });
+
   const handleToggleCursandoCard = (materia: Materia, v: boolean) => {
     if (!v) {
       guardarMateria({ ...materia, cursando: false });
       return;
     }
-    const creditos = creditosAcumulados(materias, config);
-    const aprobadas = new Set(
-      materias
-        .filter(m => {
-          const est = calcularEstadoFinal(m, config);
-          return est === 'exonerado' || (config.aprobadoHabilitaPrevias && est === 'aprobado');
-        })
-        .map(m => m.numero)
+    const r = requisitosFaltantes(
+      materia,
+      materias.filter(m => m.id !== materia.id),
+      m => calcularEstadoFinal(m, config),
+      creditosAcumulados(materias, config),
+      config.aprobadoHabilitaPrevias,
     );
-    const creditosOk = creditos >= materia.creditosNecesarios;
-    const previasOk = materia.previasNecesarias.every(p => aprobadas.has(p));
-    if (creditosOk && previasOk) {
-      guardarMateria({ ...materia, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault });
+    if (r.previas.length === 0 && r.creditosFaltan === 0) {
+      marcarCursandoCard(materia);
       return;
     }
-    const faltantes: string[] = [];
-    if (!creditosOk) faltantes.push(`• Créditos: tenés ${creditos}, necesitás ${materia.creditosNecesarios}`);
-    if (!previasOk) {
-      const previasFaltantes = materia.previasNecesarias
-        .filter(p => !aprobadas.has(p))
-        .map(p => { const mx = materias.find(x => x.numero === p); return `  - ${p}${mx ? ` · ${mx.nombre}` : ''}`; });
-      faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
-    }
-    showAlert('No cumple los requisitos', `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`);
+    setAvisoRequisitos({ materia, faltantes: r });
   };
 
   useEffect(() => {
@@ -930,6 +925,13 @@ export function CarreraScreen() {
         onIA={() => navigation.navigate('Tabs', { screen: 'Ajustes', params: { abrir: 'prompts' } })}
       />
 
+      <AvisoRequisitosModal
+        faltantes={avisoRequisitos?.faltantes ?? null}
+        labelCursando={getLabel('cursando')}
+        onCancelar={() => setAvisoRequisitos(null)}
+        onMarcarIgual={() => { if (avisoRequisitos) marcarCursandoCard(avisoRequisitos.materia); setAvisoRequisitos(null); }}
+        onVer={m => { setAvisoRequisitos(null); irAEditar(m); }}
+      />
       <ConfirmModal
         visible={!!confirmImportar}
         titulo="Importar carrera"

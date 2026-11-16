@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, 
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, StackActions } from '@react-navigation/native';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta } from '../types';
@@ -32,8 +32,17 @@ import { SelectorHorario } from '../components/SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
+import { PreviasEditor } from '../components/PreviasEditor';
+import { MedidorAsistencia } from '../components/MedidorAsistencia';
+import { AvisoRequisitosModal } from '../components/AvisoRequisitosModal';
+import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
+import { CampoSalon } from '../components/CampoSalon';
+import { SalidaIncompletaModal } from '../components/SalidaIncompletaModal';
+import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
+import { EdicionLoteModal } from '../components/EdicionLoteModal';
+import { aplicarLote } from '../utils/bloquesLote';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -82,13 +91,41 @@ function autoFormatFechaBloque(prev: string, next: string): string {
 }
 
 // ── Fila de bloque de horario (memoizada: evita re-renders masivos al tipear) ──
-const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, onEliminar }: {
+const BloqueRow = React.memo(function BloqueRow({ bloque, tipoLabel, onEditar, onEliminar, seleccion, onToggleSel }: {
   bloque: BloqueHorario;
   tipoLabel: string;
   onEditar: (b: BloqueHorario) => void;
   onEliminar: (id: string) => void;
+  /** Punto 73: undefined = fuera del modo selección */
+  seleccion?: boolean;
+  onToggleSel?: (id: string) => void;
 }) {
   const tema = useTema();
+  if (seleccion !== undefined) {
+    return (
+      <TouchableOpacity
+        onPress={() => onToggleSel?.(bloque.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: seleccion }}
+        accessibilityLabel={`${fmtFechaBloque(bloque.fecha)} ${fmtHora(bloque.horaInicio)}`}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4,
+          borderWidth: 1, borderColor: seleccion ? (tema.acentoLineas ?? tema.acento) : 'transparent' }}
+      >
+        <View style={{ width: 20, height: 20, borderRadius: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+          borderColor: tema.acentoLineas ?? tema.acento, backgroundColor: seleccion ? tema.acento : 'transparent' }}>
+          {seleccion && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: tema.texto, fontSize: 13 }}>
+            {fmtFechaBloque(bloque.fecha)}  {fmtHora(bloque.horaInicio)}–{fmtHora(bloque.horaFin)}
+          </Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
+            {tipoLabel}{bloque.salon ? ` · ${bloque.salon}` : ''}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
       <View style={{ flex: 1 }}>
@@ -170,7 +207,6 @@ export function EditMateriaScreen() {
     evaluaciones: [], oportunidadesExamen: config.oportunidadesExamenDefault,
     tipoFormacion: undefined, bloques: [],
   });
-  const [busquedaPrevia, setBusquedaPrevia] = useState('');
   const [semestreStr, setSemestreStr] = useState(String(materiaOriginal?.semestre ?? 1));
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
@@ -204,6 +240,20 @@ export function EditMateriaScreen() {
 
   // ── Asistencia ──
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
+  const [vistaPreviaImport, setVistaPreviaImport] = useState<BloqueHorario[] | null>(null);
+  // Punto 73: selección de bloques para cambiarlos en lote (null = fuera del modo selección)
+  const [seleccionLote, setSeleccionLote] = useState<Set<string> | null>(null);
+  const [modalLote, setModalLote] = useState(false);
+  const toggleSeleccion = useCallback((id: string) => {
+    setSeleccionLote(sel => {
+      if (!sel) return sel;
+      const n = new Set(sel);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -384,10 +434,7 @@ export function EditMateriaScreen() {
   const guardar = () => {
     const faltantes = validarObligatorios();
     if (faltantes.length > 0) {
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
+      irAFaltantes(faltantes);
       showAlert(
         'Campos obligatorios',
         `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
@@ -398,25 +445,35 @@ export function EditMateriaScreen() {
     navigation.goBack();
   };
 
+
+  // ── Punto 79: salir con campos obligatorios vacíos ──
+  const scrollRef = useRef<ScrollView>(null);
+  const posCampos = useRef<Record<string, number>>({});
+  const saliendo = useRef(false);
+  const [salidaIncompleta, setSalidaIncompleta] = useState<{ faltantes: string[]; accion: any } | null>(null);
+  /** Resalta todos los campos que faltan y baja hasta el primero. */
+  const irAFaltantes = (faltantes: string[]) => {
+    setCamposError({ nombre: faltantes.includes('Nombre'), semestre: faltantes.includes('Semestre') });
+    setTabActiva('general');
+    setTimeout(() => {
+      const y = posCampos.current[faltantes[0]];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }, 80);
+  };
+  // Si la materia ya estaba completa, el autoguardado conservó la última versión válida:
+  // descartar solo pierde los cambios. Si vino incompleta (o es nueva), descartar la elimina.
+  const originalCompleta = useRef(!!materiaOriginal && !!materiaOriginal.nombre.trim() && materiaOriginal.semestre >= 1).current;
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-      const faltantes: string[] = [];
-      if (!form.nombre.trim()) faltantes.push('Nombre');
-      const n = parseInt(semestreStr, 10);
-      if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
+      if (saliendo.current) return;
+      const faltantes = validarObligatorios();
       if (faltantes.length === 0) return;
-
       e.preventDefault();
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
-      showAlert(
-        'No podés salir',
-        `Completá los campos obligatorios antes de salir: ${faltantes.join(', ')}.`,
-      );
+      setSalidaIncompleta({ faltantes, accion: e.data.action });
     });
     return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, form.nombre, semestreStr]);
 
   const handleEliminar = () => setShowConfirmEliminar(true);
@@ -498,8 +555,7 @@ export function EditMateriaScreen() {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
-      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
       showAlert('Error al importar JSON', e.message);
     }
@@ -536,7 +592,7 @@ export function EditMateriaScreen() {
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+    setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     setModoImport(null);
     setEventosICS([]);
   };
@@ -654,50 +710,26 @@ export function EditMateriaScreen() {
     );
   };
 
+  const marcarCursando = () => setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+
+  // Punto 17: si no cumple los requisitos, se avisa qué falta y se puede marcar igual
   const handleToggleCursando = (v: boolean) => {
     if (!v) {
       setForm(f => ({ ...f, cursando: false }));
       return;
     }
-
-    const creditos = creditosAcumulados(materias, config);
-    const aprobadas = new Set(
-      materias
-        .filter(m => {
-          const estado = calcularEstadoFinal(m, config);
-          return estado === 'exonerado' ||
-            (config.aprobadoHabilitaPrevias && estado === 'aprobado');
-        })
-        .map(m => m.numero)
+    const r = requisitosFaltantes(
+      form,
+      materias.filter(m => m.id !== form.id),
+      m => calcularEstadoFinal(m, config),
+      creditosAcumulados(materias, config),
+      config.aprobadoHabilitaPrevias,
     );
-
-    const creditosOk = creditos >= form.creditosNecesarios;
-    const previasOk = form.previasNecesarias.every(p => aprobadas.has(p));
-
-    if (creditosOk && previasOk) {
-      setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+    if (r.previas.length === 0 && r.creditosFaltan === 0) {
+      marcarCursando();
       return;
     }
-
-    const faltantes: string[] = [];
-    if (!creditosOk) {
-      faltantes.push(`• Créditos: tenés ${creditos}, necesitás ${form.creditosNecesarios}`);
-    }
-    if (!previasOk) {
-      const previasFaltantes = form.previasNecesarias
-        .filter(p => !aprobadas.has(p))
-        .map(p => {
-          const m = materias.find(x => x.numero === p);
-          return `  - ${p}${m ? ` · ${m.nombre}` : ''}`;
-        });
-      faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
-    }
-
-    showAlert(
-      'No cumple los requisitos',
-      `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`,
-      'Entendido'
-    );
+    setAvisoRequisitos(r);
   };
 
   const confirmarFalta = () => {
@@ -752,7 +784,7 @@ export function EditMateriaScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.fondo }}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
         {/* ── Estado actual + Cursando (punto 61) ── */}
@@ -768,12 +800,14 @@ export function EditMateriaScreen() {
         {tabActiva === 'general' && (<>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
+        <View onLayout={e => { posCampos.current.Nombre = e.nativeEvent.layout.y; }}>
         {campo('Nombre', form.nombre, v => {
           setForm(f => ({ ...f, nombre: v }));
           if (v.trim()) setCamposError(e => ({ ...e, nombre: false }));
         }, false, 100, camposError.nombre)}
+        </View>
         {/* Punto 2: grilla de 2 columnas con − / + (tocar el número permite escribirlo) */}
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+        <View onLayout={e => { posCampos.current.Semestre = e.nativeEvent.layout.y; }} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
           <CampoNumerico
             label="Semestre"
             texto={semestreStr}
@@ -821,56 +855,14 @@ export function EditMateriaScreen() {
           onAgregarTipo={t => actualizarConfig({ tiposFormacion: [...useStore.getState().config.tiposFormacion, t] })}
         />
 
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>PREVIAS NECESARIAS</Text>
-        {form.previasNecesarias.map((num, i) => {
-          const m = materias.find(x => x.numero === num);
-          return (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
-              <Text style={{ color: tema.texto, flex: 1 }}>{num} · {m?.nombre ?? '?'}</Text>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, previasNecesarias: f.previasNecesarias.filter((_, j) => j !== i) }))}>
-                <Text style={{ color: '#F44336' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-        {/* Autocompletado de previas */}
-        <View style={{ marginBottom: 16 }}>
-          <TextInput
-            placeholder="Buscar por nombre o número..."
-            placeholderTextColor={tema.textoSecundario}
-            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 8 }}
-            value={busquedaPrevia}
-            onChangeText={setBusquedaPrevia}
-            keyboardType="default"
-          />
-          {busquedaPrevia.length > 0 && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, marginTop: 4, maxHeight: 160 }}>
-              {materias
-                .filter(m =>
-                  m.id !== form.id &&
-                  !form.previasNecesarias.includes(m.numero) &&
-                  (
-                    m.nombre.toLowerCase().includes(busquedaPrevia.toLowerCase()) ||
-                    String(m.numero).includes(busquedaPrevia)
-                  )
-                )
-                .slice(0, 5)
-                .map(m => (
-                  <TouchableOpacity
-                    key={m.id}
-                    onPress={() => {
-                      setForm(f => ({ ...f, previasNecesarias: [...f.previasNecesarias, m.numero] }));
-                      setBusquedaPrevia('');
-                    }}
-                    style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                  >
-                    <Text style={{ color: tema.texto }}>{m.numero} · {m.nombre}</Text>
-                  </TouchableOpacity>
-                ))
-              }
-            </View>
-          )}
-        </View>
+        {/* Punto 6: previas con chips de estado y buscador */}
+        <PreviasEditor
+          previas={form.previasNecesarias}
+          onCambiar={previas => setForm(f => ({ ...f, previasNecesarias: previas }))}
+          materias={materias}
+          config={config}
+          excluirId={form.id}
+        />
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>NOTA</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
@@ -998,6 +990,15 @@ export function EditMateriaScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 8 }}>
           <Text style={{ color: tema.acento, fontWeight: '600', flex: 1 }}>HORARIO</Text>
+          {(form.bloques ?? []).length > 1 && (
+            <TouchableOpacity
+              onPress={() => setSeleccionLote(sel => (sel ? null : new Set()))}
+              accessibilityRole="button"
+              style={{ paddingHorizontal: 10, paddingVertical: 4, marginRight: 8 }}
+            >
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>{seleccionLote ? 'Listo' : 'Seleccionar'}</Text>
+            </TouchableOpacity>
+          )}
           {hayFiltrosActivos && (
             <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
               {bloquesFiltrados.length} de {(form.bloques ?? []).length}
@@ -1078,6 +1079,34 @@ export function EditMateriaScreen() {
           </View>
         )}
 
+        {/* Punto 73: acciones del modo selección */}
+        {seleccionLote && (
+          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 8, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <Text style={{ color: tema.texto, fontSize: 13, flex: 1 }}>
+                {seleccionLote.size} {seleccionLote.size === 1 ? 'seleccionado' : 'seleccionados'}
+              </Text>
+              <TouchableOpacity onPress={() => setSeleccionLote(new Set(bloquesFiltrados.map(b => b.id)))} accessibilityRole="button">
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>Todos los visibles ({bloquesFiltrados.length})</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSeleccionLote(new Set())} accessibilityRole="button">
+                <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Ninguno</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={() => setModalLote(true)}
+              disabled={seleccionLote.size === 0}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: seleccionLote.size === 0 }}
+              style={{ padding: 10, borderRadius: 8, alignItems: 'center', backgroundColor: seleccionLote.size > 0 ? tema.acento : tema.fondo }}
+            >
+              <Text style={{ color: seleccionLote.size > 0 ? '#fff' : tema.textoSecundario, fontWeight: '700' }}>
+                Cambiar {seleccionLote.size} {seleccionLote.size === 1 ? 'seleccionado' : 'seleccionados'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <ScrollView
           nestedScrollEnabled
           style={{ maxHeight: 260 }}
@@ -1099,6 +1128,8 @@ export function EditMateriaScreen() {
                 tipoLabel={tiposBloque.find(t => t.key === b.tipo)?.label ?? ''}
                 onEditar={handleEditarBloque}
                 onEliminar={handleEliminarBloque}
+                seleccion={seleccionLote ? seleccionLote.has(b.id) : undefined}
+                onToggleSel={toggleSeleccion}
               />
             </React.Fragment>
           ))}
@@ -1174,7 +1205,7 @@ export function EditMateriaScreen() {
 
             {/* ── Salón ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Salón (opcional)</Text>
-            <TextInput
+            <CampoSalon
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
               value={bloqueNuevo.salon}
               onChangeText={v => {
@@ -1568,68 +1599,21 @@ export function EditMateriaScreen() {
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
 
-        {/* Límites por tipo */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
-          {(
-            [
-              { label: config.labelTeorica || 'Teórica', key: 'faltasMaxTeorica' as const },
-              { label: config.labelPractica || 'Práctica', key: 'faltasMaxPractica' as const },
-            ] as const
-          ).map(({ label, key }) => (
-            <View key={key} style={{ flex: 1 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
-                Máx. faltas {label}
-              </Text>
-              <TextInput
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8 }}
-                value={form[key] !== undefined ? String(form[key]) : ''}
-                onChangeText={v => {
-                  const n = parseInt(v, 10);
-                  setForm(f => ({ ...f, [key]: v === '' ? undefined : isNaN(n) ? f[key] : n }));
-                }}
-                onBlur={() => {
-                  const val = form[key];
-                  if (val !== undefined) {
-                    setForm(f => ({ ...f, [key]: Math.max(1, Math.min(99, val)) }));
-                  }
-                }}
-                keyboardType="number-pad"
-                placeholder="Sin límite"
-                placeholderTextColor={tema.textoSecundario}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Contadores con barra de progreso */}
+        {/* Punto 7: una tarjeta por tipo, con el máximo de faltas adentro */}
         {(
           [
-            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, max: form.faltasMaxTeorica },
-            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
+            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, key: 'faltasMaxTeorica' as const },
+            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, key: 'faltasMaxPractica' as const },
           ] as const
-        ).map(({ label, tipo, max }) => {
-          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length;
-          if (max === undefined && cantidad === 0) return null;
-          const pct = max ? Math.min(cantidad / max, 1) : 0;
-          const colorBarra = max === undefined
-            ? tema.acento
-            : pct >= 1 ? '#F44336' : pct >= 0.7 ? '#FF9800' : '#4CAF50';
-          return (
-            <View key={tipo} style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-                <Text style={{ color: colorBarra, fontSize: 13, fontWeight: '700' }}>
-                  {cantidad}{max !== undefined ? ` / ${max}` : ' falta(s)'}
-                </Text>
-              </View>
-              {max !== undefined && (
-                <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, overflow: 'hidden' }}>
-                  <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colorBarra, borderRadius: 3 }} />
-                </View>
-              )}
-            </View>
-          );
-        })}
+        ).map(({ label, tipo, key }) => (
+          <MedidorAsistencia
+            key={tipo}
+            label={label}
+            faltas={(form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length}
+            max={form[key]}
+            onCambiarMax={max => setForm(f => ({ ...f, [key]: max }))}
+          />
+        ))}
 
         {/* Formulario de nueva falta */}
         {mostrarFormFalta && (
@@ -1780,10 +1764,17 @@ export function EditMateriaScreen() {
         {/* Historial de faltas */}
         {(form.faltas ?? []).length > 0 && (
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
-              Historial — {(form.faltas ?? []).length} falta(s) registrada(s)
-            </Text>
-            {[...(form.faltas ?? [])]
+            <TouchableOpacity
+              onPress={() => setHistorialAbierto(v => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: historialAbierto }}
+              style={{ paddingVertical: 6, marginBottom: 4 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Historial · {(form.faltas ?? []).length} {(form.faltas ?? []).length === 1 ? 'falta' : 'faltas'} {historialAbierto ? '▴' : '▾'}
+              </Text>
+            </TouchableOpacity>
+            {historialAbierto && [...(form.faltas ?? [])]
               .sort((a, b) => b.fecha.localeCompare(a.fecha))
               .map(falta => {
                 const tipoLabel = falta.tipo === 'teorica'
@@ -1891,6 +1882,50 @@ export function EditMateriaScreen() {
         destructivo
         onConfirmar={() => { setShowConfirmEliminar(false); eliminarMateria(form.id, form.numero); navigation.goBack(); }}
         onCancelar={() => setShowConfirmEliminar(false)}
+      />
+      <EdicionLoteModal
+        visible={modalLote}
+        cantidad={seleccionLote?.size ?? 0}
+        tiposBloque={tiposBloque}
+        sugeridos={horariosSugeridos(form.bloques ?? [], t => tiposBloque.find(x => x.key === t)?.label ?? t)}
+        onCancelar={() => setModalLote(false)}
+        onAplicar={cambios => {
+          if (seleccionLote) setForm(f => ({ ...f, bloques: aplicarLote(f.bloques ?? [], seleccionLote, cambios) }));
+          setModalLote(false);
+          setSeleccionLote(null);
+        }}
+      />
+      <VistaPreviaImportModal
+        bloques={vistaPreviaImport}
+        etiquetaTipo={t => tiposBloque.find(x => x.key === t)?.label ?? t}
+        primerDia={config.horarioPrimerDia ?? 'lunes'}
+        onCancelar={() => setVistaPreviaImport(null)}
+        onImportar={bloques => {
+          setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+          setVistaPreviaImport(null);
+        }}
+      />
+      <SalidaIncompletaModal
+        faltantes={salidaIncompleta?.faltantes ?? null}
+        labelDescartar={originalCompleta ? 'Descartar cambios' : 'Descartar materia'}
+        detalleDescartar={originalCompleta
+          ? 'Si descartás, queda como estaba la última vez que estuvo completa.'
+          : 'Si descartás, la materia se elimina.'}
+        onCompletar={() => { const f = salidaIncompleta?.faltantes ?? []; setSalidaIncompleta(null); irAFaltantes(f); }}
+        onDescartar={() => {
+          const accion = salidaIncompleta?.accion;
+          setSalidaIncompleta(null);
+          if (!originalCompleta && esMateriaExistente) eliminarMateria(form.id, form.numero);
+          saliendo.current = true;
+          if (accion) navigation.dispatch(accion); else navigation.goBack();
+        }}
+      />
+      <AvisoRequisitosModal
+        faltantes={avisoRequisitos}
+        labelCursando={getLabel('cursando')}
+        onCancelar={() => setAvisoRequisitos(null)}
+        onMarcarIgual={() => { setAvisoRequisitos(null); marcarCursando(); }}
+        onVer={m => { setAvisoRequisitos(null); navigation.dispatch(StackActions.push('EditMateria', { materiaId: m.id })); }}
       />
     </SafeAreaView>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -31,8 +31,15 @@ import { SelectorHorario } from '../components/SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
+import { PreviasEditor } from '../components/PreviasEditor';
+import { MedidorAsistencia } from '../components/MedidorAsistencia';
+import { AvisoRequisitosModal } from '../components/AvisoRequisitosModal';
+import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
+import { CampoSalon } from '../components/CampoSalon';
+import { SalidaIncompletaModal } from '../components/SalidaIncompletaModal';
+import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -129,7 +136,6 @@ export function CrearMateriaScreen() {
     evaluaciones: [], oportunidadesExamen: config.oportunidadesExamenDefault,
     tipoFormacion: undefined, bloques: [],
   });
-  const [busquedaPrevia, setBusquedaPrevia] = useState('');
   const [semestreStr, setSemestreStr] = useState(String(semestreInicial));
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
@@ -162,6 +168,9 @@ export function CrearMateriaScreen() {
 
   // ── Asistencia ──────────────────────────────────────────────────────
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
+  const [vistaPreviaImport, setVistaPreviaImport] = useState<BloqueHorario[] | null>(null);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -252,13 +261,42 @@ export function CrearMateriaScreen() {
     return faltantes;
   };
 
+
+  // ── Punto 79: salir con campos obligatorios vacíos ──
+  const scrollRef = useRef<ScrollView>(null);
+  const posCampos = useRef<Record<string, number>>({});
+  const saliendo = useRef(false);
+  const [salidaIncompleta, setSalidaIncompleta] = useState<{ faltantes: string[]; accion: any } | null>(null);
+  /** Resalta todos los campos que faltan y baja hasta el primero. */
+  const irAFaltantes = (faltantes: string[]) => {
+    setCamposError({ nombre: faltantes.includes('Nombre'), semestre: faltantes.includes('Semestre') });
+    setTabActiva('general');
+    setTimeout(() => {
+      const y = posCampos.current[faltantes[0]];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }, 80);
+  };
+
+  // Al salir sin guardar: si ya se cargó algo y falta un obligatorio, preguntar.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      if (saliendo.current) return;
+      const tocada = !!form.nombre.trim() || (form.bloques ?? []).length > 0 || form.evaluaciones.length > 0
+        || form.previasNecesarias.length > 0 || (form.faltas ?? []).length > 0;
+      if (!tocada) return;
+      const faltantes = validarObligatorios();
+      if (faltantes.length === 0) return;
+      e.preventDefault();
+      setSalidaIncompleta({ faltantes, accion: e.data.action });
+    });
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, form, semestreStr]);
+
   const guardar = () => {
     const faltantes = validarObligatorios();
     if (faltantes.length > 0) {
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
+      irAFaltantes(faltantes);
       showAlert(
         'Campos obligatorios',
         `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
@@ -266,6 +304,7 @@ export function CrearMateriaScreen() {
       return;
     }
     guardarMateria(form);
+    saliendo.current = true;
     navigation.goBack();
   };
 
@@ -346,8 +385,7 @@ export function CrearMateriaScreen() {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
-      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
       showAlert('Error al importar JSON', e.message);
     }
@@ -384,7 +422,7 @@ export function CrearMateriaScreen() {
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+    setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     setModoImport(null);
     setEventosICS([]);
   };
@@ -502,50 +540,26 @@ export function CrearMateriaScreen() {
     );
   };
 
+  const marcarCursando = () => setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+
+  // Punto 17: si no cumple los requisitos, se avisa qué falta y se puede marcar igual
   const handleToggleCursando = (v: boolean) => {
     if (!v) {
       setForm(f => ({ ...f, cursando: false }));
       return;
     }
-
-    const creditos = creditosAcumulados(materias, config);
-    const aprobadas = new Set(
-      materias
-        .filter(m => {
-          const estado = calcularEstadoFinal(m, config);
-          return estado === 'exonerado' ||
-            (config.aprobadoHabilitaPrevias && estado === 'aprobado');
-        })
-        .map(m => m.numero)
+    const r = requisitosFaltantes(
+      form,
+      materias.filter(m => m.id !== form.id),
+      m => calcularEstadoFinal(m, config),
+      creditosAcumulados(materias, config),
+      config.aprobadoHabilitaPrevias,
     );
-
-    const creditosOk = creditos >= form.creditosNecesarios;
-    const previasOk = form.previasNecesarias.every(p => aprobadas.has(p));
-
-    if (creditosOk && previasOk) {
-      setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+    if (r.previas.length === 0 && r.creditosFaltan === 0) {
+      marcarCursando();
       return;
     }
-
-    const faltantes: string[] = [];
-    if (!creditosOk) {
-      faltantes.push(`• Créditos: tenés ${creditos}, necesitás ${form.creditosNecesarios}`);
-    }
-    if (!previasOk) {
-      const previasFaltantes = form.previasNecesarias
-        .filter(p => !aprobadas.has(p))
-        .map(p => {
-          const m = materias.find(x => x.numero === p);
-          return `  - ${p}${m ? ` · ${m.nombre}` : ''}`;
-        });
-      faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
-    }
-
-    showAlert(
-      'No cumple los requisitos',
-      `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`,
-      'Entendido'
-    );
+    setAvisoRequisitos(r);
   };
 
   const confirmarFalta = () => {
@@ -600,7 +614,7 @@ export function CrearMateriaScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.fondo }}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
         {/* ── Estado actual + Cursando (punto 61) ── */}
@@ -616,12 +630,14 @@ export function CrearMateriaScreen() {
         {tabActiva === 'general' && (<>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
+        <View onLayout={e => { posCampos.current.Nombre = e.nativeEvent.layout.y; }}>
         {campo('Nombre', form.nombre, v => {
           setForm(f => ({ ...f, nombre: v }));
           if (v.trim()) setCamposError(e => ({ ...e, nombre: false }));
         }, false, 100, camposError.nombre)}
+        </View>
         {/* Punto 2: grilla de 2 columnas con − / + (tocar el número permite escribirlo) */}
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+        <View onLayout={e => { posCampos.current.Semestre = e.nativeEvent.layout.y; }} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
           <CampoNumerico
             label="Semestre"
             texto={semestreStr}
@@ -669,56 +685,14 @@ export function CrearMateriaScreen() {
           onAgregarTipo={t => actualizarConfig({ tiposFormacion: [...useStore.getState().config.tiposFormacion, t] })}
         />
 
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>PREVIAS NECESARIAS</Text>
-        {form.previasNecesarias.map((num, i) => {
-          const m = materias.find(x => x.numero === num);
-          return (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
-              <Text style={{ color: tema.texto, flex: 1 }}>{num} · {m?.nombre ?? '?'}</Text>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, previasNecesarias: f.previasNecesarias.filter((_, j) => j !== i) }))}>
-                <Text style={{ color: '#F44336' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-        {/* Autocompletado de previas */}
-        <View style={{ marginBottom: 16 }}>
-          <TextInput
-            placeholder="Buscar por nombre o número..."
-            placeholderTextColor={tema.textoSecundario}
-            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 8 }}
-            value={busquedaPrevia}
-            onChangeText={setBusquedaPrevia}
-            keyboardType="default"
-          />
-          {busquedaPrevia.length > 0 && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, marginTop: 4, maxHeight: 160 }}>
-              {materias
-                .filter(m =>
-                  m.id !== form.id &&
-                  !form.previasNecesarias.includes(m.numero) &&
-                  (
-                    m.nombre.toLowerCase().includes(busquedaPrevia.toLowerCase()) ||
-                    String(m.numero).includes(busquedaPrevia)
-                  )
-                )
-                .slice(0, 5)
-                .map(m => (
-                  <TouchableOpacity
-                    key={m.id}
-                    onPress={() => {
-                      setForm(f => ({ ...f, previasNecesarias: [...f.previasNecesarias, m.numero] }));
-                      setBusquedaPrevia('');
-                    }}
-                    style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                  >
-                    <Text style={{ color: tema.texto }}>{m.numero} · {m.nombre}</Text>
-                  </TouchableOpacity>
-                ))
-              }
-            </View>
-          )}
-        </View>
+        {/* Punto 6: previas con chips de estado y buscador */}
+        <PreviasEditor
+          previas={form.previasNecesarias}
+          onCambiar={previas => setForm(f => ({ ...f, previasNecesarias: previas }))}
+          materias={materias}
+          config={config}
+          excluirId={form.id}
+        />
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>NOTA</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
@@ -999,7 +973,7 @@ export function CrearMateriaScreen() {
 
             {/* ── Salón ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Salón (opcional)</Text>
-            <TextInput
+            <CampoSalon
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
               value={bloqueNuevo.salon}
               onChangeText={v => {
@@ -1393,68 +1367,21 @@ export function CrearMateriaScreen() {
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>ASISTENCIA</Text>
 
-        {/* Límites por tipo */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
-          {(
-            [
-              { label: config.labelTeorica || 'Teórica', key: 'faltasMaxTeorica' as const },
-              { label: config.labelPractica || 'Práctica', key: 'faltasMaxPractica' as const },
-            ] as const
-          ).map(({ label, key }) => (
-            <View key={key} style={{ flex: 1 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>
-                Máx. faltas {label}
-              </Text>
-              <TextInput
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8 }}
-                value={form[key] !== undefined ? String(form[key]) : ''}
-                onChangeText={v => {
-                  const n = parseInt(v, 10);
-                  setForm(f => ({ ...f, [key]: v === '' ? undefined : isNaN(n) ? f[key] : n }));
-                }}
-                onBlur={() => {
-                  const val = form[key];
-                  if (val !== undefined) {
-                    setForm(f => ({ ...f, [key]: Math.max(1, Math.min(99, val)) }));
-                  }
-                }}
-                keyboardType="number-pad"
-                placeholder="Sin límite"
-                placeholderTextColor={tema.textoSecundario}
-              />
-            </View>
-          ))}
-        </View>
-
-        {/* Contadores con barra de progreso */}
+        {/* Punto 7: una tarjeta por tipo, con el máximo de faltas adentro */}
         {(
           [
-            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, max: form.faltasMaxTeorica },
-            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, max: form.faltasMaxPractica },
+            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, key: 'faltasMaxTeorica' as const },
+            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, key: 'faltasMaxPractica' as const },
           ] as const
-        ).map(({ label, tipo, max }) => {
-          const cantidad = (form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length;
-          if (max === undefined && cantidad === 0) return null;
-          const pct = max ? Math.min(cantidad / max, 1) : 0;
-          const colorBarra = max === undefined
-            ? tema.acento
-            : pct >= 1 ? '#F44336' : pct >= 0.7 ? '#FF9800' : '#4CAF50';
-          return (
-            <View key={tipo} style={{ backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-                <Text style={{ color: colorBarra, fontSize: 13, fontWeight: '700' }}>
-                  {cantidad}{max !== undefined ? ` / ${max}` : ' falta(s)'}
-                </Text>
-              </View>
-              {max !== undefined && (
-                <View style={{ height: 6, backgroundColor: tema.borde, borderRadius: 3, overflow: 'hidden' }}>
-                  <View style={{ height: 6, width: `${pct * 100}%`, backgroundColor: colorBarra, borderRadius: 3 }} />
-                </View>
-              )}
-            </View>
-          );
-        })}
+        ).map(({ label, tipo, key }) => (
+          <MedidorAsistencia
+            key={tipo}
+            label={label}
+            faltas={(form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length}
+            max={form[key]}
+            onCambiarMax={max => setForm(f => ({ ...f, [key]: max }))}
+          />
+        ))}
 
         {/* Formulario de nueva falta */}
         {mostrarFormFalta && (
@@ -1543,10 +1470,17 @@ export function CrearMateriaScreen() {
         {/* Historial de faltas */}
         {(form.faltas ?? []).length > 0 && (
           <View style={{ marginBottom: 16 }}>
-            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>
-              Historial — {(form.faltas ?? []).length} falta(s) registrada(s)
-            </Text>
-            {[...(form.faltas ?? [])]
+            <TouchableOpacity
+              onPress={() => setHistorialAbierto(v => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: historialAbierto }}
+              style={{ paddingVertical: 6, marginBottom: 4 }}
+            >
+              <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
+                Historial · {(form.faltas ?? []).length} {(form.faltas ?? []).length === 1 ? 'falta' : 'faltas'} {historialAbierto ? '▴' : '▾'}
+              </Text>
+            </TouchableOpacity>
+            {historialAbierto && [...(form.faltas ?? [])]
               .sort((a, b) => b.fecha.localeCompare(a.fecha))
               .map(falta => {
                 const tipoLabel = falta.tipo === 'teorica'
@@ -1642,6 +1576,34 @@ export function CrearMateriaScreen() {
         </View>
       </Modal>
 
+      <VistaPreviaImportModal
+        bloques={vistaPreviaImport}
+        etiquetaTipo={t => tiposBloque.find(x => x.key === t)?.label ?? t}
+        primerDia={config.horarioPrimerDia ?? 'lunes'}
+        onCancelar={() => setVistaPreviaImport(null)}
+        onImportar={bloques => {
+          setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+          setVistaPreviaImport(null);
+        }}
+      />
+      <SalidaIncompletaModal
+        faltantes={salidaIncompleta?.faltantes ?? null}
+        labelDescartar="Descartar materia"
+        detalleDescartar="Si descartás, no se guarda nada de lo que cargaste."
+        onCompletar={() => { const f = salidaIncompleta?.faltantes ?? []; setSalidaIncompleta(null); irAFaltantes(f); }}
+        onDescartar={() => {
+          const accion = salidaIncompleta?.accion;
+          setSalidaIncompleta(null);
+          saliendo.current = true;
+          if (accion) navigation.dispatch(accion); else navigation.goBack();
+        }}
+      />
+      <AvisoRequisitosModal
+        faltantes={avisoRequisitos}
+        labelCursando={getLabel('cursando')}
+        onCancelar={() => setAvisoRequisitos(null)}
+        onMarcarIgual={() => { setAvisoRequisitos(null); marcarCursando(); }}
+      />
     </SafeAreaView>
   );
 }

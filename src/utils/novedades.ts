@@ -16,6 +16,18 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.8.0',
+    items: [
+      '🔗 Las previas se ven como chips con su estado ("1 de 2 cumplidas") y se agregan con un buscador por nombre o número.',
+      '🙋 La asistencia muestra cuántas faltas te quedan, con una barra de color, y el máximo se cambia con − / + ahí mismo.',
+      '⚠️ Si una materia no cumple los requisitos, ves qué previas faltan (con "Ver ›") y podés marcarla como cursando igual.',
+      '🏫 Al escribir un salón, te sugiere los que ya usaste.',
+      '✅ En los horarios de una materia podés seleccionar varios bloques y cambiarles el salón, el tipo o el horario de una vez.',
+      '👀 Antes de importar bloques de un archivo o calendario, ves cuántos se van a crear y cuáles.',
+      '📝 Si salís con el nombre o el semestre vacíos, elegís entre completarlos (se marcan en rojo) o descartar.',
+    ],
+  },
+  {
     version: '1.7.5',
     items: [
       '📅 Las fechas se eligen con un calendario (mes o semana: tocá el título para cambiar) que marca los días con clase.',
