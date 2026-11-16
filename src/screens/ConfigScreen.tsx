@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, Modal, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
@@ -29,20 +29,25 @@ import { logrosOrdenados, textoLogro } from '../utils/logros';
 // ── Anclas: cada ajuste del buscador registra su posición para poder llevar el scroll hasta él ──
 interface AnclasCtxValor {
   registrar: (id: string, y: number) => void;
+  /** En web se guarda el nodo para usar scrollIntoView (onLayout no siempre informa la posición ahí). */
+  registrarNodo: (id: string, nodo: any) => void;
   olvidar: (id: string) => void;
   resaltado: string | null;
   colorResaltado: string;
 }
 const AnclasCtx = React.createContext<AnclasCtxValor>({
-  registrar: () => {}, olvidar: () => {}, resaltado: null, colorResaltado: 'transparent',
+  registrar: () => {}, registrarNodo: () => {}, olvidar: () => {}, resaltado: null, colorResaltado: 'transparent',
 });
 
 /** Envuelve un ajuste: guarda su `y` (relativa al contenedor del panel) y lo resalta si es el elegido en el buscador. */
 function Ancla({ id, children }: { id: string; children: React.ReactNode }) {
-  const { registrar, olvidar, resaltado, colorResaltado } = useContext(AnclasCtx);
-  useEffect(() => () => olvidar(id), [id, olvidar]);
+  const { registrar, registrarNodo, olvidar, resaltado, colorResaltado } = useContext(AnclasCtx);
+  // registrar/olvidar son estables: el efecto solo corre al montar/desmontar el ancla.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => olvidar(id), [id]);
   return (
     <View
+      ref={nodo => { if (nodo) registrarNodo(id, nodo); }}
       onLayout={e => registrar(id, e.nativeEvent.layout.y)}
       style={{ borderRadius: 10, backgroundColor: resaltado === id ? colorResaltado : 'transparent' }}
     >
@@ -149,10 +154,15 @@ export function ConfigScreen() {
   const [resaltado, setResaltado] = useState<string | null>(null);
   const [irA, setIrA] = useState<{ id: string; n: number } | null>(null);
   const anclasY = useRef<Record<string, number>>({});
+  const anclasNodo = useRef<Record<string, any>>({});
   const contenedorY = useRef(0);
+  const registrarAncla = useCallback((id: string, y: number) => { anclasY.current[id] = y; }, []);
+  const registrarNodoAncla = useCallback((id: string, nodo: any) => { anclasNodo.current[id] = nodo; }, []);
+  const olvidarAncla = useCallback((id: string) => { delete anclasY.current[id]; delete anclasNodo.current[id]; }, []);
   const anclasCtx = useMemo<AnclasCtxValor>(() => ({
-    registrar: (id, y) => { anclasY.current[id] = y; },
-    olvidar: id => { delete anclasY.current[id]; },
+    registrar: registrarAncla,
+    registrarNodo: registrarNodoAncla,
+    olvidar: olvidarAncla,
     resaltado,
     colorResaltado: (tema.acentoFondo ?? tema.acento) + '33',
   }), [resaltado, tema.acentoFondo, tema.acento]);
@@ -171,9 +181,17 @@ export function ConfigScreen() {
     let t2: any;
     const intentar = () => {
       const y = anclasY.current[irA.id];
-      if (y == null && intentos < 4) { intentos++; t1 = setTimeout(intentar, 120); return; }
-      if (y != null) {
-        scrollConfigRef.current?.scrollTo?.({ y: Math.max(0, contenedorY.current + y - 12), animated: true });
+      const nodoWeb = Platform.OS === 'web' ? anclasNodo.current[irA.id] : null;
+      if (y == null && !nodoWeb && intentos < 10) { intentos++; t1 = setTimeout(intentar, 100); return; }
+      if (nodoWeb?.scrollIntoView) {
+        nodoWeb.scrollIntoView({ block: 'start' }); // suave se cancela mientras el panel recién montado termina de dibujarse
+      } else if (y != null) {
+        const destino = Math.max(0, contenedorY.current + y - 12);
+        // El ref de Animated.ScrollView no siempre expone scrollTo (en web puede ser el envoltorio animado).
+        const sv: any = scrollConfigRef.current;
+        const nodo: any = sv?.scrollTo ? sv : sv?.getNode?.() ?? sv?.getScrollResponder?.();
+        if (nodo?.scrollTo) nodo.scrollTo({ y: destino, animated: true });
+        else if (Platform.OS === 'web') sv?.getScrollableNode?.()?.scrollTo?.({ top: destino, behavior: 'smooth' });
       }
       setResaltado(irA.id);
       t2 = setTimeout(() => setResaltado(null), 1500);
