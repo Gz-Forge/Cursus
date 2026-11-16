@@ -2,17 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Platform, Animated, useWindowDimensions } from 'react-native';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla } from '../utils/useFondoPantalla';
-import * as Clipboard from 'expo-clipboard';
 import { useStore } from '../store/useStore';
 import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
-import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
+import { normalizarTipo } from '../utils/importExport';
 import { contarMateriasPorTipo } from '../utils/formulario';
 import { TablaUmbrales } from '../components/TablaUmbrales';
 import { SelectorColor } from '../components/SelectorColor';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
+import { BorrarTodoModal } from '../components/BorrarTodoModal';
 import { calcularEstadoFinal } from '../utils/calculos';
 import { TipoBloque, ColorBloque, EvaluacionSimple, GrupoEvaluacion, EstadoMateria } from '../types';
 import { useEstadoEstilo, ICONOS_DEFAULT, ESTADO_NOMBRES } from '../hooks/useEstadoEstilo';
@@ -71,17 +71,11 @@ function TabBar({ activa, onCambiar, tema }: { activa: Tab; onCambiar: (t: Tab) 
   );
 }
 
-const TODOS_MODULOS: ModuloIA[] = ['carrera', 'horarios', 'evaluaciones', 'config', 'colores'];
-
 export function ConfigScreen() {
   const { config, actualizarConfig, materias, guardarMateria } = useStore();
   const { showAlert, showConfirm } = useAlert();
   const [tabActiva, setTabActiva] = useState<Tab>('notas');
   const tema = useTemaPantalla('config');
-  const [modulosSeleccionados, setModulosSeleccionados] = useState<Set<ModuloIA>>(
-    new Set(TODOS_MODULOS)
-  );
-  const [modoCarrera, setModoCarrera] = useState<'crear' | 'revisar'>('crear');
   const [nuevoTipo, setNuevoTipo] = useState('');
   const [editandoTipo, setEditandoTipo] = useState<string | null>(null);
   const [textoEdicion, setTextoEdicion] = useState('');
@@ -96,29 +90,11 @@ export function ConfigScreen() {
   const { getColor, getIcono, getLabel } = useEstadoEstilo();
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
   const navigation = useNavigation<any>();
-  const route = useRoute<any>();
   const scrollConfigRef = useRef<any>(null);
-  const promptsYRef = useRef<number | null>(null);
-  const [irAPrompts, setIrAPrompts] = useState(false);
-
-  // Punto 57: "Armar con IA" abre Ajustes → Datos en "Prompts para IA"
-  useEffect(() => {
-    const pedido = route.params?.abrir;
-    if (pedido !== 'prompts') return;
-    setTabActiva('datos');
-    setIrAPrompts(true);
-    navigation.setParams({ abrir: undefined });
-  }, [route.params?.abrir]);
-  useEffect(() => {
-    if (!irAPrompts || tabActiva !== 'datos') return;
-    const id = setTimeout(() => {
-      if (promptsYRef.current !== null) {
-        scrollConfigRef.current?.scrollTo?.({ y: Math.max(0, promptsYRef.current - 12), animated: true });
-      }
-      setIrAPrompts(false);
-    }, 250);
-    return () => clearTimeout(id);
-  }, [irAPrompts, tabActiva]);
+  const [mostrarBorrar, setMostrarBorrar] = useState(false);
+  const perfiles = useStore(st => st.perfiles);
+  const perfilActivoId = useStore(st => st.perfilActivoId);
+  const nombrePerfilActivo = perfiles.find(pp => pp.id === perfilActivoId)?.nombre ?? 'Perfil';
   // Estado local para los campos numéricos — permite editar libremente sin que el TextInput
   // controlado revierta el texto mientras el usuario escribe (ej: borrar "12" para tipear "5")
   const [notaMaxStr, setNotaMaxStr] = useState(() => String(config.notaMaxima));
@@ -937,139 +913,66 @@ export function ConfigScreen() {
 
           {tabActiva === 'datos' && (
           <>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>IMPORTAR / EXPORTAR</Text>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ImportarExportar' as never)}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: tema.borde }}
-          >
-            <Text style={{ color: tema.texto, fontWeight: '600' }}>📦 Gestionar importación y exportación →</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setMostrarSync(true)}
-            style={{ backgroundColor: tema.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
-          >
-            <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>🔄 Sincronizar con otro dispositivo</Text>
-          </TouchableOpacity>
-
-          <Text
-            onLayout={e => { promptsYRef.current = e.nativeEvent.layout.y; }}
-            style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 4 }}
-          >PROMPTS PARA IA</Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 14 }}>
-            Seleccioná qué querés generar. La IA preguntará solo lo necesario y generará un único JSON para importar.
-          </Text>
-
-          {/* Checkboxes de módulos */}
-          <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 12 }}>
-            {/* Seleccionar todo */}
             <TouchableOpacity
-              onPress={() => {
-                if (modulosSeleccionados.size === TODOS_MODULOS.length) {
-                  setModulosSeleccionados(new Set());
-                } else {
-                  setModulosSeleccionados(new Set(TODOS_MODULOS));
-                }
-              }}
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
-                borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', marginBottom: 4 }}
+              onPress={() => navigation.navigate('ImportarExportar', { tab: 'exportar' })}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, borderRadius: 12, padding: 14, marginBottom: 10 }}
             >
-              <View style={{
-                width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                borderColor: tema.acentoLineas ?? tema.acento, marginRight: 10, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: modulosSeleccionados.size === TODOS_MODULOS.length ? (tema.acentoFondo ?? tema.acento) : 'transparent',
-              }}>
-                {modulosSeleccionados.size === TODOS_MODULOS.length && (
-                  <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
-                )}
+              <Text style={{ fontSize: 28, marginRight: 14 }}>💾</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Hacer una copia de seguridad</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>Guardá todo en un archivo</Text>
               </View>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>Seleccionar todo</Text>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ImportarExportar', { tab: 'importar' })}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, borderRadius: 12, padding: 14, marginBottom: 10 }}
+            >
+              <Text style={{ fontSize: 28, marginRight: 14 }}>📥</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Cargar datos</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>Desde un archivo, un QR o una IA</Text>
+              </View>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setMostrarSync(true)}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, borderRadius: 12, padding: 14, marginBottom: 10 }}
+            >
+              <Text style={{ fontSize: 28, marginRight: 14 }}>🔄</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Pasar a otro dispositivo</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>Con un código de 8 letras</Text>
+              </View>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('PromptsIA')}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderWidth: 1, borderColor: tema.borde, borderRadius: 12, padding: 14, marginBottom: 10 }}
+            >
+              <Text style={{ fontSize: 28, marginRight: 14 }}>✨</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Armar mi carrera con IA</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 2 }}>Copiá un texto y pegalo en ChatGPT o Claude</Text>
+              </View>
+              <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
 
-            {/* Opciones individuales */}
-            {([
-              { id: 'carrera'       as ModuloIA, label: 'Plan de carrera',           desc: 'Materias, semestres, previas, créditos' },
-              { id: 'horarios'      as ModuloIA, label: 'Horarios',                  desc: 'Bloques de clase por materia' },
-              { id: 'evaluaciones'  as ModuloIA, label: 'Evaluaciones',              desc: 'Parciales, finales, trabajos y sus pesos' },
-              { id: 'config'        as ModuloIA, label: 'Configuración de la app',   desc: 'Umbrales, etiquetas, tarjetas' },
-              { id: 'colores'       as ModuloIA, label: 'Colores del horario',       desc: 'Colores por materia y tipo de bloque' },
-            ] as const).map(({ id, label, desc }) => (
-              <View key={id}>
-                <TouchableOpacity
-                  onPress={() => setModulosSeleccionados(prev => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id); else next.add(id);
-                    return next;
-                  })}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
-                >
-                  <View style={{
-                    width: 20, height: 20, borderRadius: 4, borderWidth: 2,
-                    borderColor: modulosSeleccionados.has(id) ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
-                    marginRight: 10, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: modulosSeleccionados.has(id) ? (tema.acentoFondo ?? tema.acento) : 'transparent',
-                  }}>
-                    {modulosSeleccionados.has(id) && (
-                      <Text style={{ color: '#fff', fontSize: 12, lineHeight: 14 }}>✓</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 13 }}>{label}</Text>
-                    <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 1 }}>{desc}</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Sub-radios modo para Plan de carrera */}
-                {id === 'carrera' && modulosSeleccionados.has('carrera') && (
-                  <View style={{ marginLeft: 30, marginBottom: 6, gap: 6 }}>
-                    {([
-                      { valor: 'crear'   as const, label: 'Crear desde cero' },
-                      { valor: 'revisar' as const, label: 'Revisar / actualizar un JSON existente' },
-                    ]).map(({ valor, label: labelRadio }) => (
-                      <TouchableOpacity
-                        key={valor}
-                        onPress={() => setModoCarrera(valor)}
-                        style={{ flexDirection: 'row', alignItems: 'center' }}
-                      >
-                        <View style={{
-                          width: 16, height: 16, borderRadius: 8, borderWidth: 2,
-                          borderColor: modoCarrera === valor ? (tema.acentoLineas ?? tema.acento) : tema.textoSecundario,
-                          marginRight: 8, alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          {modoCarrera === valor && (
-                            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: tema.acentoFondo ?? tema.acento }} />
-                          )}
-                        </View>
-                        <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{labelRadio}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-
-          {/* Preview y botón copiar */}
-          {modulosSeleccionados.size === 0 ? (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20, alignItems: 'center' }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>Seleccioná al menos un módulo para generar el prompt.</Text>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 20 }}>
-              <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, fontFamily: 'monospace' }}>
-                  {generarPromptCombinado(modulosSeleccionados, config, materias, modoCarrera)}
-                </Text>
-              </ScrollView>
-              <TouchableOpacity
-                onPress={() => Clipboard.setStringAsync(generarPromptCombinado(modulosSeleccionados, config, materias, modoCarrera))}
-                style={{ marginTop: 10, backgroundColor: tema.acentoFondo ?? tema.acento, padding: 10, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📋 Copiar prompt</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <Text style={{ color: '#FF5722', fontSize: 12, fontWeight: '700', marginTop: 24, marginBottom: 8 }}>ZONA DE PELIGRO</Text>
+          <TouchableOpacity
+            onPress={() => setMostrarBorrar(true)}
+            accessibilityRole="button"
+            style={{ borderWidth: 1, borderColor: '#FF5722', borderRadius: 12, padding: 14, alignItems: 'center', backgroundColor: 'transparent' }}
+          >
+            <Text style={{ color: '#FF5722', fontWeight: '700' }}>🗑 Borrar todo y empezar de cero</Text>
+          </TouchableOpacity>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 6, marginBottom: 20 }}>
+            {`Borra las materias y la configuración del perfil "${nombrePerfilActivo}". Los otros perfiles no se tocan.`}
+          </Text>
           </>
           )}
 
@@ -1085,6 +988,17 @@ export function ConfigScreen() {
 
       <PeriodoExamenModal visible={mostrarPeriodo} onCerrar={() => setMostrarPeriodo(false)} />
       <SyncDispositivosModal visible={mostrarSync} onCerrar={() => setMostrarSync(false)} />
+      <BorrarTodoModal
+        visible={mostrarBorrar}
+        cantidadMaterias={materias.length}
+        onCancelar={() => setMostrarBorrar(false)}
+        onHacerCopia={() => { setMostrarBorrar(false); navigation.navigate('ImportarExportar', { tab: 'exportar' }); }}
+        onConfirmar={async () => {
+          setMostrarBorrar(false);
+          await useStore.getState().borrarDatosPerfilActivo();
+          showAlert('Listo', 'Se borraron los datos de este perfil.');
+        }}
+      />
     </View>
   );
   return (

@@ -75,6 +75,8 @@ interface Store extends AppState {
   reemplazarMaterias: (nuevas: Materia[]) => void;
   /** Reemplaza materias y configuración del perfil activo en una sola escritura. */
   reemplazarEstado: (materias: Materia[], config: Config) => Promise<void>;
+  /** Punto 125: vacía las materias y deja la config de fábrica en el perfil activo (conserva el perfil y su nombre). */
+  borrarDatosPerfilActivo: () => Promise<void>;
   eliminarMateria: (id: string, numero: number) => void;
   actualizarConfig: (c: Partial<Config>) => void;
   decrementarPeriodoExamen: () => Materia[];
@@ -126,6 +128,10 @@ export const useStore = create<Store>((set, get) => ({
     const { perfilActivoId } = get();
     set({ materias, config });
     await guardarPerfilEstado(perfilActivoId, { materias, config });
+  },
+
+  borrarDatosPerfilActivo: async () => {
+    await get().reemplazarEstado([], { ...CONFIG_DEFAULT });
   },
 
   eliminarMateria: (id, numero) => {

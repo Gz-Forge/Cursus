@@ -1,3 +1,5 @@
+import { Evaluacion } from '../types';
+import { conIdsNuevos } from '../utils/evaluacionesQr';
 import { Materia } from '../types';
 import { previsualizarImportacion, MateriaJson } from '../utils/importExport';
 
@@ -78,5 +80,51 @@ describe('previsualizarImportacion (37)', () => {
     const p = previsualizarImportacion(actuales, json, 'solo_nuevas', 3);
     expect(p.nuevas).toEqual([]);
     expect(p.sinCambios).toBe(3);
+  });
+});
+
+import { textoConfirmaBorrado } from '../utils/borrarTodo';
+
+describe('textoConfirmaBorrado (125)', () => {
+  it('acepta BORRAR sin importar mayúsculas ni espacios', () => {
+    expect(textoConfirmaBorrado('BORRAR')).toBe(true);
+    expect(textoConfirmaBorrado('  borrar ')).toBe(true);
+  });
+  it('rechaza cualquier otro texto', () => {
+    expect(textoConfirmaBorrado('')).toBe(false);
+    expect(textoConfirmaBorrado('borra')).toBe(false);
+    expect(textoConfirmaBorrado('borrar todo')).toBe(false);
+  });
+});
+
+describe('conIdsNuevos (23)', () => {
+  const entrada: Evaluacion[] = [
+    { id: 'a', tipo: 'simple', nombre: 'Parcial', pesoEnMateria: 40, tipoNota: 'porcentaje', nota: 80, notaMaxima: 100, fecha: '2026-05-01' },
+    { id: 'g', tipo: 'grupo', nombre: 'Labs', pesoEnMateria: 20, subEvaluaciones: [
+      { id: 's1', nombre: 'L1', tipoNota: 'porcentaje', nota: null, notaMaxima: 100 },
+      { id: 's2', nombre: 'L2', tipoNota: 'porcentaje', nota: 50, notaMaxima: 100 },
+    ] },
+  ];
+
+  it('cambia todos los ids, incluidos los de sub-evaluaciones, y son distintos entre sí', () => {
+    const r = conIdsNuevos(entrada) as any[];
+    const ids = [r[0].id, r[1].id, r[1].subEvaluaciones[0].id, r[1].subEvaluaciones[1].id];
+    expect(ids.some(i => ['a', 'g', 's1', 's2'].includes(i))).toBe(false);
+    expect(new Set(ids).size).toBe(4);
+  });
+
+  it('conserva el resto de los campos', () => {
+    const r = conIdsNuevos(entrada) as any[];
+    expect({ ...r[0], id: 'a' }).toEqual(entrada[0]);
+    expect(r[1].nombre).toBe('Labs');
+    expect(r[1].pesoEnMateria).toBe(20);
+    expect(r[1].subEvaluaciones.map((s: any) => ({ ...s, id: '' }))).toEqual(
+      (entrada[1] as any).subEvaluaciones.map((s: any) => ({ ...s, id: '' })));
+  });
+
+  it('no muta la entrada', () => {
+    const copia = JSON.parse(JSON.stringify(entrada));
+    conIdsNuevos(entrada);
+    expect(entrada).toEqual(copia);
   });
 });

@@ -3,6 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, Platform,
   ActivityIndicator, Modal,
 } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { useAlert } from '../contexts/AlertContext';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,7 +32,10 @@ type Tab = 'importar' | 'exportar';
 
 export function ImportarExportarScreen() {
   const tema = useTema();
-  const [tab, setTab] = useState<Tab>('importar');
+  const route = useRoute<any>();
+  const tabParam: Tab | undefined = route.params?.tab === 'exportar' || route.params?.tab === 'importar' ? route.params.tab : undefined;
+  const [tab, setTab] = useState<Tab>(tabParam ?? 'importar');
+  useEffect(() => { if (tabParam) setTab(tabParam); }, [tabParam]);
 
   const tabStyle = (t: Tab) => ({
     flex: 1,
