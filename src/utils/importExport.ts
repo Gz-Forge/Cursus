@@ -382,6 +382,16 @@ TARJETAS DE MATERIAS:
 EVALUACIONES:
 - barraProgresoEvaluaciones (true/false): mostrar, al editar una materia, una barra con el avance de la nota sobre los umbrales de aprobación y exoneración.
 
+CARRERA Y MÉTRICAS (1.9.0):
+- encabezadoSemestreEstilo ("materias", "barra", "iconos" o "anillo"): cómo resumir el avance en el encabezado de cada semestre.
+- encabezadoSemestreCreditos (true/false): mostrar créditos obtenidos sobre el total en el encabezado del semestre.
+- encabezadoSemestreCreditosCuenta ("exonerados" o "exonerados_aprobados"): qué materias suman créditos obtenidos en ese encabezado.
+- carreraCifrasEstilo ("simple", "meta" o "anillo"): estilo de las cifras de la carrera.
+- creditosModalAgruparTipo (true/false): agrupar por tipo de formación el detalle de créditos obtenidos.
+- tarjetaDiseno ("clasica" o "dos_lineas"): diseño de la tarjeta de materia.
+- metricasCreditosContar ("exonerados", "exonerados_aprobados" o "ambos"): qué créditos cuenta Métricas como obtenidos.
+- cuelloBotellaSemestresAdelante (entero ≥ 1): cuántos semestres incompletos hacia adelante se miran en los cuellos de botella.
+
 ════════════════════════════
 EJEMPLO COMPLETO
 ════════════════════════════
@@ -678,6 +688,17 @@ export function aplicarConfigJson(
     aplicados.push(key);
   };
 
+  const entero = (key: string, min: number, max: number) => {
+    const v = d[key];
+    if (v === undefined) return;
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
+      ignorados.push({ campo: key, motivo: `debe ser número entero entre ${min} y ${max}` });
+      return;
+    }
+    (update as any)[key] = v;
+    aplicados.push(key);
+  };
+
   const bool = (key: string) => {
     const v = d[key];
     if (v === undefined) return;
@@ -781,6 +802,14 @@ export function aplicarConfigJson(
   bool('tarjetaTipoFormacion');
   oneOf('tarjetaCreditosExtendida', ['da', 'necesita', 'ambos']);
   bool('tarjetaMostrarToggleCursando');
+  oneOf('encabezadoSemestreEstilo', ['materias', 'barra', 'iconos', 'anillo']);
+  bool('encabezadoSemestreCreditos');
+  oneOf('encabezadoSemestreCreditosCuenta', ['exonerados', 'exonerados_aprobados']);
+  oneOf('carreraCifrasEstilo', ['simple', 'meta', 'anillo']);
+  bool('creditosModalAgruparTipo');
+  oneOf('tarjetaDiseno', ['clasica', 'dos_lineas']);
+  oneOf('metricasCreditosContar', ['exonerados', 'exonerados_aprobados', 'ambos']);
+  entero('cuelloBotellaSemestresAdelante', 1, 999);
 
   if (aplicados.length > 0) {
     actualizarConfig(update);
@@ -838,6 +867,14 @@ export function configAJson(config: import('../types').Config): Record<string, u
     metricasProgresoEstilo: config.metricasProgresoEstilo ?? 'lista',
     notasObtenidasEje: config.notasObtenidasEje ?? 'con_datos',
     metricasLineasUmbral: config.metricasLineasUmbral ?? true,
+    encabezadoSemestreEstilo: config.encabezadoSemestreEstilo ?? 'materias',
+    encabezadoSemestreCreditos: config.encabezadoSemestreCreditos ?? false,
+    encabezadoSemestreCreditosCuenta: config.encabezadoSemestreCreditosCuenta ?? 'exonerados',
+    carreraCifrasEstilo: config.carreraCifrasEstilo ?? 'simple',
+    creditosModalAgruparTipo: config.creditosModalAgruparTipo ?? false,
+    tarjetaDiseno: config.tarjetaDiseno ?? 'clasica',
+    metricasCreditosContar: config.metricasCreditosContar ?? 'exonerados_aprobados',
+    cuelloBotellaSemestresAdelante: config.cuelloBotellaSemestresAdelante ?? 1,
   };
 }
 
@@ -957,6 +994,30 @@ CAMPOS DE CONFIGURACIÓN:
 33. metricasLineasUmbral (true/false)
     En "Notas obtenidas", ¿marcar las notas de aprobación y exoneración? (Con eje completo, líneas punteadas; con datos, barras pintadas según la zona.)
 
+34. encabezadoSemestreEstilo ("materias", "barra", "iconos" o "anillo")
+    En el encabezado de cada semestre de la pantalla Carrera, ¿cómo resumir el avance? "materias": solo la cantidad de materias. "barra": barra de progreso. "iconos": cantidad por estado con su ícono. "anillo": un anillo con el porcentaje.
+
+35. encabezadoSemestreCreditos (true/false)
+    En el encabezado del semestre, ¿mostrar también los créditos obtenidos sobre el total del semestre?
+
+36. encabezadoSemestreCreditosCuenta ("exonerados" o "exonerados_aprobados")
+    ¿Qué materias suman créditos obtenidos en el encabezado del semestre? "exonerados": solo las exoneradas. "exonerados_aprobados": exoneradas y aprobadas (si el estado Aprobado está habilitado).
+
+37. carreraCifrasEstilo ("simple", "meta" o "anillo")
+    En las cifras de la carrera, ¿qué estilo usar? "simple": números sueltos. "meta": créditos obtenidos respecto de la meta. "anillo": un anillo con el porcentaje.
+
+38. creditosModalAgruparTipo (true/false)
+    En el detalle de créditos obtenidos, ¿agrupar las materias por tipo de formación?
+
+39. tarjetaDiseno ("clasica" o "dos_lineas")
+    ¿Qué diseño usar para la tarjeta de cada materia? "clasica": como siempre. "dos_lineas": más compacta, en dos líneas.
+
+40. metricasCreditosContar ("exonerados", "exonerados_aprobados" o "ambos")
+    En Métricas, ¿qué créditos contar como obtenidos? "exonerados": solo exoneradas. "exonerados_aprobados": exoneradas y aprobadas. "ambos": mostrar los dos totales por separado.
+
+41. cuelloBotellaSemestresAdelante (número entero, 1 o más)
+    Con "solo siguiente" activado en los cuellos de botella, ¿cuántos semestres incompletos hacia adelante se miran? 1 es solo el siguiente.
+
 ---
 
 FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
@@ -999,7 +1060,15 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "barraProgresoEvaluaciones": true,
   "metricasProgresoEstilo": "anillo",
   "notasObtenidasEje": "completo",
-  "metricasLineasUmbral": true
+  "metricasLineasUmbral": true,
+  "encabezadoSemestreEstilo": "barra",
+  "encabezadoSemestreCreditos": false,
+  "encabezadoSemestreCreditosCuenta": "exonerados",
+  "carreraCifrasEstilo": "simple",
+  "creditosModalAgruparTipo": false,
+  "tarjetaDiseno": "clasica",
+  "metricasCreditosContar": "exonerados_aprobados",
+  "cuelloBotellaSemestresAdelante": 1
 }
 
 ⚠️ IMPORTANTE: Entregá el resultado como un archivo .json para descargar — NO pegues el contenido en el chat.`;

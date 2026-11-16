@@ -206,3 +206,126 @@ export function renumerarMaterias(materias: Materia[], materiaGuardada: Materia)
 
   return remapped;
 }
+
+// ── 1.9.0: resúmenes por semestre, créditos y cuellos de botella ─────────────
+
+export interface ResumenSemestre {
+  conteo: Record<EstadoMateria, number>;
+  total: number;
+  completadas: number;   // exoneradas, + aprobadas si config.usarEstadoAprobado
+  pct: number;           // 0-100 redondeado; 0 si no hay materias
+  creditos: number;      // créditos obtenidos según config.encabezadoSemestreCreditosCuenta
+  creditosTotal: number; // suma de creditosQueDA del semestre
+}
+
+/** Resumen de un semestre. `materias` son las del semestre ya filtradas. */
+export function resumenSemestre(materias: Materia[], config: Config): ResumenSemestre {
+  const conteo: Record<EstadoMateria, number> = {
+    aprobado: 0, exonerado: 0, cursando: 0, por_cursar: 0, reprobado: 0, recursar: 0,
+  };
+  let creditosExo = 0;
+  let creditosApr = 0;
+  let creditosTotal = 0;
+  for (const m of materias) {
+    const e = calcularEstadoFinal(m, config);
+    conteo[e]++;
+    creditosTotal += m.creditosQueDA;
+    if (e === 'exonerado') creditosExo += m.creditosQueDA;
+    else if (e === 'aprobado') creditosApr += m.creditosQueDA;
+  }
+  const total = materias.length;
+  const contarAprobado = !!config.usarEstadoAprobado;
+  const completadas = conteo.exonerado + (contarAprobado ? conteo.aprobado : 0);
+  const pct = total > 0 ? Math.round((completadas / total) * 100) : 0;
+  const cuenta = config.encabezadoSemestreCreditosCuenta ?? 'exonerados';
+  const creditos = cuenta === 'exonerados_aprobados' && contarAprobado
+    ? creditosExo + creditosApr
+    : creditosExo;
+  return { conteo, total, completadas, pct, creditos, creditosTotal };
+}
+
+export interface CreditosContados { exonerados: number; aprobados: number; total: number }
+
+/** Créditos obtenidos de un conjunto de materias. aprobados = 0 si !config.usarEstadoAprobado. */
+export function creditosObtenidos(materias: Materia[], config: Config): CreditosContados {
+  let exonerados = 0;
+  let aprobados = 0;
+  let total = 0;
+  for (const m of materias) {
+    total += m.creditosQueDA;
+    const e = calcularEstadoFinal(m, config);
+    if (e === 'exonerado') exonerados += m.creditosQueDA;
+    else if (e === 'aprobado' && config.usarEstadoAprobado) aprobados += m.creditosQueDA;
+  }
+  return { exonerados, aprobados, total };
+}
+
+export interface GrupoTipo { tipo: string | null; materias: Materia[]; creditos: number }
+
+/** Agrupa por tipoFormacion conservando el orden de entrada dentro de cada grupo. Grupos ordenados por créditos desc y luego nombre; el grupo sin tipo (null, '' o solo espacios) va al final. */
+export function agruparPorTipo(materias: Materia[]): GrupoTipo[] {
+  const mapa = new Map<string | null, GrupoTipo>();
+  for (const m of materias) {
+    const t = m.tipoFormacion?.trim();
+    const clave = t ? t : null;
+    let g = mapa.get(clave);
+    if (!g) {
+      g = { tipo: clave, materias: [], creditos: 0 };
+      mapa.set(clave, g);
+    }
+    g.materias.push(m);
+    g.creditos += m.creditosQueDA;
+  }
+  const grupos = Array.from(mapa.values());
+  const conTipo = grupos
+    .filter(g => g.tipo !== null)
+    .sort((a, b) => b.creditos - a.creditos || (a.tipo as string).localeCompare(b.tipo as string, 'es'));
+  const sinTipo = grupos.filter(g => g.tipo === null);
+  return [...conTipo, ...sinTipo];
+}
+
+/**
+ * Los primeros N semestres (ascendente) con al menos una materia no terminada
+ * (ni aprobada ni exonerada), con N = config.cuelloBotellaSemestresAdelante (default 1).
+ */
+export function semestresPorDelante(materias: Materia[], config: Config): number[] {
+  const n = Math.max(1, Math.floor(config.cuelloBotellaSemestresAdelante ?? 1));
+  const incompletos = new Set<number>();
+  for (const m of materias) {
+    const e = calcularEstadoFinal(m, config);
+    if (e !== 'aprobado' && e !== 'exonerado') incompletos.add(m.semestre);
+  }
+  return Array.from(incompletos).sort((a, b) => a - b).slice(0, n);
+}
+
+/** Materias no terminadas que traban a otras (cuellos de botella), de mayor a menor cantidad de dependientes. */
+export function cuellosDeBotella(materias: Materia[], config: Config): Materia[] {
+  const umbral = config.cuelloBotellaUmbral ?? 3;
+  const soloSiguiente = config.cuelloBotellaSoloSiguiente ?? false;
+  const sems = semestresPorDelante(materias, config);
+  const semSet = new Set(sems);
+  const numerosAdelante = new Set(
+    materias.filter(m => semSet.has(m.semestre)).map(m => m.numero)
+  );
+  return materias
+    .filter(m => {
+      const e = calcularEstadoFinal(m, config);
+      if (e === 'aprobado' || e === 'exonerado') return false;
+      // Con soloSiguiente activo, las cursando siempre aparecen
+      if (soloSiguiente && e === 'cursando' && m.esPreviaDe.length > 0) return true;
+      if (m.esPreviaDe.length < umbral) return false;
+      if (soloSiguiente && sems.length > 0) {
+        return m.esPreviaDe.some(num => numerosAdelante.has(num));
+      }
+      return true;
+    })
+    .sort((a, b) => b.esPreviaDe.length - a.esPreviaDe.length);
+}
+
+/** Materias que dependen de `m` (sus números en m.esPreviaDe), ordenadas por semestre y número. */
+export function materiasQueTraba(m: Materia, materias: Materia[]): Materia[] {
+  const nums = new Set(m.esPreviaDe);
+  return materias
+    .filter(x => nums.has(x.numero))
+    .sort((a, b) => a.semestre - b.semestre || a.numero - b.numero);
+}
