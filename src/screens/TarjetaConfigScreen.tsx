@@ -1,10 +1,12 @@
 // Cursus/src/screens/TarjetaConfigScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
+import { MateriaCard } from '../components/MateriaCard';
+import { Materia } from '../types';
 
 type SegOpt<T extends string> = { valor: T; label: string };
 
@@ -55,11 +57,28 @@ function ToggleFila({ label, valor, onChange, descripcion }: {
 
 type Panel = 'colapsada' | 'extendida';
 
+function materiaEjemplo(p: Partial<Materia> & Pick<Materia, 'id' | 'numero' | 'nombre'>): Materia {
+  return {
+    semestre: 1, creditosQueDA: 6, creditosNecesarios: 0,
+    previasNecesarias: [], esPreviaDe: [], cursando: false,
+    usarNotaManual: false, notaManual: null, tipoNotaManual: 'porcentaje',
+    evaluaciones: [], oportunidadesExamen: 3,
+    ...p,
+  };
+}
+
+const MATERIAS_EJEMPLO: Materia[] = [
+  materiaEjemplo({ id: 'ej-1', numero: 1, nombre: 'Cálculo I', semestre: 1, usarNotaManual: true, notaManual: 90, tipoFormacion: 'Básica', esPreviaDe: [] }),
+  materiaEjemplo({ id: 'ej-5', numero: 5, nombre: 'Física II', semestre: 2, usarNotaManual: true, notaManual: 50, oportunidadesExamen: 2 }),
+  materiaEjemplo({ id: 'ej-9', numero: 9, nombre: 'Mecánica', semestre: 3, creditosQueDA: 8, creditosNecesarios: 120, previasNecesarias: [5] }),
+];
+
 export function TarjetaConfigScreen() {
   const { config, actualizarConfig } = useStore();
   const tema = useTema();
   const { getLabel } = useEstadoEstilo();
   const [panel, setPanel] = useState<Panel>('colapsada');
+  const { height } = useWindowDimensions();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.fondo }}>
@@ -83,6 +102,25 @@ export function TarjetaConfigScreen() {
       </View>
       <View style={{ height: 1, backgroundColor: tema.borde }} />
 
+      {/* ── Vista previa fija ── */}
+      <View style={{ backgroundColor: tema.fondo, borderBottomWidth: 1, borderBottomColor: tema.borde, maxHeight: Math.round(height * 0.45) }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
+          <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '600', marginBottom: 2 }}>Vista previa</Text>
+            {MATERIAS_EJEMPLO.map(m => (
+              <MateriaCard
+                key={m.id}
+                materia={m}
+                todasLasMaterias={MATERIAS_EJEMPLO}
+                config={config}
+                onEditar={() => {}}
+                mostrarToggleCursando={false}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
@@ -91,6 +129,19 @@ export function TarjetaConfigScreen() {
               <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 16, lineHeight: 20 }}>
                 Configuración de la tarjeta cuando está cerrada.
               </Text>
+
+              <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>DISEÑO</Text>
+              <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 8 }}>Diseño de la tarjeta</Text>
+                <Segmentado
+                  opciones={[
+                    { valor: 'clasica', label: 'Clásica' },
+                    { valor: 'dos_lineas', label: 'Dos líneas' },
+                  ]}
+                  valor={config.tarjetaDiseno ?? 'clasica'}
+                  onChange={v => actualizarConfig({ tarjetaDiseno: v })}
+                />
+              </View>
 
               <Text style={{ color: tema.acento, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>BADGE DE CRÉDITOS</Text>
               <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 14, marginBottom: 16 }}>

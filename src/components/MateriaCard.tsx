@@ -102,18 +102,59 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
     },
   });
 
+  const dosLineas = config.tarjetaDiseno === 'dos_lineas';
+
+  const titulo = partirCoincidencia(`${materia.numero} · ${materia.nombre}`, resaltar ?? '').map((p, i) => (
+    p.coincide
+      ? <Text key={i} style={{ backgroundColor: (tema.acentoFondo ?? tema.acento) + hexOpacity(35), color: tema.texto, fontWeight: '800' }}>{p.texto}</Text>
+      : <Text key={i}>{p.texto}</Text>
+  ));
+
+  // Línea 2 del diseño "dos líneas": partes separadas por " · "
+  const partesLinea2: React.ReactNode[] = [];
+  if (dosLineas) {
+    partesLinea2.push(
+      <Text key="estado">{icono} <Text style={{ color }}>{getLabel(estado)}</Text></Text>,
+    );
+    if ((config.tarjetaMostrarNota ?? true) && notaPct !== null) {
+      partesLinea2.push(<Text key="nota">{notaDisplayTarjeta(notaPct, config)}</Text>);
+    }
+    partesLinea2.push(<Text key="cred">{badgeCreditos(materia, config)}</Text>);
+    let clave: string | null = null;
+    if (estado === 'reprobado') {
+      clave = `${materia.oportunidadesExamen} ${materia.oportunidadesExamen === 1 ? 'oportunidad' : 'oportunidades'}`;
+    } else if (estado === 'aprobado') {
+      clave = `${materia.oportunidadesExamen} oport. de examen`;
+    } else if (estado === 'cursando') {
+      if (notaPct !== null) clave = `${notaPct.toFixed(0)}% acumulado`;
+    } else if (estado === 'por_cursar') {
+      if (previasPendientes.length > 0) {
+        clave = `faltan ${previasPendientes.length} ${previasPendientes.length === 1 ? 'previa' : 'previas'}`;
+      }
+    }
+    if (clave) partesLinea2.push(<Text key="clave">{clave}</Text>);
+    if ((config.tarjetaTipoFormacion ?? true) && materia.tipoFormacion) {
+      partesLinea2.push(<Text key="tipo">{materia.tipoFormacion}</Text>);
+    }
+  }
+
   return (
     <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress} activeOpacity={0.75}>
-      <View style={s.fila}>
-          <Text style={s.nombre}>
-            {partirCoincidencia(`${materia.numero} · ${materia.nombre}`, resaltar ?? '').map((p, i) => (
-              p.coincide
-                ? <Text key={i} style={{ backgroundColor: (tema.acentoFondo ?? tema.acento) + hexOpacity(35), color: tema.texto, fontWeight: '800' }}>{p.texto}</Text>
-                : <Text key={i}>{p.texto}</Text>
+      {dosLineas ? (
+        <View>
+          <Text style={[s.nombre, { fontWeight: '700', flex: undefined }]}>{titulo}</Text>
+          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 3 }} numberOfLines={1}>
+            {partesLinea2.map((parte, i) => (
+              <React.Fragment key={i}>{i > 0 ? ' · ' : ''}{parte}</React.Fragment>
             ))}
           </Text>
+        </View>
+      ) : (
+        <View style={s.fila}>
+          <Text style={s.nombre}>{titulo}</Text>
           <Text style={s.badge}>{icono} {badgeCreditos(materia, config)}</Text>
         </View>
+      )}
 
         {(config.tarjetaAvisoPrevias ?? true) && previasPendientes.length > 0 && (
           <Text style={s.advertencia}>⚠️ Faltan previas N°: {previasPendientes.map(p => p.num).join(', ')}</Text>
