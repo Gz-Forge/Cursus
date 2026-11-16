@@ -12,6 +12,10 @@ import {
 import { parsearMes } from '../utils/fecha';
 import { confirmacionBorrarEvaluacion } from '../utils/ayudas';
 import { ultimoMaximo, ajustarNota } from '../utils/numerosNotas';
+import { SelectorFecha } from './SelectorFecha';
+import { SelectorHorario } from './SelectorHorario';
+import { esIsoValida } from '../utils/calendario';
+import { HorarioSugerido } from '../utils/horarioSelector';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -30,113 +34,46 @@ function fmtNum(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
-// ── HoraPicker: botones ▲/▼ para hora, botones :00/:30 para minutos ───────────
-function HoraPicker({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
-  const tema = useTema();
-  const h = Math.floor(value / 60);
-  const m = value % 60 === 30 ? 30 : 0;
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>{label}</Text>
-      <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 10, alignItems: 'center' }}>
-        <TouchableOpacity onPress={() => onChange(((h + 1) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
-        </TouchableOpacity>
-        <Text style={{ color: tema.texto, fontSize: 26, fontWeight: '700', letterSpacing: 1, minWidth: 64, textAlign: 'center' }}>
-          {h.toString().padStart(2, '0')}:{m === 0 ? '00' : '30'}
-        </Text>
-        <TouchableOpacity onPress={() => onChange(((h - 1 + 24) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-          {([0, 30] as const).map(min => (
-            <TouchableOpacity
-              key={min}
-              onPress={() => onChange(h * 60 + min)}
-              style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6,
-                backgroundColor: m === min ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta, alignItems: 'center' }}
-            >
-              <Text style={{ color: m === min ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
-                :{min === 0 ? '00' : '30'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ── Subcomponente genérico: fecha y hora ──────────────────────────────────────
+// ── Fecha y hora de una evaluación (puntos 1/11 y selector de hora D) ────────
 function FechaHoraPicker({
   fecha,
   hora,
   horaFin,
   onActualizar,
+  sugeridos = [],
+  ocupadosDe,
+  excluirId,
+  diasMarcados,
 }: {
   fecha?: string;
   hora?: number;
   horaFin?: number;
   onActualizar: (p: { fecha?: string; hora?: number; horaFin?: number }) => void;
+  sugeridos?: HorarioSugerido[];
+  /** Horarios ocupados en una fecha (otros bloques y evaluaciones), sin esta evaluación. */
+  ocupadosDe?: (fecha: string, excluirId?: string) => { inicio: number; fin: number }[];
+  excluirId?: string;
+  diasMarcados?: string[];
 }) {
   const tema = useTema();
-
-  // Inicializar día/mes desde ISO YYYY-MM-DD
-  const parsarFechaInicial = (iso?: string): { dia: string; mes: string } => {
-    if (!iso) return { dia: '', mes: '' };
-    const parts = iso.split('-');
-    if (parts.length !== 3) return { dia: '', mes: '' };
-    const [, mo, d] = parts;
-    const dia = parseInt(d, 10);
-    const mes = parseInt(mo, 10);
-    if (isNaN(dia) || isNaN(mes)) return { dia: '', mes: '' };
-    return { dia: String(dia), mes: String(mes) };
-  };
-
-  const inicial = parsarFechaInicial(fecha);
-
   const [expandido, setExpandido] = useState(false);
-  const [diaStr, setDiaStr] = useState(inicial.dia);
-  const [mesStr, setMesStr] = useState(inicial.mes);
-  const [dropdownDia, setDropdownDia] = useState(false);
-  const [dropdownMes, setDropdownMes] = useState(false);
-  const [horaInicio, setHoraInicio] = useState<number>(hora !== undefined ? hora : 480);
-  const [horaFinVal, setHoraFinVal] = useState<number>(horaFin !== undefined ? horaFin : 600);
-  // Refs para acceder al valor actual sin depender del closure del render
-  const diaRef = useRef(inicial.dia);
-  const mesRef = useRef(inicial.mes);
-  const horaInicioRef = useRef(hora !== undefined ? hora : 480);
-  const horaFinRef = useRef(horaFin !== undefined ? horaFin : 600);
+  const tieneFecha = esIsoValida(fecha);
 
-  const setDia = (v: string) => { diaRef.current = v; setDiaStr(v); };
-  const setMes = (v: string) => { mesRef.current = v; setMesStr(v); };
+  // Sin hora todavía: el primer horario sugerido o 08:00, sin hora de fin
+  const inicio = hora ?? sugeridos[0]?.inicio ?? 480;
+  const fin: number | null = hora === undefined ? null : (horaFin ?? null);
 
-  const construirFechaISO = (): string | undefined => {
-    const dia = parseInt(diaRef.current, 10);
-    const mes = parsearMes(mesRef.current) ?? 0;
-    if (isNaN(dia) || dia < 1 || dia > 31 || mes < 1 || mes > 12) return undefined;
-    const anio = new Date().getFullYear();
-    const d = new Date(anio, mes - 1, dia);
-    if (d.getMonth() !== mes - 1 || d.getDate() !== dia) return undefined;
-    return `${anio}-${mes.toString().padStart(2, '0')}-${dia.toString().padStart(2, '0')}`;
-  };
-
-  const guardar = () => {
-    onActualizar({
-      fecha: construirFechaISO(),
-      hora: horaInicioRef.current,
-      horaFin: horaFinRef.current,
-    });
-  };
-
+  // Se guarda en cada cambio, como antes
+  const cambiarFecha = (iso: string) => onActualizar({ fecha: iso, hora: inicio, horaFin: fin ?? undefined });
+  const cambiarHora = (v: { inicio: number; fin: number | null }) =>
+    onActualizar({ fecha, hora: v.inicio, horaFin: v.fin ?? undefined });
   const limpiar = () => {
-    setDia(''); setMes('');
     onActualizar({ fecha: undefined, hora: undefined, horaFin: undefined });
+    setExpandido(false);
   };
 
-  const fechaISO = construirFechaISO();
-  const labelFecha = fechaISO
-    ? `📅 ${isoToDisplay(fechaISO)}${hora !== undefined ? `  ${fmtHoraEval(hora)}` : ''}`
+  const labelFecha = tieneFecha
+    ? `📅 ${isoToDisplay(fecha!)}${hora !== undefined ? `  ${fmtHoraEval(hora)}` : ''}`
     : null;
 
   return (
@@ -164,136 +101,25 @@ function FechaHoraPicker({
       )}
 
       {expandido && (
-        <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginTop: 6 }}>
-
-          {/* ── Fecha: día + mes ── */}
-          <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 2 }}>
-
-            {/* Día */}
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Día</Text>
-              <TextInput
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
-                value={diaStr}
-                onChangeText={v => { setDia(v.replace(/\D/g, '').slice(0, 2)); setDropdownMes(false); }}
-                onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
-                onBlur={guardar}
-                onSubmitEditing={guardar}
-                placeholder="DD"
-                placeholderTextColor={tema.textoSecundario}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-              {dropdownDia && (
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 150, borderWidth: 1, borderColor: tema.borde }}>
-                  <ScrollView nestedScrollEnabled>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                      <TouchableOpacity
-                        key={d}
-                        onPress={() => { setDia(String(d)); setDropdownDia(false); guardar(); }}
-                        style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                      >
-                        <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            {/* Mes */}
-            <View style={{ flex: 2 }}>
-              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Mes</Text>
-              <TextInput
-                style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 6 }}
-                value={mesStr}
-                onChangeText={v => { setMes(v); setDropdownDia(false); }}
-                onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
-                onBlur={() => {
-                  const n = parsearMes(mesRef.current);
-                  if (n !== null) setMes(String(n));
-                  setDropdownMes(false);
-                  guardar();
-                }}
-                onSubmitEditing={() => {
-                  const n = parsearMes(mesRef.current);
-                  if (n !== null) setMes(String(n));
-                  guardar();
-                }}
-                placeholder="MM o mes"
-                placeholderTextColor={tema.textoSecundario}
-                maxLength={20}
-              />
-              {!!mesStr && !isNaN(parseInt(mesStr, 10)) && parseInt(mesStr, 10) >= 1 && parseInt(mesStr, 10) <= 12 && (
-                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 10, marginTop: 2 }}>
-                  {MESES[parseInt(mesStr, 10) - 1]}
-                </Text>
-              )}
-              {dropdownMes && (
-                <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 180, borderWidth: 1, borderColor: tema.borde }}>
-                  <ScrollView nestedScrollEnabled>
-                    {MESES.map((nombre, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        onPress={() => { setMes(String(i + 1)); setDropdownMes(false); guardar(); }}
-                        style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                      >
-                        <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <Text style={{ color: tema.textoSecundario, fontSize: 10, marginBottom: 10, textAlign: 'right' }}>
-            Año: {new Date().getFullYear()}
-          </Text>
-
-          {/* ── Hora ── */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-            <HoraPicker
-              label="Hora inicio"
-              value={horaInicio}
-              onChange={v => {
-                horaInicioRef.current = v;
-                setHoraInicio(v);
-                let fin = horaFinRef.current;
-                if (fin < v + 30) {
-                  fin = v + 30;
-                  horaFinRef.current = fin;
-                  setHoraFinVal(fin);
-                }
-                onActualizar({ fecha: construirFechaISO(), hora: v, horaFin: fin });
-              }}
+        <View style={{ marginTop: 6, gap: 8 }}>
+          <SelectorFecha fecha={fecha} onCambiar={cambiarFecha} diasMarcados={diasMarcados} />
+          {tieneFecha ? (
+            <SelectorHorario
+              inicio={inicio}
+              fin={fin}
+              onCambiar={cambiarHora}
+              sugeridos={sugeridos}
+              ocupados={ocupadosDe ? ocupadosDe(fecha!, excluirId) : []}
+              permiteSinFin
             />
-            <HoraPicker
-              label="Fin"
-              value={horaFinVal}
-              onChange={v => {
-                if (v <= horaInicioRef.current) return;
-                horaFinRef.current = v;
-                setHoraFinVal(v);
-                onActualizar({ fecha: construirFechaISO(), hora: horaInicioRef.current, horaFin: v });
-              }}
-            />
-          </View>
-
-          {(fecha || hora !== undefined) && (
-            <TouchableOpacity onPress={limpiar} style={{ marginTop: 8, alignItems: 'center' }}>
+          ) : (
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, textAlign: 'center' }}>Elegí el día para poner la hora.</Text>
+          )}
+          {tieneFecha && (
+            <TouchableOpacity onPress={limpiar} style={{ alignItems: 'center', paddingVertical: 4 }}>
               <Text style={{ color: '#F44336', fontSize: 12 }}>Quitar del horario</Text>
             </TouchableOpacity>
           )}
-
-          {/* Botón guardar fecha */}
-          <TouchableOpacity
-            onPress={guardar}
-            style={{ marginTop: 10, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 6, padding: 8, alignItems: 'center' }}
-          >
-            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>Guardar fecha</Text>
-          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -354,9 +180,13 @@ interface Props {
   onToggleColapso: (id: string) => void;
   /** Punto 64: máximo para una prueba nueva si el grupo todavía no tiene ninguna en modo Número. */
   maximoSugerido?: number;
+  /** Selector de hora D: horarios de la materia, ocupados del día y días con clase. */
+  horariosSugeridos?: HorarioSugerido[];
+  ocupadosDe?: (fecha: string, excluirId?: string) => { inicio: number; fin: number }[];
+  diasConClase?: string[];
 }
 
-export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, onToggleColapso, maximoSugerido }: Props) {
+export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, onToggleColapso, maximoSugerido, horariosSugeridos, ocupadosDe, diasConClase }: Props) {
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
   const contribucion = calcularPorcentajeEvaluacion(evaluacion);
@@ -552,6 +382,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           hora={evaluacion.hora}
           horaFin={evaluacion.horaFin}
           onActualizar={actualizarSimple}
+          sugeridos={horariosSugeridos}
+          ocupadosDe={ocupadosDe}
+          excluirId={evaluacion.id}
+          diasMarcados={diasConClase}
         />
         <View style={{ marginTop: 6 }}>
           <Text style={estilos.label}>Salón (opcional)</Text>
@@ -700,6 +534,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
               hora={sub.hora}
               horaFin={sub.horaFin}
               onActualizar={p => actualizarSub(i, p)}
+              sugeridos={horariosSugeridos}
+              ocupadosDe={ocupadosDe}
+              excluirId={sub.id}
+              diasMarcados={diasConClase}
             />
             <View style={{ marginTop: 6 }}>
               <Text style={estilos.label}>Salón (opcional)</Text>

@@ -12,36 +12,13 @@ import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { TemaPersonalizado, FondoPantalla, ColoresScreen, ColoresSemestres } from '../types';
 import * as ImagePicker from 'expo-image-picker';
+import { SelectorColor } from '../components/SelectorColor';
 
-// ── Color picker ──────────────────────────────────────────────────────────────
+// ── Color: paleta, selector visual y código (punto 29) ──────────────────────
 function ColorInput({
   value, onChange, label, fallbackColor,
 }: { value: string; onChange: (v: string) => void; label: string; fallbackColor?: string }) {
-  const tema = useTema();
-  const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
-  const swatchColor = isValidHex ? value : (fallbackColor ?? tema.borde);
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-      <View style={{
-        width: 32, height: 32, borderRadius: 8,
-        backgroundColor: swatchColor,
-        borderWidth: 1, borderColor: tema.borde,
-      }} />
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 120 }}>{label}</Text>
-      <TextInput
-        style={{
-          flex: 1, backgroundColor: tema.fondo, color: tema.texto,
-          padding: 8, borderRadius: 6, fontSize: 13, fontFamily: 'monospace',
-        }}
-        value={value}
-        onChangeText={onChange}
-        placeholder={fallbackColor ?? '#RRGGBB'}
-        placeholderTextColor={tema.textoSecundario}
-        maxLength={7}
-        autoCapitalize="characters"
-      />
-    </View>
-  );
+  return <SelectorColor value={value} onChange={onChange} label={label} fallbackColor={fallbackColor} anchoLabel={120} />;
 }
 
 // ── Editor de fondo por pantalla ──────────────────────────────────────────────
@@ -404,27 +381,13 @@ function PantallaEditor({
                 </Text>
               )}
               {semestresUnicos.map(sem => (
-                <View key={sem} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <View style={{
-                    width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: tema.borde,
-                    backgroundColor: cs?.porSemestre?.[sem.toString()] || tema.borde,
-                  }} />
-                  <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 80 }}>Sem. {sem}</Text>
-                  <TextInput
-                    style={{
-                      flex: 1, backgroundColor: tema.fondo, color: tema.texto,
-                      padding: 7, borderRadius: 6, fontSize: 13, fontFamily: 'monospace',
-                    }}
-                    value={cs?.porSemestre?.[sem.toString()] ?? ''}
-                    onChangeText={v =>
-                      setCS({ porSemestre: { ...(cs?.porSemestre ?? {}), [sem.toString()]: v } })
-                    }
-                    placeholder="#RRGGBB"
-                    placeholderTextColor={tema.textoSecundario}
-                    maxLength={7}
-                    autoCapitalize="characters"
-                  />
-                </View>
+                <SelectorColor
+                  key={sem}
+                  label={`Sem. ${sem}`}
+                  anchoLabel={80}
+                  value={cs?.porSemestre?.[sem.toString()] ?? ''}
+                  onChange={v => setCS({ porSemestre: { ...(cs?.porSemestre ?? {}), [sem.toString()]: v } })}
+                />
               ))}
             </View>
           )}

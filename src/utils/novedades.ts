@@ -16,6 +16,18 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.7.5',
+    items: [
+      '📅 Las fechas se eligen con un calendario (mes o semana: tocá el título para cambiar) que marca los días con clase.',
+      '🕘 La hora se elige en una línea de tiempo: arrastrá el bloque o sus bordes, o usá − / + de a 15 minutos.',
+      '💡 Te sugiere los horarios que ya usa la materia y avisa si se superpone con otra clase o evaluación.',
+      '⏱️ Las evaluaciones pueden ir "Sin hora de fin", y en el horario se puede cambiar la hora desde la edición rápida.',
+      '🗂️ La lista de horarios de la materia se agrupa por semana y los filtros son desplegables (por defecto, los futuros).',
+      '🎨 Los colores se eligen de una paleta de 16 o con un selector visual, y podés aplicar un color a todas las evaluaciones individuales.',
+      '🔎 En Horarios, doble clic (o doble toque) sobre la fecha te lleva a cualquier semana.',
+    ],
+  },
+  {
     version: '1.7.0',
     items: [
       '➕ Semestre, créditos y oportunidades se cargan con − / + (y tocando el número lo escribís).',
