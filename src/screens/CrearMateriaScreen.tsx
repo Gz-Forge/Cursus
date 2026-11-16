@@ -31,6 +31,7 @@ import { SelectorHorario } from '../components/SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
+import { PreviasEditor } from '../components/PreviasEditor';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 
@@ -129,7 +130,6 @@ export function CrearMateriaScreen() {
     evaluaciones: [], oportunidadesExamen: config.oportunidadesExamenDefault,
     tipoFormacion: undefined, bloques: [],
   });
-  const [busquedaPrevia, setBusquedaPrevia] = useState('');
   const [semestreStr, setSemestreStr] = useState(String(semestreInicial));
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
@@ -669,56 +669,14 @@ export function CrearMateriaScreen() {
           onAgregarTipo={t => actualizarConfig({ tiposFormacion: [...useStore.getState().config.tiposFormacion, t] })}
         />
 
-        <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 8 }}>PREVIAS NECESARIAS</Text>
-        {form.previasNecesarias.map((num, i) => {
-          const m = materias.find(x => x.numero === num);
-          return (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 10, marginBottom: 4 }}>
-              <Text style={{ color: tema.texto, flex: 1 }}>{num} · {m?.nombre ?? '?'}</Text>
-              <TouchableOpacity onPress={() => setForm(f => ({ ...f, previasNecesarias: f.previasNecesarias.filter((_, j) => j !== i) }))}>
-                <Text style={{ color: '#F44336' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-        {/* Autocompletado de previas */}
-        <View style={{ marginBottom: 16 }}>
-          <TextInput
-            placeholder="Buscar por nombre o número..."
-            placeholderTextColor={tema.textoSecundario}
-            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 8, borderRadius: 8 }}
-            value={busquedaPrevia}
-            onChangeText={setBusquedaPrevia}
-            keyboardType="default"
-          />
-          {busquedaPrevia.length > 0 && (
-            <View style={{ backgroundColor: tema.tarjeta, borderRadius: 8, marginTop: 4, maxHeight: 160 }}>
-              {materias
-                .filter(m =>
-                  m.id !== form.id &&
-                  !form.previasNecesarias.includes(m.numero) &&
-                  (
-                    m.nombre.toLowerCase().includes(busquedaPrevia.toLowerCase()) ||
-                    String(m.numero).includes(busquedaPrevia)
-                  )
-                )
-                .slice(0, 5)
-                .map(m => (
-                  <TouchableOpacity
-                    key={m.id}
-                    onPress={() => {
-                      setForm(f => ({ ...f, previasNecesarias: [...f.previasNecesarias, m.numero] }));
-                      setBusquedaPrevia('');
-                    }}
-                    style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                  >
-                    <Text style={{ color: tema.texto }}>{m.numero} · {m.nombre}</Text>
-                  </TouchableOpacity>
-                ))
-              }
-            </View>
-          )}
-        </View>
+        {/* Punto 6: previas con chips de estado y buscador */}
+        <PreviasEditor
+          previas={form.previasNecesarias}
+          onCambiar={previas => setForm(f => ({ ...f, previasNecesarias: previas }))}
+          materias={materias}
+          config={config}
+          excluirId={form.id}
+        />
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>NOTA</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 8 }}>
