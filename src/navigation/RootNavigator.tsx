@@ -15,6 +15,7 @@ import { CrearMateriaScreen } from '../screens/CrearMateriaScreen';
 import { TarjetaConfigScreen } from '../screens/TarjetaConfigScreen';
 import { HorarioScreen } from '../screens/HorarioScreen';
 import { ImportarExportarScreen } from '../screens/ImportarExportarScreen';
+import { PromptsIAScreen } from '../screens/PromptsIAScreen';
 import { TemaPersonalizadoScreen } from '../screens/TemaPersonalizadoScreen';
 import { WebSidebar } from './WebSidebar';
 
@@ -83,6 +84,11 @@ export function RootNavigator() {
             name="ImportarExportar"
             component={ImportarExportarScreen}
             options={{ headerShown: true, title: 'Importar / Exportar' }}
+          />
+          <Stack.Screen
+            name="PromptsIA"
+            component={PromptsIAScreen}
+            options={{ headerShown: true, title: 'Prompts para IA' }}
           />
           <Stack.Screen
             name="TemaPersonalizado"

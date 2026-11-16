@@ -16,6 +16,16 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.8.5',
+    items: [
+      '📦 Ajustes → Datos ahora tiene tarjetas: copia de seguridad, cargar datos, pasar a otro dispositivo y armar tu carrera con IA.',
+      '👀 Antes de importar materias ves cuántas se crean, cuántas cambian y cuántas se borran, según el modo que elijas.',
+      '📂 En la web y en la app de escritorio ya podés importar archivos, y también arrastrarlos y soltarlos.',
+      '📷 En las evaluaciones de una materia podés escanear un QR y elegir si agregarlas o reemplazar las que tenías.',
+      '🗑 Nuevo "Borrar todo y empezar de cero" en Ajustes → Datos, solo para el perfil activo.',
+    ],
+  },
+  {
     version: '1.8.0',
     items: [
       '🔗 Las previas se ven como chips con su estado ("1 de 2 cumplidas") y se agregan con un buscador por nombre o número.',

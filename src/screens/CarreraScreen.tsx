@@ -922,7 +922,7 @@ export function CarreraScreen() {
         onManual={() => navigation.navigate('CrearMateria' as never, {} as never)}
         onImportar={handleImportar}
         onEscanear={!isWeb ? () => setMostrarQrScanner(true) : undefined}
-        onIA={() => navigation.navigate('Tabs', { screen: 'Ajustes', params: { abrir: 'prompts' } })}
+        onIA={() => navigation.navigate('PromptsIA')}
       />
 
       <AvisoRequisitosModal

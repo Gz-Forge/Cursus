@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { ZonaArchivo } from '../components/ZonaArchivo';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, Switch, Platform, Modal } from 'react-native';
 import LZString from 'lz-string';
 import QRCode from 'react-native-qrcode-svg';
@@ -10,6 +11,9 @@ import { Materia, Evaluacion, BloqueHorario, TipoBloque, TipoNota, RegistroFalta
 import { EvaluacionItem } from '../components/EvaluacionItem';
 import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
 import { EvaluacionesQrModal } from '../components/EvaluacionesQrModal';
+import { QrScannerModal } from '../components/QrScannerModal';
+import { EvaluacionesRecibidasModal } from '../components/EvaluacionesRecibidasModal';
+import { conIdsNuevos } from '../utils/evaluacionesQr';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
 import { ayudaNotaExamen } from '../utils/ayudas';
@@ -44,6 +48,9 @@ import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 import { EdicionLoteModal } from '../components/EdicionLoteModal';
 import { aplicarLote } from '../utils/bloquesLote';
 
+
+// En web, las filas Cancelar + zona de archivo van en columna: sin flex: 1 cada celda ocupa su alto natural.
+const celdaFila = Platform.OS === 'web' ? {} : { flex: 1 };
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -233,6 +240,8 @@ export function EditMateriaScreen() {
   const [modoImport, setModoImport] = useState<ModoImport | null>(null);
   const [mostrarMenuImport, setMostrarMenuImport] = useState(false);
   const [mostrarEvalQr, setMostrarEvalQr] = useState(false);
+  const [mostrarScannerEval, setMostrarScannerEval] = useState(false);
+  const [evalRecibidas, setEvalRecibidas] = useState<Evaluacion[] | null>(null);
   const [mostrarQrHorario, setMostrarQrHorario] = useState(false);
   const [semanasICS, setSemanasICS] = useState('16');
   const [eventosICS, setEventosICS] = useState<ReturnType<typeof extraerEventosICS>>([]);
@@ -531,13 +540,17 @@ export function EditMateriaScreen() {
   });
 
   const importarDesdeCSV = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['text/csv', 'text/plain', '*/*']);
       if (!texto) return;
+      procesarCSV(texto);
+    } catch (e: any) {
+      showAlert('Error al abrir CSV', e.message);
+    }
+  };
+
+  const procesarCSV = (texto: string) => {
+    try {
       setTextoTabla(texto);
       setFilasParseadas(parsearCSV(texto));
       setModoImport('csv');
@@ -547,13 +560,17 @@ export function EditMateriaScreen() {
   };
 
   const importarDesdeJSON = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
+      procesarJSONHorario(texto);
+    } catch (e: any) {
+      showAlert('Error al importar JSON', e.message);
+    }
+  };
+
+  const procesarJSONHorario = (texto: string) => {
+    try {
       const bloques = parsearJSONMateria(texto);
       setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
@@ -562,13 +579,17 @@ export function EditMateriaScreen() {
   };
 
   const importarDesdeICS = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'La importación de archivos desde la versión web no está disponible aún. Usá la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['text/calendar', '*/*']);
       if (!texto) return;
+      procesarICS(texto);
+    } catch (e: any) {
+      showAlert('Error al importar ICS', e.message);
+    }
+  };
+
+  const procesarICS = (texto: string) => {
+    try {
       const eventos = extraerEventosICS(texto);
       if (eventos.length === 0) {
         showAlert('Sin eventos', 'No se encontraron eventos en el archivo ICS.');
@@ -635,13 +656,17 @@ export function EditMateriaScreen() {
   };
 
   const importarEvaluaciones = async () => {
-    if (Platform.OS === 'web') {
-      showAlert('No disponible', 'Importá desde la app móvil.');
-      return;
-    }
     try {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
+      procesarEvaluaciones(texto);
+    } catch (e: any) {
+      showAlert('Error al importar', e.message);
+    }
+  };
+
+  const procesarEvaluaciones = (texto: string) => {
+    try {
       const parsed = JSON.parse(texto);
       if (!Array.isArray(parsed)) {
         showAlert('Formato inválido', 'El archivo debe ser un array JSON de evaluaciones.');
@@ -702,12 +727,8 @@ export function EditMateriaScreen() {
   };
 
   const handleEvaluacionesDetectadas = (evaluaciones: Evaluacion[]) => {
-    showConfirm(
-      'Evaluaciones recibidas por QR',
-      `Se recibieron ${evaluaciones.length} evaluación${evaluaciones.length !== 1 ? 'es' : ''}. ¿Qué querés hacer?`,
-      () => setForm(f => ({ ...f, evaluaciones })),
-      { labelConfirmar: 'Reemplazar', destructivo: true }
-    );
+    // El escáner se cierra solo; se espera a que termine para no apilar dos Modal (iOS).
+    setTimeout(() => setEvalRecibidas(evaluaciones), 350);
   };
 
   const marcarCursando = () => setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
@@ -956,18 +977,30 @@ export function EditMateriaScreen() {
                 <Text style={{ color: tema.texto }}>↑ Exportar evaluaciones (.json)</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              onPress={importarEvaluaciones}
-              style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
-            >
-              <Text style={{ color: tema.texto }}>📥 Importar evaluaciones (.json)</Text>
-            </TouchableOpacity>
+            <View style={{ marginBottom: 6 }}>
+              <ZonaArchivo
+                compacta
+                extensiones={['.json']}
+                etiquetaBoton="📥 Importar evaluaciones (.json)"
+                estiloBoton="secundario"
+                onElegir={importarEvaluaciones}
+                onArchivo={t => procesarEvaluaciones(t)}
+              />
+            </View>
             {Platform.OS !== 'web' && (
               <TouchableOpacity
                 onPress={() => setMostrarEvalQr(true)}
+                style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
+              >
+                <Text style={{ color: tema.texto }}>📤 Compartir por QR</Text>
+              </TouchableOpacity>
+            )}
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity
+                onPress={() => setMostrarScannerEval(true)}
                 style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 16 }}
               >
-                <Text style={{ color: tema.texto }}>📷 Compartir por QR</Text>
+                <Text style={{ color: tema.texto }}>📷 Escanear QR</Text>
               </TouchableOpacity>
             )}
           </>
@@ -1382,18 +1415,22 @@ export function EditMateriaScreen() {
                 ))}
               </View>
             )}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => { setModoImport(null); setTextoTabla(''); setFilasParseadas([]); setMostrarAcordeonCSV(false); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               {filasParseadas.length === 0 ? (
-                <TouchableOpacity
-                  onPress={importarDesdeCSV}
-                  style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo CSV</Text>
-                </TouchableOpacity>
+                <View style={celdaFila}>
+                  <ZonaArchivo
+                    compacta
+                    extensiones={['.csv', '.txt']}
+                    etiquetaBoton="📂 Abrir archivo CSV"
+                    onElegir={importarDesdeCSV}
+                    onArchivo={t => procesarCSV(t)}
+                  />
+                </View>
               ) : (
                 <TouchableOpacity
                   onPress={() => {
@@ -1405,7 +1442,7 @@ export function EditMateriaScreen() {
                     setForm(prev => ({ ...prev, bloques: [...(prev.bloques ?? []), ...nuevos] }));
                     setModoImport(null); setTextoTabla(''); setFilasParseadas([]); setMostrarAcordeonCSV(false);
                   }}
-                  style={{ flex: 1, padding: 9, backgroundColor: filasParseadas.some(f => !f.error) ? tema.acento : tema.tarjeta, borderRadius: 6, alignItems: 'center' }}>
+                  style={{ ...celdaFila, padding: 9, backgroundColor: filasParseadas.some(f => !f.error) ? tema.acento : tema.tarjeta, borderRadius: 6, alignItems: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '600' }}>
                     Agregar {filasParseadas.filter(f => !f.error).length} válidos
                   </Text>
@@ -1456,17 +1493,21 @@ export function EditMateriaScreen() {
                 </View>
               </View>
             )}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => { setModoImport(null); setMostrarAcordeonCSV(false); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={async () => { setMostrarAcordeonCSV(false); await importarDesdeJSON(); setModoImport(null); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo JSON</Text>
-              </TouchableOpacity>
+              <View style={celdaFila}>
+                <ZonaArchivo
+                  compacta
+                  extensiones={['.json']}
+                  etiquetaBoton="📂 Abrir archivo JSON"
+                  onElegir={async () => { setMostrarAcordeonCSV(false); await importarDesdeJSON(); setModoImport(null); }}
+                  onArchivo={async t => { setMostrarAcordeonCSV(false); procesarJSONHorario(t); setModoImport(null); }}
+                />
+              </View>
             </View>
           </View>
         )}
@@ -1481,17 +1522,21 @@ export function EditMateriaScreen() {
                   Importá un archivo .ics (Google Calendar, Outlook, etc.).{'\n'}
                   Los eventos recurrentes semanales se expandirán N semanas.
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => setModoImport(null)}
-                    style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                    style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                     <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={importarDesdeICS}
-                    style={{ flex: 1, padding: 9, backgroundColor: tema.acento, borderRadius: 6, alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontWeight: '600' }}>📂 Abrir archivo ICS</Text>
-                  </TouchableOpacity>
+                  <View style={celdaFila}>
+                    <ZonaArchivo
+                      compacta
+                      extensiones={['.ics']}
+                      etiquetaBoton="📂 Abrir archivo ICS"
+                      onElegir={importarDesdeICS}
+                      onArchivo={t => procesarICS(t)}
+                    />
+                  </View>
                 </View>
               </>
             ) : (
@@ -1838,6 +1883,29 @@ export function EditMateriaScreen() {
         visible={mostrarEvalQr}
         evaluaciones={form.evaluaciones}
         onCerrar={() => setMostrarEvalQr(false)}
+      />
+
+      <QrScannerModal
+        visible={mostrarScannerEval}
+        onCerrar={() => setMostrarScannerEval(false)}
+        onEvaluacionesDetectadas={handleEvaluacionesDetectadas}
+      />
+
+      <EvaluacionesRecibidasModal
+        cantidadRecibidas={evalRecibidas ? evalRecibidas.length : null}
+        nombreMateria={form.nombre ?? ''}
+        cantidadActuales={form.evaluaciones.length}
+        onAgregar={() => {
+          const recibidas = evalRecibidas ?? [];
+          setForm(f => ({ ...f, evaluaciones: [...f.evaluaciones, ...conIdsNuevos(recibidas)] }));
+          setEvalRecibidas(null);
+        }}
+        onReemplazar={() => {
+          const recibidas = evalRecibidas ?? [];
+          setForm(f => ({ ...f, evaluaciones: recibidas }));
+          setEvalRecibidas(null);
+        }}
+        onCancelar={() => setEvalRecibidas(null)}
       />
 
       {/* ── Modal QR horario ── */}
