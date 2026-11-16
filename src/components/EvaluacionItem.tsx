@@ -16,6 +16,7 @@ import { SelectorFecha } from './SelectorFecha';
 import { SelectorHorario } from './SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
 import { HorarioSugerido } from '../utils/horarioSelector';
+import { CampoSalon } from './CampoSalon';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -389,7 +390,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
         />
         <View style={{ marginTop: 6 }}>
           <Text style={estilos.label}>Salón (opcional)</Text>
-          <TextInput
+          <CampoSalon
             style={[estilos.input, { marginTop: 4 }]}
             placeholder="Ej: Aula 3, Lab 201..."
             placeholderTextColor={tema.textoSecundario}
@@ -541,7 +542,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             />
             <View style={{ marginTop: 6 }}>
               <Text style={estilos.label}>Salón (opcional)</Text>
-              <TextInput
+              <CampoSalon
                 style={[estilos.input, { marginTop: 4 }]}
                 placeholder="Ej: Aula 3, Lab 201..."
                 placeholderTextColor={tema.textoSecundario}

@@ -38,6 +38,7 @@ import { AvisoRequisitosModal } from '../components/AvisoRequisitosModal';
 import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
+import { CampoSalon } from '../components/CampoSalon';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -1113,7 +1114,7 @@ export function EditMateriaScreen() {
 
             {/* ── Salón ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Salón (opcional)</Text>
-            <TextInput
+            <CampoSalon
               style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12 }}
               value={bloqueNuevo.salon}
               onChangeText={v => {

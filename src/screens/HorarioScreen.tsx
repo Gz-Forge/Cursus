@@ -33,6 +33,7 @@ import {
   type LongPressGestureHandlerStateChangeEvent,
   type TapGestureHandlerStateChangeEvent,
 } from 'react-native-gesture-handler';
+import { CampoSalon } from '../components/CampoSalon';
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -2866,7 +2867,7 @@ export function HorarioScreen() {
                 />
 
                 <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Salón (opcional)</Text>
-                <TextInput
+                <CampoSalon
                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 14 }}
                   value={modalSalonStr}
                   onChangeText={setModalSalonStr}
@@ -3256,7 +3257,7 @@ export function HorarioScreen() {
                         })}
                       </View>
                       <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 10 }}>SALÓN / AULA</Text>
-                      <TextInput
+                      <CampoSalon
                         style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 22 }}
                         value={cmbSalon}
                         onChangeText={setCmbSalon}
