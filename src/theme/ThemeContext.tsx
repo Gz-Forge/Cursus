@@ -19,7 +19,7 @@ export function sanitizarTema(p: TemaPersonalizado): Tema {
   };
 }
 
-const ThemeContext = createContext<Tema>(temaOscuro);
+export const ThemeContext = createContext<Tema>(temaOscuro);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const config = useStore(s => s.config);
