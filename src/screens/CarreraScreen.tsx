@@ -16,7 +16,8 @@ import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { AgregarMateriaModal } from '../components/AgregarMateriaModal';
 import TiledBackground from '../components/TiledBackground';
 import { useFondoPantalla, useTemaPantalla, hexOpacity, useColoresSemestres } from '../utils/useFondoPantalla';
-import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal } from '../utils/calculos';
+import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal, agruparPorTipo } from '../utils/calculos';
+import { AnilloProgreso } from '../components/AnilloProgreso';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
 import { EstadoMateria, Materia } from '../types';
@@ -82,6 +83,7 @@ export function CarreraScreen() {
   const isWeb = Platform.OS === 'web';
   const fondoPantalla = useFondoPantalla('carrera');
   const creditosIncluirAprobado = config.creditosModalIncluirAprobado ?? false;
+  const agruparCreditos = config.creditosModalAgruparTipo ?? false;
   const dispIncluirAprobado = config.disponiblesModalIncluirAprobado ?? false;
   const dispIncluirRecursar = config.disponiblesModalIncluirRecursar ?? false;
 
@@ -560,20 +562,41 @@ export function CarreraScreen() {
       )}
 
       {/* Resumen */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', padding: 16, backgroundColor: surfaceBg }}>
-        <TouchableOpacity onPress={() => setModalCreditos(true)} style={{ alignItems: 'center' }}>
-          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{creditos}</Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Créditos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setModalExoneradas(true)} style={{ alignItems: 'center' }}>
-          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{exoneradas}</Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>{getLabel('exonerado')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setModalDisponibles(true)} style={{ alignItems: 'center' }}>
-          <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{disponibles}</Text>
-          <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Disponibles</Text>
-        </TouchableOpacity>
-      </View>
+      {(() => {
+        const estiloCifras = config.carreraCifrasEstilo ?? 'simple';
+        const colAcento = tema.acentoLineas ?? tema.acento;
+        const metaCreditos = materias.reduce((acc, m) => acc + m.creditosQueDA, 0);
+        const metaMaterias = materias.length;
+        const pctDe = (v: number, meta: number) => (meta > 0 ? Math.max(0, Math.min(100, (v / meta) * 100)) : 0);
+        const numero = (valor: number, meta?: number) => (
+          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <Text style={{ color: tema.texto, fontSize: 24, fontWeight: '700' }}>{valor}</Text>
+            {meta !== undefined && <Text style={{ color: tema.textoSecundario, fontSize: 12, marginLeft: 2 }}>{`/${meta}`}</Text>}
+          </View>
+        );
+        const cifra = (valor: number, meta: number | undefined, etiqueta: string, onPress: () => void) => (
+          <TouchableOpacity onPress={onPress} style={{ alignItems: 'center', justifyContent: 'center' }}>
+            {estiloCifras === 'anillo' && meta !== undefined ? (
+              <AnilloProgreso pct={pctDe(valor, meta)} tamano={56} grosor={5} color={colAcento} colorFondo={tema.borde}>
+                <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700' }}>{valor}</Text>
+              </AnilloProgreso>
+            ) : numero(valor, estiloCifras === 'meta' ? meta : undefined)}
+            {estiloCifras === 'meta' && meta !== undefined && (
+              <View style={{ width: 64, height: 4, borderRadius: 2, backgroundColor: tema.borde, overflow: 'hidden', marginTop: 3 }}>
+                <View style={{ width: `${pctDe(valor, meta)}%`, height: 4, backgroundColor: colAcento }} />
+              </View>
+            )}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: estiloCifras === 'anillo' && meta !== undefined ? 4 : 0 }}>{etiqueta}</Text>
+          </TouchableOpacity>
+        );
+        return (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: estiloCifras === 'anillo' ? 'center' : 'flex-start', padding: 16, backgroundColor: surfaceBg }}>
+            {cifra(creditos, metaCreditos, 'Créditos', () => setModalCreditos(true))}
+            {cifra(exoneradas, metaMaterias, getLabel('exonerado'), () => setModalExoneradas(true))}
+            {cifra(disponibles, undefined, 'Disponibles', () => setModalDisponibles(true))}
+          </View>
+        );
+      })()}
 
       {/* Pestañas */}
       <View style={{ flexDirection: 'row', backgroundColor: surfaceBg, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
@@ -975,12 +998,12 @@ export function CarreraScreen() {
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, marginBottom: 2 }}>
               Créditos obtenidos
             </Text>
-            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: config.usarEstadoAprobado ? 10 : 14 }}>
+            <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 10 }}>
               {listaCreditosMostrados.length} materia{listaCreditosMostrados.length !== 1 ? 's' : ''} · {creditos} créditos
             </Text>
 
             {config.usarEstadoAprobado && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 13, flex: 1 }}>
                   Incluir {getLabel('aprobado')}
                 </Text>
@@ -993,13 +1016,24 @@ export function CarreraScreen() {
               </View>
             )}
 
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={{ color: tema.textoSecundario, fontSize: 13, flex: 1 }}>Agrupar por tipo</Text>
+              <Switch
+                value={agruparCreditos}
+                onValueChange={v => actualizarConfig({ creditosModalAgruparTipo: v })}
+                trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                thumbColor="#fff"
+              />
+            </View>
+
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator persistentScrollbar>
               {listaCreditosMostrados.length === 0 ? (
                 <Text style={{ color: tema.textoSecundario, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
                   Sin créditos obtenidos aún
                 </Text>
               ) : (
-                listaCreditosMostrados.map((mat, idx) => {
+                (() => {
+                  const filaCredito = (mat: Materia, idx: number, total: number) => {
                   const semIdx = semestres.indexOf(mat.semestre);
                   const color = coloresSem[semIdx] ?? coloresSem[semIdx % coloresSem.length];
                   return (
@@ -1008,7 +1042,7 @@ export function CarreraScreen() {
                       style={{
                         flexDirection: 'row', alignItems: 'center', gap: 10,
                         paddingVertical: 9,
-                        borderBottomWidth: idx < listaCreditosMostrados.length - 1 ? 1 : 0,
+                        borderBottomWidth: idx < total - 1 ? 1 : 0,
                         borderBottomColor: tema.borde,
                       }}
                     >
@@ -1021,7 +1055,17 @@ export function CarreraScreen() {
                       </Text>
                     </View>
                   );
-                })
+                  };
+                  if (!agruparCreditos) return listaCreditosMostrados.map((mat, idx) => filaCredito(mat, idx, listaCreditosMostrados.length));
+                  return agruparPorTipo(listaCreditosMostrados).map((g, gi) => (
+                    <View key={g.tipo ?? '__sin_tipo__'} style={{ marginTop: gi === 0 ? 0 : 10 }}>
+                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11, fontWeight: '700', marginBottom: 2 }}>
+                        {`${g.tipo ? g.tipo.toUpperCase() : 'SIN TIPO'} · ${g.creditos} cr`}
+                      </Text>
+                      {g.materias.map((mat, idx) => filaCredito(mat, idx, g.materias.length))}
+                    </View>
+                  ));
+                })()
               )}
             </ScrollView>
 

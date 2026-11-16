@@ -3,6 +3,58 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Materia, Config } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { MateriaCard } from './MateriaCard';
+import { AnilloProgreso } from './AnilloProgreso';
+import { resumenSemestre } from '../utils/calculos';
+import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
+import { EstadoMateria } from '../types';
+
+const ORDEN_ESTADOS: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
+
+interface ResumenProps {
+  materias: Materia[];
+  totalMaterias?: number;
+  config: Config;
+  colorAcento: string;
+}
+
+/** Contenido de la derecha del encabezado de semestre (también se usa en la vista previa de Ajustes). */
+export function ResumenEncabezado({ materias, totalMaterias, config, colorAcento }: ResumenProps) {
+  const tema = useTema();
+  const { getColor, getIcono } = useEstadoEstilo();
+  const estilo = config.encabezadoSemestreEstilo ?? 'materias';
+  const r = resumenSemestre(materias, config);
+  const sufijoCred = config.encabezadoSemestreCreditos ? ` · ${r.creditos} cr` : '';
+  const estados = ORDEN_ESTADOS.filter(e => (e !== 'aprobado' || config.usarEstadoAprobado) && r.conteo[e] > 0);
+  const txt = { color: tema.textoSecundario, fontSize: 13 };
+
+  if (estilo === 'barra') {
+    return (
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={txt}>{`${r.completadas}/${r.total}${sufijoCred}`}</Text>
+        <View style={{ flexDirection: 'row', width: 80, height: 4, borderRadius: 2, overflow: 'hidden', marginTop: 3, backgroundColor: tema.borde }}>
+          {estados.map(e => (
+            <View key={e} style={{ width: `${(r.conteo[e] / Math.max(1, r.total)) * 100}%`, height: 4, backgroundColor: getColor(e) }} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+  if (estilo === 'iconos') {
+    return <Text style={txt}>{estados.map(e => `${getIcono(e)}${r.conteo[e]}`).join(' ') + sufijoCred}</Text>;
+  }
+  if (estilo === 'anillo') {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={txt}>{`${r.pct}%${sufijoCred}`}</Text>
+        <AnilloProgreso pct={r.pct} tamano={18} grosor={3} color={colorAcento} colorFondo={tema.borde} />
+      </View>
+    );
+  }
+  const base = totalMaterias !== undefined && totalMaterias > materias.length
+    ? `${materias.length} de ${totalMaterias} materias`
+    : `${materias.length} materias`;
+  return <Text style={txt}>{base + sufijoCred}</Text>;
+}
 
 interface Props {
   semestre: number;
@@ -45,7 +97,7 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
       <TouchableOpacity
         onPress={toggleExpandido}
         style={{
-          flexDirection: 'row', justifyContent: 'space-between',
+          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
           paddingVertical: 10, paddingHorizontal: 4,
           borderBottomWidth: 2, borderBottomColor: colorAcento,
         }}
@@ -53,11 +105,7 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
         <Text style={{ color: colorAcento, fontWeight: '700', fontSize: 15 }}>
           {expandido ? '▼' : '▶'} {semestre}° Semestre
         </Text>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
-          {totalMaterias !== undefined && totalMaterias > materias.length
-            ? `${materias.length} de ${totalMaterias} materias`
-            : `${materias.length} materias`}
-        </Text>
+        <ResumenEncabezado materias={materias} totalMaterias={totalMaterias} config={config} colorAcento={colorAcento} />
       </TouchableOpacity>
       {expandido && (
         webGrid ? (
