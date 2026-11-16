@@ -104,6 +104,10 @@ const CONFIG_COMPLETA: Required<Config> = {
   frasesUsadas: [1, 4],
   mostrarFelicitacionesAnio: false,
   frasesAnioUsadas: [2],
+  horarioCuentaRegresiva: false,
+  idioma: 'es',
+  mostrarNovedadesAlActualizar: false,
+  logros: [{ tipo: 'semestre', numero: 2, fecha: '2026-07-01' }],
 };
 
 const CONFIG_BASE: Config = {

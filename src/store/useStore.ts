@@ -71,6 +71,10 @@ export const CONFIG_DEFAULT: Config = {
   frasesUsadas: [],
   mostrarFelicitacionesAnio: true,
   frasesAnioUsadas: [],
+  horarioCuentaRegresiva: true,
+  idioma: 'es',
+  mostrarNovedadesAlActualizar: true,
+  logros: [],
 };
 
 interface Store extends AppState {

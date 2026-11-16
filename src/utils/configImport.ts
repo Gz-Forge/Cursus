@@ -123,6 +123,13 @@ const fechaIso: Validador = v =>
 const fechaLimite: Validador = v =>
   typeof v === 'string' && (RE_DDMM.test(v) || fechaIso(v) !== INVALIDO) ? v : INVALIDO;
 
+/** Logro del perfil: tipo válido, número entero ≥ 1 y fecha ISO. Los ítems inválidos se descartan. */
+const logro: Validador = forma({
+  tipo: uno('semestre', 'anio', 'carrera'),
+  numero: entero(1, 9999),
+  fecha: fechaIso,
+});
+
 const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   tema: uno('oscuro', 'claro', 'personalizado'),
   temaPersonalizado,
@@ -204,6 +211,10 @@ const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   frasesUsadas: arr(num(0, 100000)),
   mostrarFelicitacionesAnio: bool,
   frasesAnioUsadas: arr(num(0, 100000)),
+  horarioCuentaRegresiva: bool,
+  idioma: uno('es'),
+  mostrarNovedadesAlActualizar: bool,
+  logros: arr(logro, 500),
 };
 
 export interface ConfigImportada {

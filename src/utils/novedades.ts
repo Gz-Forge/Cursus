@@ -208,3 +208,35 @@ export async function marcarVersionVista(version: string = APP_VERSION): Promise
     // Si falla, la ventana vuelve a aparecer la próxima vez: no es grave.
   }
 }
+
+/**
+ * Decide si hay que abrir la ventana de novedades al iniciar.
+ * - `mostrarAlActualizar === false`: nunca (el enlace manual "Qué hay de nuevo" no pasa por acá).
+ * - `ultimaVista` null: no se decide acá (instalación nueva o sin registro); lo resuelve `novedadesPendientes`.
+ * - Si no: solo cuando la versión instalada es posterior a la última vista.
+ */
+export function debeMostrarNovedades(
+  ultimaVista: string | null,
+  versionActual: string,
+  mostrarAlActualizar: boolean,
+): boolean {
+  if (!mostrarAlActualizar) return false;
+  if (ultimaVista === null) return true;
+  return compararVersiones(versionActual, ultimaVista) > 0;
+}
+
+/**
+ * Variante de `novedadesPendientes` que respeta la preferencia "Mostrar novedades al actualizar".
+ * Con la preferencia apagada devuelve []. En ese caso, la pantalla debe llamar igual a
+ * `marcarVersionVista(actual)` para que, al volver a activarla, no aparezcan versiones viejas.
+ */
+export function novedadesAMostrar(
+  ultimaVista: string | null,
+  tieneDatos: boolean,
+  mostrarAlActualizar: boolean,
+  actual: string = APP_VERSION,
+  lista: NovedadesVersion[] = NOVEDADES,
+): NovedadesVersion[] {
+  if (!debeMostrarNovedades(ultimaVista, actual, mostrarAlActualizar)) return [];
+  return novedadesPendientes(ultimaVista, tieneDatos, actual, lista);
+}

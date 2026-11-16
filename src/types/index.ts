@@ -20,6 +20,7 @@ export interface EvaluacionSimple {
   hora?: number;           // minutos desde 00:00, ej: 480 = 08:00
   horaFin?: number;        // minutos desde 00:00, duración opcional
   salon?: string;          // salón donde ocurre (opcional)
+  ocultarCuentaRegresiva?: boolean; // 1.9.5: no mostrar la cuenta regresiva de esta evaluación en el horario
 }
 
 export interface SubEvaluacion {
@@ -32,6 +33,7 @@ export interface SubEvaluacion {
   hora?: number;           // minutos desde 00:00
   horaFin?: number;        // minutos desde 00:00
   salon?: string;          // salón donde ocurre (opcional)
+  ocultarCuentaRegresiva?: boolean; // 1.9.5: no mostrar la cuenta regresiva de esta sub-evaluación en el horario
 }
 
 export interface GrupoEvaluacion {
@@ -145,6 +147,16 @@ export interface TemaPersonalizado {
   coloresSemestres?: ColoresSemestres;
 }
 
+/** Idiomas disponibles (por ahora solo español; el tipo está pensado para sumar más). */
+export type Idioma = 'es';
+
+/** Hito alcanzado en la carrera. Es un dato del perfil, no un ajuste. */
+export interface Logro {
+  tipo: 'semestre' | 'anio' | 'carrera';
+  numero: number;   // número de semestre o de año; en 'carrera' se usa 1
+  fecha: string;    // ISO yyyy-mm-dd
+}
+
 export interface Config {
   tema: 'oscuro' | 'claro' | 'personalizado';
   temaPersonalizado?: TemaPersonalizado;
@@ -229,6 +241,10 @@ export interface Config {
   frasesUsadas?: number[];             // índices de frases de semestre ya mostradas
   mostrarFelicitacionesAnio?: boolean; // default true — aviso al exonerar todo un año
   frasesAnioUsadas?: number[];         // índices de frases de año ya mostradas
+  horarioCuentaRegresiva?: boolean;    // 1.9.5: cuenta regresiva en las evaluaciones del horario (default true)
+  idioma?: Idioma;                     // 1.9.5: idioma de la app (default 'es')
+  mostrarNovedadesAlActualizar?: boolean; // 1.9.5: abrir la ventana de novedades al actualizar (default true)
+  logros?: Logro[];                    // 1.9.5: registro de logros del perfil (no es un ajuste; viaja en la exportación completa)
 }
 
 export interface AppState {
