@@ -20,7 +20,10 @@ import { creditosAcumulados, materiasDisponibles, calcularEstadoFinal, agruparPo
 import { CifrasCarrera } from '../components/CifrasCarrera';
 import { jsonAMaterias, extraerTiposNuevos } from '../utils/importExport';
 import { importarCarrera } from '../utils/importExportNative';
-import { EstadoMateria, Materia } from '../types';
+import { EstadoMateria, Materia, Logro } from '../types';
+import { FelicitacionAnimada } from '../components/FelicitacionAnimada';
+import { registrarLogro } from '../utils/logros';
+import { hoyIso } from '../utils/calendario';
 import { useAlert } from '../contexts/AlertContext';
 import { temaOscuro } from '../theme/colors';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
@@ -400,12 +403,20 @@ export function CarreraScreen() {
     anosCompletadosRef.current = anosCompletos;
 
     const mensajes: { titulo: string; frase: string }[] = [];
+    const logrosNuevos: Pick<Logro, 'tipo' | 'numero'>[] = [];
+    const registrarLogros = (nuevos: Pick<Logro, 'tipo' | 'numero'>[]) => {
+      const fecha = hoyIso();
+      const logrosActuales = useStore.getState().config.logros;
+      const logros = nuevos.reduce((acc, l) => registrarLogro(acc, { ...l, fecha }), logrosActuales);
+      actualizarConfig({ logros });
+    };
 
     // ── Prioridad 1: carrera completa (todos los semestres exonerados) ────────
     const carreraCompleta = semsCompletos.size === totalSems && totalSems > 0;
     const carreraAntesFaltaba = prevSems.size < totalSems;
     if (carreraCompleta && carreraAntesFaltaba) {
       setColaFelicitaciones(q => [...q, { titulo: '🏆 ¡Carrera completa!', frase: FRASE_CARRERA_COMPLETA }]);
+      registrarLogros([{ tipo: 'carrera', numero: 1 }]);
       return;
     }
 
@@ -423,6 +434,7 @@ export function CarreraScreen() {
             actualizarConfig({ frasesUsadas: nuevasUsadas });
             mensajes.push({ titulo: `🎉 ¡${sem}° semestre completo!`, frase });
           }
+          logrosNuevos.push({ tipo: 'semestre', numero: sem });
           break;
         }
       }
@@ -440,6 +452,7 @@ export function CarreraScreen() {
             actualizarConfig({ frasesAnioUsadas: nuevasUsadas });
             mensajes.push({ titulo: `🎉 ¡Año ${anio}° completo!`, frase });
           }
+          logrosNuevos.push({ tipo: 'anio', numero: anio });
           break;
         }
       }
@@ -448,6 +461,7 @@ export function CarreraScreen() {
     if (mensajes.length > 0) {
       setColaFelicitaciones(q => [...q, ...mensajes]);
     }
+    if (logrosNuevos.length > 0) registrarLogros(logrosNuevos);
   }, [materias, config]);
 
   const handleImportar = async () => {
@@ -952,13 +966,11 @@ export function CarreraScreen() {
         onCancelar={() => setShowConfirmPeriodo(false)}
       />
 
-      <ConfirmModal
+      <FelicitacionAnimada
         visible={colaFelicitaciones.length > 0}
         titulo={colaFelicitaciones[0]?.titulo ?? ''}
         mensaje={colaFelicitaciones[0]?.frase ?? ''}
-        labelConfirmar="¡Gracias!"
-        onConfirmar={() => setColaFelicitaciones(q => q.slice(1))}
-        onCancelar={() => setColaFelicitaciones(q => q.slice(1))}
+        onCerrar={() => setColaFelicitaciones(q => q.slice(1))}
       />
 
       {/* ── Modal: Créditos obtenidos ── */}
