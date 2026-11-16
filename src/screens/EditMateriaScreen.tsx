@@ -31,6 +31,8 @@ import { SelectorFecha } from '../components/SelectorFecha';
 import { SelectorHorario } from '../components/SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
+import { SelectorDesplegable } from '../components/SelectorDesplegable';
+import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 
 
@@ -183,7 +185,7 @@ export function EditMateriaScreen() {
 
   // ── Filtros de horario ──
   const [filtroTipos, setFiltroTipos] = useState<TipoBloque[]>([]);
-  const [filtroFecha, setFiltroFecha] = useState<'todos' | 'futuros' | 'semana' | 'mes' | 'rango'>('todos');
+  const [filtroFecha, setFiltroFecha] = useState<'todos' | 'futuros' | 'semana' | 'mes' | 'rango'>('futuros');
   const [filtroDesde, setFiltroDesde] = useState('');
   const [filtroHasta, setFiltroHasta] = useState('');
 
@@ -1024,39 +1026,26 @@ export function EditMateriaScreen() {
           })}
         </View>
 
-        {/* ── Filtro tipo ── */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
-          {tiposBloque.map(({ key, label }) => {
-            const activo = filtroTipos.includes(key);
-            return (
-              <TouchableOpacity
-                key={key}
-                onPress={() => setFiltroTipos(prev => activo ? prev.filter(t => t !== key) : [...prev, key])}
-                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
-                  backgroundColor: activo ? tema.acento : tema.fondo }}
-              >
-                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── Filtro fecha ── */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
-          {(['todos', 'futuros', 'semana', 'mes', 'rango'] as const).map(op => {
-            const labels = { todos: 'Todos', futuros: 'Futuros', semana: 'Esta sem', mes: 'Este mes', rango: 'Rango' };
-            const activo = filtroFecha === op;
-            return (
-              <TouchableOpacity
-                key={op}
-                onPress={() => setFiltroFecha(op)}
-                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
-                  backgroundColor: activo ? tema.acento : tema.fondo }}
-              >
-                <Text style={{ fontSize: 12, color: activo ? '#fff' : tema.textoSecundario }}>{labels[op]}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* ── Punto 24: período (Futuros por defecto) y tipos, cada uno en un desplegable ── */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, zIndex: 2 }}>
+          <SelectorDesplegable
+            accesible="Período"
+            valor={filtroFecha}
+            onCambiar={setFiltroFecha}
+            opciones={[
+              { key: 'futuros', label: 'Futuros' },
+              { key: 'todos', label: 'Todos' },
+              { key: 'semana', label: 'Esta semana' },
+              { key: 'mes', label: 'Este mes' },
+              { key: 'rango', label: 'Rango…' },
+            ]}
+          />
+          <SelectorDesplegable
+            accesible="Tipo"
+            valor={filtroTipos[0] ?? 'todos'}
+            onCambiar={k => setFiltroTipos(k === 'todos' ? [] : [k as TipoBloque])}
+            opciones={[{ key: 'todos', label: 'Todos los tipos' }, ...tiposBloque.map(t => ({ key: t.key as string, label: t.label }))]}
+          />
         </View>
 
         {/* ── Inputs de rango ── */}
@@ -1094,14 +1083,24 @@ export function EditMateriaScreen() {
           style={{ maxHeight: 260 }}
           contentContainerStyle={{ paddingBottom: 2 }}
         >
-          {bloquesPagina.map((b) => (
-            <BloqueRow
-              key={b.id}
-              bloque={b}
-              tipoLabel={tiposBloque.find(t => t.key === b.tipo)?.label ?? ''}
-              onEditar={handleEditarBloque}
-              onEliminar={handleEliminarBloque}
-            />
+          {bloquesPagina.length === 0 && (
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, textAlign: 'center', paddingVertical: 10 }}>
+              {(form.bloques ?? []).length === 0 ? 'Todavía no hay bloques.' : 'No hay bloques con estos filtros.'}
+            </Text>
+          )}
+          {bloquesPagina.map((b, i) => (
+            <React.Fragment key={b.id}>
+              {/* Punto 24: encabezado por semana; si la semana viene de la página anterior, "(sigue)" */}
+              {(() => { const t = encabezadoSemana(b.fecha, (i > 0 ? bloquesPagina[i - 1] : bloquesFiltrados[paginaActual * porPagina - 1])?.fecha, i === 0, config.horarioPrimerDia ?? 'lunes'); return t ? (
+                <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '700', marginTop: i > 0 ? 8 : 0, marginBottom: 4 }}>{t}</Text>
+              ) : null; })()}
+              <BloqueRow
+                bloque={b}
+                tipoLabel={tiposBloque.find(t => t.key === b.tipo)?.label ?? ''}
+                onEditar={handleEditarBloque}
+                onEliminar={handleEliminarBloque}
+              />
+            </React.Fragment>
           ))}
         </ScrollView>
 

@@ -100,3 +100,26 @@ export function fechaLarga(iso: string): string {
 export function mismoMes(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
+
+/** "Semana del 26/10" para el lunes (o domingo) de la semana. */
+export function tituloSemanaDel(inicio: string): string {
+  const f = isoAFecha(inicio);
+  return `Semana del ${f.getDate()}/${f.getMonth() + 1}`;
+}
+
+/**
+ * Punto 24: ¿hay que poner un encabezado de semana antes del ítem i?
+ * `anterior` es el ítem que viene justo antes en la lista completa (aunque esté en otra página).
+ * Devuelve el título, con "(sigue)" si la semana empezó en la página anterior, o null.
+ */
+export function encabezadoSemana(
+  fecha: string,
+  anterior: string | undefined,
+  esPrimeroDePagina: boolean,
+  primerDia: PrimerDia = 'lunes',
+): string | null {
+  const sem = inicioSemana(fecha, primerDia);
+  const misma = anterior !== undefined && inicioSemana(anterior, primerDia) === sem;
+  if (!misma) return tituloSemanaDel(sem);
+  return esPrimeroDePagina ? `${tituloSemanaDel(sem)} (sigue)` : null;
+}

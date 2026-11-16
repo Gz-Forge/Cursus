@@ -1,5 +1,6 @@
 import {
   inicioSemana, diasSemana, grillaMes, sumarMeses, sumarDias, tituloSemana, tituloMes, fechaLarga, esIsoValida, encabezadoDias,
+  encabezadoSemana,
 } from '../utils/calendario';
 import {
   normalizarRango, moverRango, moverInicio, moverFin, rangoLinea, fmtDuracion, horariosSugeridos, horariosOcupados, seSuperpone, unirConY,
@@ -93,5 +94,17 @@ describe('lógica del selector de hora (D)', () => {
     expect(horariosOcupados(materias as any, undefined)).toEqual([]);
     expect(seSuperpone(600, 700, [{ inicio: 540, fin: 660 }])).toBe(true);
     expect(seSuperpone(660, 700, [{ inicio: 540, fin: 660 }])).toBe(false);
+  });
+});
+
+describe('lista de horarios agrupada por semana (24)', () => {
+  it('encabezado al empezar cada semana', () => {
+    expect(encabezadoSemana('2026-10-28', undefined, true)).toBe('Semana del 26/10');
+    expect(encabezadoSemana('2026-10-29', '2026-10-28', false)).toBeNull();
+    expect(encabezadoSemana('2026-11-02', '2026-10-29', false)).toBe('Semana del 2/11');
+  });
+
+  it('la semana que continúa en otra página lleva "(sigue)"', () => {
+    expect(encabezadoSemana('2026-10-30', '2026-10-28', true)).toBe('Semana del 26/10 (sigue)');
   });
 });
