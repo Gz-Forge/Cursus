@@ -9,7 +9,9 @@ import {
   contribucionParcialEvaluacion,
   contribucionSubEvaluacion,
   pesoSubEvaluacion,
+  asignadoGrupo,
 } from '../utils/calculos';
+import { OpcionalEditor } from './OpcionalEditor';
 import { parsearMes } from '../utils/fecha';
 import { confirmacionBorrarEvaluacion } from '../utils/ayudas';
 import { ultimoMaximo, ajustarNota } from '../utils/numerosNotas';
@@ -34,6 +36,20 @@ function isoToDisplay(iso: string): string {
 
 function fmtNum(n: number): string {
   return String(Math.round(n * 100) / 100);
+}
+
+function fmtComa(n: number): string {
+  return String(Math.round(n * 10) / 10).replace('.', ',');
+}
+
+/** Etiqueta chica "opcional" junto al nombre de una evaluación plegada o desplegada. */
+function EtiquetaOpcional() {
+  const tema = useTema();
+  return (
+    <View style={{ borderWidth: 1, borderColor: tema.borde, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 }}>
+      <Text style={{ color: tema.textoSecundario, fontSize: 10 }}>opcional</Text>
+    </View>
+  );
 }
 
 // ── Fecha y hora de una evaluación (puntos 1/11 y selector de hora D) ────────
@@ -320,6 +336,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
               {evaluacion.nombre || 'Sin nombre'}
             </Text>
           )}
+          {evaluacion.opcional && <EtiquetaOpcional />}
           {!colapsada && editandoId !== evaluacion.id && (
             <TouchableOpacity onPress={() => setEditandoId(evaluacion.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre de la evaluación">
               <Text style={{ fontSize: 13 }}>✏️</Text>
@@ -416,6 +433,11 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             onChangeText={salon => actualizarSimple({ salon: salon || undefined })}
           />
         </View>
+        <OpcionalEditor
+          opcional={evaluacion.opcional}
+          topeOpcional={evaluacion.topeOpcional}
+          onCambiar={actualizarSimple}
+        />
         {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {contribucion.toFixed(2)}% a la nota final</Text>}
         </>)}
       </View>
@@ -426,8 +448,28 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
   const grupo = evaluacion as GrupoEvaluacion;
   const grupoColapsado = isColapsada(grupo.id);
   const parcialGrupo = contribucionParcialEvaluacion(grupo);
+  const individual = grupo.reparto === 'individual';
+  const { asignado, total: totalGrupo, excede } = asignadoGrupo(grupo);
+  const faltante = totalGrupo - asignado;
+
+  const cambiarReparto = (reparto: 'equitativo' | 'individual') => {
+    if ((grupo.reparto ?? 'equitativo') === reparto) return;
+    if (reparto === 'individual') {
+      // Las pruebas sin peso heredan el reparto equitativo actual, así la nota no cambia de golpe
+      const subs = grupo.subEvaluaciones.map(s =>
+        s.peso === undefined ? { ...s, peso: Math.round(pesoSubEvaluacion(grupo, s) * 10000) / 10000 } : s);
+      onChange({ ...grupo, reparto, subEvaluaciones: subs });
+    } else {
+      onChange({ ...grupo, reparto });
+    }
+  };
+
   return (
-    <View style={[estilos.contenedor, { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento }]}>
+    <View style={[
+      estilos.contenedor,
+      { borderLeftWidth: 3, borderLeftColor: tema.acentoLineas ?? tema.acento },
+      excede && { borderWidth: 1.5, borderColor: '#F44336' },
+    ]}>
       {/* Header: tocar el nombre/peso extiende o contrae; el lápiz (solo visible extendido) edita el nombre */}
       <TouchableOpacity
         onPress={() => onToggleColapso(grupo.id)}
@@ -447,6 +489,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             {grupo.nombre || 'Sin nombre'}
           </Text>
         )}
+        {grupo.opcional && <EtiquetaOpcional />}
         {!grupoColapsado && editandoId !== grupo.id && (
           <TouchableOpacity onPress={() => setEditandoId(grupo.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel="Editar nombre del grupo">
             <Text style={{ fontSize: 13 }}>✏️</Text>
@@ -467,6 +510,34 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
         <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
           value={String(grupo.pesoEnMateria)} onChangeText={v => { const n = Number(v); if (!isNaN(n)) onChange({ ...grupo, pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 }); }} />
       </View>
+      {/* Punto 66: reparto del peso entre las pruebas */}
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
+        {([['equitativo', 'Reparto equitativo'], ['individual', 'Individual']] as const).map(([valor, etiqueta]) => {
+          const sel = valor === 'individual' ? individual : !individual;
+          return (
+            <TouchableOpacity
+              key={valor}
+              onPress={() => cambiarReparto(valor)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sel }}
+              style={{ flex: 1, paddingVertical: 6, borderRadius: 6, alignItems: 'center', backgroundColor: sel ? (tema.acentoFondo ?? tema.acento) : tema.fondo }}
+            >
+              <Text style={{ color: sel ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: '600' }}>{etiqueta}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {!individual && grupo.subEvaluaciones.length > 0 && (
+        <Text style={[estilos.label, { marginBottom: 6 }]}>
+          {`${fmtComa(grupo.pesoEnMateria)}% · ${grupo.subEvaluaciones.length} × ${fmtComa(pesoSubEvaluacion(grupo))}%`}
+        </Text>
+      )}
+      <OpcionalEditor
+        opcional={grupo.opcional}
+        topeOpcional={grupo.topeOpcional}
+        onCambiar={campos => onChange({ ...grupo, ...campos })}
+      />
+      <View style={{ height: 8 }} />
       {grupo.subEvaluaciones.map((sub, i) => {
         const subColapsada = isColapsada(sub.id);
         const pesoSub = pesoSubEvaluacion(grupo, sub);
@@ -489,7 +560,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 />
               ) : (
                 <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-                  {sub.nombre || `Prueba ${i + 1}`}
+                  {`${sub.nombre || `Prueba ${i + 1}`} · ${fmtComa(pesoSub)}%`}
                 </Text>
               )}
               {!subColapsada && editandoId !== sub.id && (
@@ -498,7 +569,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 </TouchableOpacity>
               )}
               <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : `${fmtNum(pesoSub)}%`}
+                {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : ''}
               </Text>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
               <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${sub.nombre || `Prueba ${i + 1}`}`}>
@@ -507,6 +578,19 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             </TouchableOpacity>
 
             {!subColapsada && (<>
+            {individual && (
+              <View style={estilos.fila}>
+                <Text style={estilos.label}>Peso</Text>
+                <NotaInput
+                  style={[estilos.input, { flex: 0, width: 70 }]}
+                  value={sub.peso ?? 0}
+                  onChange={v => actualizarSub(i, { peso: Math.max(0, v ?? 0) })}
+                  placeholder="0"
+                  placeholderTextColor={tema.textoSecundario}
+                />
+                <Text style={estilos.label}>%</Text>
+              </View>
+            )}
             {/* Fila: Tipo de nota */}
             <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
               {(['numero', 'porcentaje'] as TipoNota[]).map(t => (
@@ -573,6 +657,12 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           </View>
         );
       })}
+      {individual && (
+        <Text style={{ fontSize: 12, marginTop: 2, color: excede ? '#F44336' : faltante > 0.01 ? '#FF9800' : tema.textoSecundario }}>
+          {`Asignado ${fmtComa(asignado)}% de ${fmtComa(totalGrupo)}%`}
+          {excede ? ' · Te pasaste del % del grupo' : faltante > 0.01 ? ` · Faltan ${fmtComa(faltante)}% por asignar` : ''}
+        </Text>
+      )}
       <TouchableOpacity onPress={agregarSub} style={{ padding: 6 }}>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13 }}>+ Añadir prueba al grupo</Text>
       </TouchableOpacity>
