@@ -469,7 +469,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
       </View>
       {grupo.subEvaluaciones.map((sub, i) => {
         const subColapsada = isColapsada(sub.id);
-        const pesoSub = pesoSubEvaluacion(grupo);
+        const pesoSub = pesoSubEvaluacion(grupo, sub);
         const aporteSub = contribucionSubEvaluacion(grupo, sub);
         return (
           <View key={sub.id} style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 8, marginBottom: 4 }}>

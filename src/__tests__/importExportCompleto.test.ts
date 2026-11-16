@@ -47,6 +47,7 @@ const CONFIG_COMPLETA: Required<Config> = {
   mostrarNombreCompletoEnBloque: true,
   modoExamen: 'automatico',
   fechasLimiteExamen: ['15-07', '10-12'],
+  periodosExamen: [{ inicio: '15-07', fin: '15-07' }, { inicio: '01-12', fin: '10-12' }],
   fechasEjecutadas: ['2026-07-15'],
   examenRepetirCiclo: true,
   tarjetaCreditosBadge: 'ambos',

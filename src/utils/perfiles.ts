@@ -30,7 +30,7 @@ const CONFIG_DEFAULT_PARCIAL = {
   labelOtro: 'Otro',
   mostrarNombreCompletoEnBloque: false,
   modoExamen: 'manual' as const,
-  fechasLimiteExamen: [] as string[],
+  periodosExamen: [] as import('../types').PeriodoExamen[],
   fechasEjecutadas: [] as string[],
   tarjetaCreditosBadge: 'da' as const,
   tarjetaBadgeOrden: 'da_primero' as const,

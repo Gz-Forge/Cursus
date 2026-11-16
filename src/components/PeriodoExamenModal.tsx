@@ -55,7 +55,9 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
   const [nuevaFecha, setNuevaFecha] = useState('');
 
   const modo = config.modoExamen;
-  const fechas = config.fechasLimiteExamen;
+  // Por ahora cada período se edita como una fecha límite (inicio = fin); la UI por rango llega en otra tanda.
+  const periodos = config.periodosExamen ?? [];
+  const fechas = periodos.map(p => p.fin);
   const ciclo = config.examenRepetirCiclo ?? false;
 
   const setModo = (m: 'manual' | 'automatico') => actualizarConfig({ modoExamen: m });
@@ -73,13 +75,13 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
       showAlert('Fecha duplicada', 'Esa fecha límite ya está en la lista.');
       return;
     }
-    actualizarConfig({ fechasLimiteExamen: [...fechas, aGuardar].sort() });
+    actualizarConfig({ periodosExamen: [...periodos, { inicio: aGuardar, fin: aGuardar }].sort((a, b) => (a.fin < b.fin ? -1 : a.fin > b.fin ? 1 : 0)) });
     setNuevaFecha('');
   };
 
   const eliminarFecha = (f: string) => {
     actualizarConfig({
-      fechasLimiteExamen: fechas.filter(x => x !== f),
+      periodosExamen: periodos.filter(p => p.fin !== f),
       fechasEjecutadas: config.fechasEjecutadas.filter(x => x !== f),
     });
   };
@@ -132,7 +134,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
               value={ciclo}
               onValueChange={v => {
                 if (fechas.length === 0) {
-                  actualizarConfig({ examenRepetirCiclo: v, fechasLimiteExamen: [], fechasEjecutadas: [] });
+                  actualizarConfig({ examenRepetirCiclo: v, periodosExamen: [], fechasEjecutadas: [] });
                   setNuevaFecha('');
                   return;
                 }
@@ -140,7 +142,7 @@ export function PeriodoExamenModal({ visible, onCerrar }: Props) {
                   'Cambiar modo',
                   'Al cambiar el modo se borrarán todas las fechas configuradas. ¿Continuar?',
                   () => {
-                    actualizarConfig({ examenRepetirCiclo: v, fechasLimiteExamen: [], fechasEjecutadas: [] });
+                    actualizarConfig({ examenRepetirCiclo: v, periodosExamen: [], fechasEjecutadas: [] });
                     setNuevaFecha('');
                   },
                   { labelConfirmar: 'Cambiar', destructivo: true },

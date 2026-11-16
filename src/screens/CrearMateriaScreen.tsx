@@ -230,7 +230,7 @@ export function CrearMateriaScreen() {
     { key: 'otro', label: config.labelOtro || 'Otro' },
   ];
 
-  const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones);
+  const notaPct = form.usarNotaManual ? form.notaManual : calcularNotaTotal(form.evaluaciones, config);
   const estado = calcularEstadoFinal(form, config);
 
   const hayFiltrosActivos = filtroTipos.length > 0 || filtroFecha !== 'todos';

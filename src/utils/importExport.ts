@@ -767,6 +767,35 @@ export function aplicarConfigJson(
     update.examenRepetirCiclo = ciclo;
   };
 
+  // Períodos de examen (2.0.0): lista de { inicio, fin }, mismo formato de fechas que `fechasExamen`.
+  const periodosExamenJson = (ciclo: boolean) => {
+    const v = d.periodosExamen;
+    if (v === undefined) return;
+    const reIso = /^\d{4}-\d{2}-\d{2}$/;
+    const reCiclo = /^\d{2}-\d{2}$/;
+    const fechaOk = (x: unknown): x is string => typeof x === 'string' && (
+      ciclo ? reCiclo.test(x) : reIso.test(x) && !isNaN(new Date(x).getTime())
+    );
+    const clave = (f: string) => (ciclo ? `${f.slice(3, 5)}-${f.slice(0, 2)}` : f);
+    const valido = (p: unknown) => {
+      if (typeof p !== 'object' || p === null) return false;
+      const { inicio, fin } = p as Record<string, unknown>;
+      return fechaOk(inicio) && fechaOk(fin) && clave(inicio) <= clave(fin);
+    };
+    if (!Array.isArray(v) || v.length > 100 || !v.every(valido)) {
+      ignorados.push({
+        campo: 'periodosExamen',
+        motivo: ciclo
+          ? 'debe ser array de { inicio, fin } con fechas DD-MM (inicio <= fin)'
+          : 'debe ser array de { inicio, fin } con fechas YYYY-MM-DD (inicio <= fin)',
+      });
+      return;
+    }
+    update.periodosExamen = (v as { inicio: string; fin: string }[]).map(p => ({ inicio: p.inicio, fin: p.fin }));
+    aplicados.push('periodosExamen');
+    update.examenRepetirCiclo = ciclo;
+  };
+
   num('notaMaxima', 1, 1000);
   num('umbralExoneracion', 0, 100);
   num('umbralAprobacion', 0, 100);
@@ -778,6 +807,12 @@ export function aplicarConfigJson(
   strArr('tiposFormacion');
   oneOf('modoExamen', ['manual', 'automatico']);
   fechasExamen('fechasLimiteExamen', d.examenRepetirCiclo === true);
+  periodosExamenJson(d.examenRepetirCiclo === true);
+  // Archivo de una versión anterior (solo fechas sueltas): cada fecha pasa a ser un período de un día.
+  if (d.periodosExamen === undefined && Array.isArray(update.fechasLimiteExamen)) {
+    update.periodosExamen = update.fechasLimiteExamen.map(f => ({ inicio: f, fin: f }));
+    aplicados.push('periodosExamen');
+  }
   oneOf('mostrarNotaComo', ['numero', 'porcentaje']);
   str('labelTeorica');
   str('abrevTeorica', 3);
@@ -832,6 +867,8 @@ export function aplicarConfigJson(
  * No incluye campos internos como tema, temaPersonalizado, coloresHorario, fechasEjecutadas.
  */
 export function configAJson(config: import('../types').Config): Record<string, unknown> {
+  // Config sin migrar (solo fechas sueltas): se exporta como períodos de un día.
+  const periodos = config.periodosExamen ?? (config.fechasLimiteExamen ?? []).map(f => ({ inicio: f, fin: f }));
   return {
     cursus_config: 1,
     notaMaxima: config.notaMaxima,
@@ -844,7 +881,8 @@ export function configAJson(config: import('../types').Config): Record<string, u
     oportunidadesExamenDefault: config.oportunidadesExamenDefault,
     tiposFormacion: config.tiposFormacion,
     modoExamen: config.modoExamen,
-    fechasLimiteExamen: config.fechasLimiteExamen,
+    periodosExamen: periodos,
+    fechasLimiteExamen: periodos.map(p => p.fin), // compatibilidad con versiones anteriores
     examenRepetirCiclo: config.examenRepetirCiclo === true,
     mostrarNotaComo: config.mostrarNotaComo,
     labelTeorica: config.labelTeorica,

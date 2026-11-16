@@ -1,4 +1,14 @@
-import { Config, EstadoMateria, Evaluacion, GrupoEvaluacion, Materia, SubEvaluacion, TipoNota } from '../types';
+import { Config, EstadoMateria, Evaluacion, GrupoEvaluacion, Materia, SubEvaluacion, TipoNota, TopeOpcional } from '../types';
+
+export type UmbralesTope = Pick<Config, 'umbralPorExamen' | 'umbralAprobacion' | 'umbralExoneracion' | 'usarEstadoAprobado'>;
+
+/** Umbrales por defecto (iguales a CONFIG_DEFAULT; no se importa el store para evitar ciclos). */
+const UMBRALES_DEFAULT: UmbralesTope = {
+  umbralPorExamen: 45,
+  umbralAprobacion: 60,
+  umbralExoneracion: 85,
+  usarEstadoAprobado: true,
+};
 
 export function calcularPorcentajeEvaluacion(ev: Evaluacion): number | null {
   if (ev.tipo === 'simple') {
@@ -11,28 +21,100 @@ export function calcularPorcentajeEvaluacion(ev: Evaluacion): number | null {
   if (subs.length === 0) return null;
   const porcentajes = subs.map(s => s.nota !== null ? s.nota / s.notaMaxima : null);
   if (porcentajes.some(p => p === null)) return null;
+  if (ev.reparto === 'individual') {
+    return subs.reduce((acc, s, i) => acc + (porcentajes[i] as number) * (s.peso ?? 0), 0);
+  }
   const promedio = (porcentajes as number[]).reduce((a, b) => a + b, 0) / subs.length;
   return promedio * ev.pesoEnMateria;
 }
 
-export function calcularNotaTotal(evaluaciones: Evaluacion[]): number | null {
-  if (evaluaciones.length === 0) return null;
-  let total = 0;
-  for (const ev of evaluaciones) {
-    const p = calcularPorcentajeEvaluacion(ev);
-    if (p === null) return null;
-    total += p;
+/**
+ * Nota máxima (en %) a la que puede llevar una evaluación opcional.
+ * Sin tope: estado aprobado (o exonerado si la carrera no usa el estado aprobado).
+ */
+export function topeEnPorcentaje(tope: TopeOpcional | undefined, config: UmbralesTope): number {
+  const aprobado = config.usarEstadoAprobado ? config.umbralAprobacion : config.umbralExoneracion;
+  if (!tope) return aprobado;
+  if (tope.tipo === 'porcentaje') return Math.max(0, Math.min(100, tope.valor));
+  switch (tope.estado) {
+    case 'reprobado': return config.umbralPorExamen;
+    case 'exonerado': return config.umbralExoneracion;
+    default: return aprobado;
   }
-  return total; // en %
 }
 
-export function pesoSubEvaluacion(grupo: GrupoEvaluacion): number {
+/** Aplica las opcionales sobre una base: cada una sube la nota sin pasar de su tope (de menor a mayor tope). */
+function aplicarOpcionales(base: number, opcionales: Evaluacion[], config: UmbralesTope): number {
+  const lista = opcionales
+    .map(ev => ({ aporte: contribucionParcialEvaluacion(ev), tope: topeEnPorcentaje(ev.topeOpcional, config) }))
+    .filter((o): o is { aporte: number; tope: number } => o.aporte !== null)
+    .sort((a, b) => a.tope - b.tope);
+  let nota = base;
+  for (const o of lista) nota = Math.max(nota, Math.min(nota + o.aporte, o.tope));
+  return nota;
+}
+
+/**
+ * Nota total en %. Sin evaluaciones opcionales es la suma de todas (null si alguna no tiene nota).
+ * Con opcionales: base de obligatorias (null si alguna no tiene nota) + opcionales con su tope.
+ */
+export function calcularNotaTotal(
+  evaluaciones: Evaluacion[],
+  config?: UmbralesTope,
+): number | null {
+  if (evaluaciones.length === 0) return null;
+  const umbrales = config ?? UMBRALES_DEFAULT;
+
+  if (!evaluaciones.some(ev => ev.opcional)) {
+    let total = 0;
+    for (const ev of evaluaciones) {
+      const p = calcularPorcentajeEvaluacion(ev);
+      if (p === null) return null;
+      total += p;
+    }
+    return total > 100 ? 100 : total; // en %
+  }
+
+  let base = 0;
+  for (const ev of evaluaciones) {
+    if (ev.opcional) continue;
+    const p = calcularPorcentajeEvaluacion(ev);
+    if (p === null) return null;
+    base += p;
+  }
+  const opcionales = evaluaciones.filter(ev => ev.opcional);
+  // Solo hay opcionales y ninguna tiene nota: todavía no hay nota (no un 0).
+  if (opcionales.length === evaluaciones.length && opcionales.every(ev => contribucionParcialEvaluacion(ev) === null)) return null;
+  return Math.min(100, aplicarOpcionales(base, opcionales, umbrales));
+}
+
+/** Peso (% de la materia) de una prueba de un grupo: equitativo = peso / n; individual = el de la prueba. */
+export function pesoSubEvaluacion(grupo: GrupoEvaluacion, sub?: SubEvaluacion): number {
+  if (grupo.reparto === 'individual') return sub?.peso ?? 0;
   return grupo.subEvaluaciones.length === 0 ? 0 : grupo.pesoEnMateria / grupo.subEvaluaciones.length;
+}
+
+/** Reparto individual: cuánto del peso del grupo ya está asignado a pruebas. */
+export function asignadoGrupo(grupo: GrupoEvaluacion): { asignado: number; total: number; excede: boolean } {
+  const total = grupo.pesoEnMateria;
+  if (grupo.reparto !== 'individual') return { asignado: total, total, excede: false };
+  const asignado = grupo.subEvaluaciones.reduce((a, s) => a + (s.peso ?? 0), 0);
+  return { asignado, total, excede: asignado > total + 0.01 };
+}
+
+/** Aviso sobre la suma de pesos de las evaluaciones obligatorias; null si suman 100 o no hay evaluaciones. */
+export function avisoPeso(evaluaciones: Evaluacion[]): string | null {
+  if (evaluaciones.length === 0) return null;
+  const suma = evaluaciones.filter(ev => !ev.opcional).reduce((a, ev) => a + ev.pesoEnMateria, 0);
+  const dif = 100 - suma;
+  if (Math.abs(dif) <= 0.01) return null;
+  const n = String(Math.round(Math.abs(dif) * 10) / 10).replace('.', ',');
+  return dif > 0 ? `Faltan ${n}% para llegar al 100%` : `Sobran ${n}%`;
 }
 
 export function contribucionSubEvaluacion(grupo: GrupoEvaluacion, sub: SubEvaluacion): number | null {
   if (sub.nota === null) return null;
-  return (sub.nota / sub.notaMaxima) * pesoSubEvaluacion(grupo);
+  return (sub.nota / sub.notaMaxima) * pesoSubEvaluacion(grupo, sub);
 }
 
 export function contribucionParcialEvaluacion(ev: Evaluacion): number | null {
@@ -44,8 +126,31 @@ export function contribucionParcialEvaluacion(ev: Evaluacion): number | null {
   return aportes.reduce((a, b) => a + b, 0);
 }
 
-export function puntosObtenidos(evaluaciones: Evaluacion[]): number {
-  return evaluaciones.reduce((acc, ev) => acc + (contribucionParcialEvaluacion(ev) ?? 0), 0);
+export interface AporteOpcionales {
+  /** Suma parcial de las obligatorias con nota. */
+  base: number;
+  /** Nota con las opcionales aplicadas (tope incluido), máx. 100. */
+  conOpcionales: number;
+  /** Mayor tope entre las opcionales (para dibujar el tramo rayado); null si no hay opcionales. */
+  topeMax: number | null;
+}
+
+export function aporteOpcionales(evaluaciones: Evaluacion[], config?: UmbralesTope): AporteOpcionales {
+  const umbrales = config ?? UMBRALES_DEFAULT;
+  const base = evaluaciones
+    .filter(ev => !ev.opcional)
+    .reduce((acc, ev) => acc + (contribucionParcialEvaluacion(ev) ?? 0), 0);
+  const opcionales = evaluaciones.filter(ev => ev.opcional);
+  if (opcionales.length === 0) return { base, conOpcionales: base, topeMax: null };
+  const topeMax = Math.max(...opcionales.map(ev => topeEnPorcentaje(ev.topeOpcional, umbrales)));
+  return { base, conOpcionales: Math.min(100, aplicarOpcionales(base, opcionales, umbrales)), topeMax };
+}
+
+export function puntosObtenidos(evaluaciones: Evaluacion[], config?: UmbralesTope): number {
+  if (!evaluaciones.some(ev => ev.opcional)) {
+    return evaluaciones.reduce((acc, ev) => acc + (contribucionParcialEvaluacion(ev) ?? 0), 0);
+  }
+  return aporteOpcionales(evaluaciones, config).conOpcionales;
 }
 
 export interface TramoBarra {
@@ -115,14 +220,14 @@ export function derivarEstado(
   return 'recursar';
 }
 
-export function obtenerNotaFinal(materia: Materia): number | null {
+export function obtenerNotaFinal(materia: Materia, config?: UmbralesTope): number | null {
   if (materia.usarNotaManual) return materia.notaManual;
-  return calcularNotaTotal(materia.evaluaciones);
+  return calcularNotaTotal(materia.evaluaciones, config);
 }
 
 export function calcularEstadoFinal(materia: Materia, config: Config): EstadoMateria {
   if (materia.cursando) return 'cursando';
-  const nota = obtenerNotaFinal(materia);
+  const nota = obtenerNotaFinal(materia, config);
   if (nota === null) return 'por_cursar';
   const estado = derivarEstado(nota, config, materia.esNotaExamen);
   if (estado === null) return 'por_cursar';

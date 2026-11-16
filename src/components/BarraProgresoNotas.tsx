@@ -22,7 +22,7 @@ export function BarraProgresoNotas({ evaluaciones, esNotaExamen, oportunidadesEx
 
   if (config.barraProgresoEvaluaciones === false) return null;
 
-  const puntos = Math.max(0, Math.min(100, puntosObtenidos(evaluaciones)));
+  const puntos = Math.max(0, Math.min(100, puntosObtenidos(evaluaciones, config)));
   const tramos = calcularTramosBarra({ esNotaExamen, oportunidadesExamen }, config);
   const posEtiqueta = Math.max(8, Math.min(92, puntos));
 

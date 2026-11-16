@@ -34,6 +34,7 @@ import {
 } from '../utils/frases';
 import { ModoBusqueda, Mostrar, placeholderBusqueda, filtrosAplicados } from '../utils/busqueda';
 import { creditosSugeridos } from '../utils/numerosNotas';
+import { periodosTerminadosPendientes } from '../utils/periodosExamen';
 
 type Vista = 'carrera' | 'semestre' | 'busqueda';
 const VISTA_LABELS: Record<Vista, string> = {
@@ -341,14 +342,7 @@ export function CarreraScreen() {
   useEffect(() => {
     if (config.modoExamen !== 'automatico') return;
     const hoy = new Date().toISOString().slice(0, 10);
-    const year = hoy.slice(0, 4);
-    const ciclo = config.examenRepetirCiclo ?? false;
-    const toISO = (f: string) => ciclo
-      ? `${year}-${f.slice(3, 5)}-${f.slice(0, 2)}`
-      : f;
-    const pendientes = config.fechasLimiteExamen
-      .filter(f => { const iso = toISO(f); return iso <= hoy && !config.fechasEjecutadas.includes(iso); })
-      .map(f => toISO(f));
+    const pendientes = periodosTerminadosPendientes(config, hoy);
     if (pendientes.length === 0) return;
     const sinOportunidades = decrementarPeriodoExamen();
     actualizarConfig({ fechasEjecutadas: [...config.fechasEjecutadas, ...pendientes] });

@@ -121,6 +121,13 @@ export function combinarConfig(base: Config, perfil: Pick<PerfilImportable, 'con
   if (importada.fechasLimiteExamen !== undefined && importada.examenRepetirCiclo === undefined) {
     importada.examenRepetirCiclo = false;
   }
+  if (importada.periodosExamen !== undefined && importada.examenRepetirCiclo === undefined) {
+    importada.examenRepetirCiclo = false;
+  }
+  // Archivo de una versión anterior: fechas sueltas => períodos de un día.
+  if (importada.periodosExamen === undefined && importada.fechasLimiteExamen !== undefined) {
+    importada.periodosExamen = importada.fechasLimiteExamen.map(f => ({ inicio: f, fin: f }));
+  }
   let config: Config = { ...base, ...importada };
 
   const tipos = [...(config.tiposFormacion ?? [])];

@@ -28,12 +28,13 @@ export function ejemploRedondeo(
   redondeo: 'abajo' | 'arriba' | undefined,
   materias: Materia[],
   notaMaxima: number,
+  config?: Config,
 ): string {
   const fn = redondeo === 'abajo' ? Math.floor : redondeo === 'arriba' ? Math.ceil : Math.round;
   let nombre: string | null = null;
   let valor = (notaMaxima * 10.75) / 12;
   for (const m of materias) {
-    const n = obtenerNotaFinal(m);
+    const n = obtenerNotaFinal(m, config);
     if (n === null) continue;
     const escala = (n / 100) * notaMaxima;
     if (Math.abs(escala - Math.round(escala)) > 0.001) {
