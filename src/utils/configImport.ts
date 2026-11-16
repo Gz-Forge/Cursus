@@ -173,6 +173,7 @@ const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   notasObtenidasEje: uno('con_datos', 'completo'),
   metricasLineasUmbral: bool,
   metricasProgresoEstilo: uno('lista', 'anillo'),
+  selectorFechaVista: uno('semana', 'mes'),
   cuelloBotellaUmbral: num(1, 999),
   cuelloBotellaSoloSiguiente: bool,
   coloresEvaluacionesGrupales: colorBloque,

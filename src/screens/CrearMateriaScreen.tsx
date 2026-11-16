@@ -26,6 +26,10 @@ import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
 import { nivelContador } from '../utils/formulario';
 import { CampoNumerico } from '../components/CampoNumerico';
 import { ultimoMaximo } from '../utils/numerosNotas';
+import { SelectorFecha } from '../components/SelectorFecha';
+import { SelectorHorario } from '../components/SelectorHorario';
+import { esIsoValida } from '../utils/calendario';
+import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { parsearMes } from '../utils/fecha';
 
 
@@ -66,44 +70,6 @@ function autoFormatFechaBloque(prev: string, next: string): string {
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-}
-
-// ── Selector de hora con botones ▲/▼ y minutos :00/:30 ──────────────
-function HoraPicker({ value, onChange, label }: {
-  value: number; onChange: (v: number) => void; label: string;
-}) {
-  const tema = useTema();
-  const h = Math.floor(value / 60);
-  const m = value % 60 === 30 ? 30 : 0;
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>{label}</Text>
-      <View style={{ backgroundColor: tema.fondo, borderRadius: 8, padding: 10, alignItems: 'center' }}>
-        <TouchableOpacity onPress={() => onChange(((h + 1) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▲</Text>
-        </TouchableOpacity>
-        <Text style={{ color: tema.texto, fontSize: 26, fontWeight: '700', letterSpacing: 1, minWidth: 64, textAlign: 'center' }}>
-          {h.toString().padStart(2, '0')}:{m === 0 ? '00' : '30'}
-        </Text>
-        <TouchableOpacity onPress={() => onChange(((h - 1 + 24) % 24) * 60 + m)} style={{ paddingVertical: 2 }}>
-          <Text style={{ color: tema.acento, fontSize: 18, textAlign: 'center' }}>▼</Text>
-        </TouchableOpacity>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-          {([0, 30] as const).map(min => (
-            <TouchableOpacity
-              key={min}
-              onPress={() => onChange(h * 60 + min)}
-              style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: m === min ? tema.acento : tema.tarjeta, alignItems: 'center' }}
-            >
-              <Text style={{ color: m === min ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
-                :{min === 0 ? '00' : '30'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
 }
 
 // ── Tab bar de crear materia ─────────────────────────────────────────
@@ -166,8 +132,8 @@ export function CrearMateriaScreen() {
   const [camposError, setCamposError] = useState({ nombre: false, semestre: false });
   const [mostrarFormBloque, setMostrarFormBloque] = useState(false);
   const [bloqueNuevo, setBloqueNuevo] = useState<{
-    dia: string; mes: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string; descripcion: string;
-  }>({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
+    fecha: string; horaInicio: number; horaFin: number; tipo: TipoBloque; salon: string; descripcion: string;
+  }>({ fecha: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
   const [dropdownDia, setDropdownDia] = useState(false);
   const [dropdownMes, setDropdownMes] = useState(false);
   const [bloqueEditandoId, setBloqueEditandoId] = useState<string | null>(null);
@@ -302,32 +268,18 @@ export function CrearMateriaScreen() {
   };
 
   const confirmarBloque = () => {
-    const anio = new Date().getFullYear();
-    const dia = parseInt(bloqueNuevo.dia, 10);
-    const mes = parsearMes(bloqueNuevo.mes) ?? NaN;
-
-    if (!bloqueNuevo.dia || isNaN(dia) || dia < 1 || dia > 31) {
-      showAlert('Día inválido', 'Ingresá un día entre 1 y 31.');
-      return;
-    }
-    if (!bloqueNuevo.mes || isNaN(mes) || mes < 1 || mes > 12) {
-      showAlert('Mes inválido', 'Ingresá un mes entre 1 y 12.');
-      return;
-    }
-    const dateObj = new Date(anio, mes - 1, dia);
-    if (dateObj.getMonth() !== mes - 1 || dateObj.getDate() !== dia) {
-      showAlert('Fecha inválida', `El día ${dia} no existe en ${MESES[mes - 1]}.`);
+    // Punto 1: la fecha viene completa del calendario (ya no se arma con el año actual)
+    if (!esIsoValida(bloqueNuevo.fecha)) {
+      showAlert('Falta la fecha', 'Elegí un día en el calendario.');
       return;
     }
     if (bloqueNuevo.horaFin <= bloqueNuevo.horaInicio) {
       showAlert('Horario inválido', 'El fin debe ser posterior al inicio.');
       return;
     }
-    const diaStr = dia.toString().padStart(2, '0');
-    const mesStr = mes.toString().padStart(2, '0');
     const bloqueActualizado: BloqueHorario = {
       id: bloqueEditandoId ?? `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      fecha: `${anio}-${mesStr}-${diaStr}`,
+      fecha: bloqueNuevo.fecha,
       horaInicio: bloqueNuevo.horaInicio,
       horaFin: bloqueNuevo.horaFin,
       tipo: bloqueNuevo.tipo,
@@ -346,7 +298,7 @@ export function CrearMateriaScreen() {
 
     setMostrarFormBloque(false);
     setBloqueEditandoId(null);
-    setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
+    setBloqueNuevo({ fecha: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
     setDropdownDia(false);
     setDropdownMes(false);
   };
@@ -835,6 +787,9 @@ export function CrearMateriaScreen() {
                 isColapsada={isEvalColapsada}
                 onToggleColapso={toggleEvalColapsada}
                 maximoSugerido={ultimoMaximo(form.evaluaciones, materias)}
+                horariosSugeridos={horariosSugeridos(form.bloques ?? [], t => tiposBloque.find(x => x.key === t)?.label ?? t)}
+                ocupadosDe={(f, excluir) => horariosOcupados([...materias.filter(m => m.id !== form.id), { ...form, cursando: true }], f, excluir)}
+                diasConClase={(form.bloques ?? []).map(b => b.fecha)}
               />
             ))}
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -979,10 +934,8 @@ export function CrearMateriaScreen() {
               <TouchableOpacity
                 style={{ paddingHorizontal: 10, paddingVertical: 4 }}
                 onPress={() => {
-                  const [, mesStr, diaStr] = b.fecha.split('-');
                   setBloqueNuevo({
-                    dia: String(parseInt(diaStr, 10)),
-                    mes: String(parseInt(mesStr, 10)),
+                    fecha: b.fecha,
                     horaInicio: b.horaInicio,
                     horaFin: b.horaFin,
                     tipo: b.tipo,
@@ -1014,103 +967,27 @@ export function CrearMateriaScreen() {
               {bloqueEditandoId ? 'Editar bloque' : 'Nuevo bloque'}
             </Text>
 
-            {/* ── Fecha: día + mes (año automático) ── */}
+            {/* ── Fecha (punto 1/11): calendario mes ↔ semana con los días de clase marcados ── */}
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Fecha</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 2 }}>
+            <SelectorFecha
+              fecha={bloqueNuevo.fecha}
+              onCambiar={iso => setBloqueNuevo(b => ({ ...b, fecha: iso }))}
+              diasMarcados={(form.bloques ?? []).map(b => b.fecha)}
+            />
 
-              {/* Día */}
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Día</Text>
-                <TextInput
-                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, textAlign: 'center' }}
-                  value={bloqueNuevo.dia}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, dia: v.replace(/\D/g, '').slice(0, 2) }))}
-                  onFocus={() => { setDropdownDia(true); setDropdownMes(false); }}
-                  onSubmitEditing={() => setDropdownDia(false)}
-                  placeholder="DD"
-                  placeholderTextColor={tema.textoSecundario}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-                {dropdownDia && (
-                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 150, borderWidth: 1, borderColor: tema.borde }}>
-                    <ScrollView nestedScrollEnabled>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                        <TouchableOpacity
-                          key={d}
-                          onPress={() => { setBloqueNuevo(b => ({ ...b, dia: String(d) })); setDropdownDia(false); }}
-                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                        >
-                          <Text style={{ color: tema.texto, textAlign: 'center' }}>{d}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+            {/* ── Hora (selector D): horarios de la materia, línea de tiempo y ±15 ── */}
+            <Text style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 12, marginBottom: 6 }}>Horario</Text>
+            <View style={{ marginBottom: 12 }}>
+              <SelectorHorario
+                inicio={bloqueNuevo.horaInicio}
+                fin={bloqueNuevo.horaFin}
+                onCambiar={v => setBloqueNuevo(b => ({ ...b, horaInicio: v.inicio, horaFin: v.fin ?? v.inicio + 60 }))}
+                sugeridos={horariosSugeridos(form.bloques ?? [], t => tiposBloque.find(x => x.key === t)?.label ?? t)}
+                ocupados={horariosOcupados(
+                  [...materias.filter(m => m.id !== form.id), { ...form, cursando: true }],
+                  esIsoValida(bloqueNuevo.fecha) ? bloqueNuevo.fecha : undefined,
+                  bloqueEditandoId ?? undefined,
                 )}
-              </View>
-
-              {/* Mes */}
-              <View style={{ flex: 2 }}>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginBottom: 3 }}>Mes</Text>
-                <TextInput
-                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6 }}
-                  value={bloqueNuevo.mes}
-                  onChangeText={v => setBloqueNuevo(b => ({ ...b, mes: v }))}
-                  onFocus={() => { setDropdownMes(true); setDropdownDia(false); }}
-                  onBlur={() => {
-                    const n = parsearMes(bloqueNuevo.mes);
-                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
-                  }}
-                  onSubmitEditing={() => {
-                    const n = parsearMes(bloqueNuevo.mes);
-                    if (n !== null) setBloqueNuevo(b => ({ ...b, mes: String(n) }));
-                  }}
-                  placeholder="MM o mes"
-                  placeholderTextColor={tema.textoSecundario}
-                  maxLength={20}
-                />
-                {bloqueNuevo.mes && !isNaN(parseInt(bloqueNuevo.mes, 10)) &&
-                  parseInt(bloqueNuevo.mes, 10) >= 1 && parseInt(bloqueNuevo.mes, 10) <= 12 && (
-                  <Text style={{ color: tema.acento, fontSize: 10, marginTop: 2 }}>
-                    {MESES[parseInt(bloqueNuevo.mes, 10) - 1]}
-                  </Text>
-                )}
-                {dropdownMes && (
-                  <View style={{ backgroundColor: tema.tarjeta, borderRadius: 6, marginTop: 2, maxHeight: 180, borderWidth: 1, borderColor: tema.borde }}>
-                    <ScrollView nestedScrollEnabled>
-                      {MESES.map((nombre, i) => (
-                        <TouchableOpacity
-                          key={i}
-                          onPress={() => { setBloqueNuevo(b => ({ ...b, mes: String(i + 1) })); setDropdownMes(false); }}
-                          style={{ padding: 8, borderBottomWidth: 1, borderBottomColor: tema.borde }}
-                        >
-                          <Text style={{ color: tema.texto }}>{i + 1} — {nombre}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            <Text style={{ color: tema.textoSecundario, fontSize: 10, marginBottom: 12, textAlign: 'right' }}>
-              Año: {new Date().getFullYear()}
-            </Text>
-
-            {/* ── Hora inicio / fin ── */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-              <HoraPicker
-                label="Inicio"
-                value={bloqueNuevo.horaInicio}
-                onChange={v => setBloqueNuevo(b => {
-                  const finCorregido = b.horaFin < v + 30 ? v + 30 : b.horaFin;
-                  return { ...b, horaInicio: v, horaFin: finCorregido };
-                })}
-              />
-              <HoraPicker
-                label="Fin"
-                value={bloqueNuevo.horaFin}
-                onChange={v => { if (v > bloqueNuevo.horaInicio) setBloqueNuevo(b => ({ ...b, horaFin: v })); }}
               />
             </View>
 
@@ -1164,7 +1041,7 @@ export function CrearMateriaScreen() {
                 onPress={() => {
                   setMostrarFormBloque(false);
                   setBloqueEditandoId(null);
-                  setBloqueNuevo({ dia: '', mes: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
+                  setBloqueNuevo({ fecha: '', horaInicio: 480, horaFin: 600, tipo: 'teorica', salon: '', descripcion: '' });
                   setDropdownDia(false);
                   setDropdownMes(false);
                 }}

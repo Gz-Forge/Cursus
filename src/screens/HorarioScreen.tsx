@@ -18,6 +18,8 @@ import {
   type FilaParseada,
 } from '../utils/horarioImportExport';
 import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_BLOQUE, textoBloque } from '../utils/horarioLayout';
+import { SelectorHorario } from '../components/SelectorHorario';
+import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import {
   LongPressGestureHandler,
   PanGestureHandler,
@@ -177,6 +179,8 @@ export function HorarioScreen() {
     materiaId?: string;
   } | null>(null);
   const [modalFechaStr, setModalFechaStr] = useState('');
+  // Selector de hora D en la edición rápida (se carga al abrir, ver efecto más abajo)
+  const [modalHora, setModalHora] = useState<{ inicio: number; fin: number | null } | null>(null);
   const [modalSalonStr, setModalSalonStr] = useState('');
   const [modalTab, setModalTab] = useState<'descripcion' | 'edicion' | 'nota'>('edicion');
   const [modalTipoBloque, setModalTipoBloque] = useState<TipoBloque>('teorica');
@@ -222,7 +226,7 @@ export function HorarioScreen() {
   }, [modalEdicionRapida?.bloqueId]);
   // --- Modal crear bloque (doble tap en espacio vacío) ---
   const [modalCrearBloque, setModalCrearBloque] = useState<{
-    fecha: string; horaInicio: number; horaFin: number;
+    fecha: string; horaInicio: number; horaFin: number | null;
   } | null>(null);
   const [cmbMateriaId, setCmbMateriaId] = useState('');
   const [cmbTipoBloque, setCmbTipoBloque] = useState<'horario' | 'evaluacion' | null>(null);
@@ -1016,6 +1020,22 @@ export function HorarioScreen() {
     setModalTipoNota(nuevo);
   };
 
+  // Selector de hora D: al abrir la edición rápida se carga la hora del bloque o la evaluación
+  React.useEffect(() => {
+    if (!modalEdicionRapida) { setModalHora(null); return; }
+    if (modalEdicionRapida.tipo === 'regular') {
+      const b = draftBloqueRef.current?.id === modalEdicionRapida.bloqueId
+        ? draftBloqueRef.current
+        : bloquesEstaSemana.find(x => x.id === modalEdicionRapida.bloqueId);
+      setModalHora(b ? { inicio: b.horaInicio, fin: b.horaFin } : null);
+    } else {
+      const ev = evaluacionesEstaSemana.find(x => x.id === modalEdicionRapida.bloqueId);
+      setModalHora(ev ? { inicio: ev.hora ?? 480, fin: ev.hora === undefined ? null : (ev.horaFin ?? null) } : null);
+    }
+  // Solo al abrir: después manda lo que se elige en el selector
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalEdicionRapida]);
+
   // Punto 100: guardar la edición rápida (botón "Guardar" y tecla Enter en escritorio)
   const guardarEdicionRapida = () => {
     if (!modalEdicionRapida) return;
@@ -1043,7 +1063,10 @@ export function HorarioScreen() {
           ...materia,
           bloques: (materia.bloques ?? []).map(bl =>
             bl.id === modalEdicionRapida.bloqueId
-              ? { ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined, tipo: modalTipoBloque, descripcion }
+              ? {
+                  ...bl, fecha: nuevaFecha, salon: modalSalonStr || undefined, tipo: modalTipoBloque, descripcion,
+                  ...(modalHora ? { horaInicio: modalHora.inicio, horaFin: modalHora.fin ?? modalHora.inicio + 60 } : {}),
+                }
               : bl
           ),
         });
@@ -1068,12 +1091,12 @@ export function HorarioScreen() {
         const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
           evs.map(ev => {
             if (ev.tipo === 'simple' && ev.id === modalEdicionRapida.bloqueId) {
-              return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota };
+              return { ...ev, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota, ...(modalHora ? { hora: modalHora.inicio, horaFin: modalHora.fin ?? undefined } : {}) };
             }
             if (ev.tipo === 'grupo') {
               return { ...ev, subEvaluaciones: ev.subEvaluaciones.map(sub =>
                 sub.id === modalEdicionRapida.bloqueId
-                  ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota }
+                  ? { ...sub, fecha: nuevaFecha, salon: modalSalonStr || undefined, ...camposNota, ...(modalHora ? { hora: modalHora.inicio, horaFin: modalHora.fin ?? undefined } : {}) }
                   : sub
               )};
             }
@@ -2791,12 +2814,36 @@ export function HorarioScreen() {
 
                 <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Salón (opcional)</Text>
                 <TextInput
-                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: modalEdicionRapida?.tipo === 'regular' ? 12 : 4, fontSize: 14 }}
+                  style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 14 }}
                   value={modalSalonStr}
                   onChangeText={setModalSalonStr}
                   placeholder="Ej: Aula 3"
                   placeholderTextColor={tema.textoSecundario}
                 />
+
+                {modalHora && (() => {
+                  const item = modalEdicionRapida?.tipo === 'regular'
+                    ? bloquesEstaSemana.find(x => x.id === modalEdicionRapida?.bloqueId)
+                    : evaluacionesEstaSemana.find(x => x.id === modalEdicionRapida?.bloqueId);
+                  const materiaItem = item?.materia;
+                  return (
+                    <View style={{ marginBottom: modalEdicionRapida?.tipo === 'regular' ? 12 : 4 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 4 }}>Horario</Text>
+                      <SelectorHorario
+                        plegado
+                        inicio={modalHora.inicio}
+                        fin={modalHora.fin}
+                        onCambiar={setModalHora}
+                        sugeridos={horariosSugeridos(
+                          materiasEnCurso.find(m => m.id === materiaItem?.id)?.bloques ?? [],
+                          t => sigla(t),
+                        )}
+                        ocupados={item?.fecha ? horariosOcupados(materiasEnCurso, item.fecha, modalEdicionRapida?.bloqueId) : []}
+                        permiteSinFin={modalEdicionRapida?.tipo !== 'regular'}
+                      />
+                    </View>
+                  );
+                })()}
 
                 {modalEdicionRapida?.tipo === 'regular' && (
                   <>
@@ -3001,7 +3048,7 @@ export function HorarioScreen() {
                     {cmbPaso === 2 && cmbMateriaId
                       ? `${materiasEnCurso.find(m => m.id === cmbMateriaId)?.nombre ?? ''} · `
                       : ''}
-                    {(() => { const [, mo, d] = modalCrearBloque.fecha.split('-'); return `${d}/${mo}`; })()} · {fmtHora(modalCrearBloque.horaInicio)}–{fmtHora(modalCrearBloque.horaFin)}
+                    {(() => { const [, mo, d] = modalCrearBloque.fecha.split('-'); return `${d}/${mo}`; })()} · {fmtHora(modalCrearBloque.horaInicio)}{modalCrearBloque.horaFin !== null ? `–${fmtHora(modalCrearBloque.horaFin)}` : ''}
                   </Text>
                 )}
               </View>
@@ -3110,6 +3157,24 @@ export function HorarioScreen() {
                   contentContainerStyle={{ padding: 20 }}
                   keyboardShouldPersistTaps="handled"
                 >
+                  {/* Selector de hora D: la hora sale de donde se tocó y se puede ajustar */}
+                  {modalCrearBloque && (
+                    <View style={{ marginBottom: 18 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 8 }}>HORARIO</Text>
+                      <SelectorHorario
+                        inicio={modalCrearBloque.horaInicio}
+                        fin={modalCrearBloque.horaFin}
+                        onCambiar={v => setModalCrearBloque(m => m ? { ...m, horaInicio: v.inicio, horaFin: v.fin } : m)}
+                        sugeridos={horariosSugeridos(
+                          materiasEnCurso.find(m => m.id === cmbMateriaId)?.bloques ?? [],
+                          t => sigla(t),
+                        )}
+                        ocupados={horariosOcupados(materiasEnCurso, modalCrearBloque.fecha)}
+                        permiteSinFin={cmbTipoBloque === 'evaluacion'}
+                      />
+                    </View>
+                  )}
+
                   {/* Config Horario */}
                   {cmbTipoBloque === 'horario' && (
                     <>
@@ -3314,7 +3379,7 @@ export function HorarioScreen() {
                       if (cmbTipoBloque === 'horario') {
                         const nuevoBloque: BloqueHorario = {
                           id: newId(), fecha: modalCrearBloque.fecha,
-                          horaInicio: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                          horaInicio: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin ?? modalCrearBloque.horaInicio + 60,
                           tipo: cmbSubTipo,
                           ...(cmbSalon.trim() ? { salon: cmbSalon.trim() } : {}),
                           ...(cmbDescripcion.trim() ? { descripcion: cmbDescripcion.trim() } : {}),
@@ -3326,7 +3391,7 @@ export function HorarioScreen() {
                           id: newId(), tipo: 'simple', nombre: cmbNombreEval.trim(),
                           pesoEnMateria: parseFloat(cmbPesoEval) || 0,
                           tipoNota: 'numero', nota: null, notaMaxima: config.notaMaxima,
-                          fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                          fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin ?? undefined,
                         };
                         guardarMateria({ ...materia, evaluaciones: [...materia.evaluaciones, nuevaEval] });
                       } else if (cmbEsGrupal === true) {
@@ -3335,7 +3400,7 @@ export function HorarioScreen() {
                           const nuevoSub: SubEvaluacion = {
                             id: newId(), nombre: '', tipoNota: 'numero', nota: null,
                             notaMaxima: config.notaMaxima,
-                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin ?? undefined,
                           };
                           guardarMateria({
                             ...materia,
@@ -3350,7 +3415,7 @@ export function HorarioScreen() {
                           const primeraSub: SubEvaluacion = {
                             id: newId(), nombre: cmbNombrePrimeraSubEval.trim(),
                             tipoNota: 'numero', nota: null, notaMaxima: config.notaMaxima,
-                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin,
+                            fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin ?? undefined,
                           };
                           const nuevoGrupo: GrupoEvaluacion = {
                             id: newId(), tipo: 'grupo', nombre: cmbNombreGrupo.trim(),

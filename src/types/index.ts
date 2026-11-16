@@ -200,6 +200,7 @@ export interface Config {
   notasObtenidasEje?: 'con_datos' | 'completo'; // 1.6.5: solo notas con materias (default) o de 0 al máximo
   metricasLineasUmbral?: boolean;     // 1.6.5: referencias de aprobación/exoneración en Notas obtenidas (default true)
   metricasProgresoEstilo?: 'lista' | 'anillo'; // 1.6.5: estilo de Progreso general (default 'lista')
+  selectorFechaVista?: 'semana' | 'mes';       // 1.7.5: última vista usada en el selector de fecha (default 'semana')
   cuelloBotellaUmbral?: number;        // mínimo de materias para ser cuello de botella (default 3)
   cuelloBotellaSoloSiguiente?: boolean;// solo mostrar cuellos que afectan al siguiente semestre incompleto
   // Horario — evaluaciones grupales e individuales

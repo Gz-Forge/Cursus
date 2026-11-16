@@ -76,6 +76,7 @@ const CONFIG_COMPLETA: Required<Config> = {
   notasObtenidasEje: 'completo',
   metricasLineasUmbral: false,
   metricasProgresoEstilo: 'anillo',
+  selectorFechaVista: 'mes',
   cuelloBotellaUmbral: 5,
   cuelloBotellaSoloSiguiente: true,
   coloresEvaluacionesGrupales: { fondo: '#aa0000', texto: '#ffffff' },
