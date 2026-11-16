@@ -19,6 +19,8 @@ import {
 } from '../utils/horarioImportExport';
 import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_BLOQUE, textoBloque } from '../utils/horarioLayout';
 import { SelectorHorario } from '../components/SelectorHorario';
+import { SelectorFecha } from '../components/SelectorFecha';
+import { semanasEntre } from '../utils/calendario';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import {
   LongPressGestureHandler,
@@ -1036,6 +1038,23 @@ export function HorarioScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalEdicionRapida]);
 
+  // Punto 98: ir a una fecha (doble clic / doble toque sobre la fecha del encabezado)
+  const [irAFechaAbierto, setIrAFechaAbierto] = useState(false);
+  const ultimoToqueFecha = React.useRef(0);
+  const tocarFechaEncabezado = () => {
+    const ahora = Date.now();
+    if (ahora - ultimoToqueFecha.current < 400) {
+      ultimoToqueFecha.current = 0;
+      setIrAFechaAbierto(true);
+    } else {
+      ultimoToqueFecha.current = ahora;
+    }
+  };
+  const irAFecha = (iso: string) => {
+    setWeekOffset(semanasEntre(hoyIso, iso, (config.horarioPrimerDia ?? 'lunes') as 'lunes' | 'domingo'));
+    setIrAFechaAbierto(false);
+  };
+
   // Punto 100: guardar la edición rápida (botón "Guardar" y tecla Enter en escritorio)
   const guardarEdicionRapida = () => {
     if (!modalEdicionRapida) return;
@@ -1127,9 +1146,12 @@ export function HorarioScreen() {
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                  {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
-                </Text>
+                {/* Punto 98: doble clic (o doble toque) sobre la fecha abre un calendario para saltar de semana */}
+                <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel="Semana visible. Doble toque para ir a una fecha.">
+                  <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
+                    {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setWeekOffset(0)}>
                   <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                     {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
@@ -1177,9 +1199,11 @@ export function HorarioScreen() {
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
-              </Text>
+              <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel="Semana visible. Doble toque para ir a una fecha.">
+                <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
+                  {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setWeekOffset(0)}>
                 <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                   {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
@@ -2736,6 +2760,35 @@ export function HorarioScreen() {
         );
       })()}
     </View>
+
+    {/* Punto 98: calendario para saltar a cualquier semana */}
+    <Modal visible={irAFechaAbierto} transparent animationType="fade" onRequestClose={() => setIrAFechaAbierto(false)}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <Pressable
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onPress={() => setIrAFechaAbierto(false)}
+          accessibilityLabel="Cerrar"
+        />
+        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 16, width: '100%', maxWidth: 360 }}>
+          <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 10 }}>Ir a una fecha</Text>
+          <SelectorFecha
+            fecha={fechasSemana[0]}
+            onCambiar={irAFecha}
+            vistaInicial="mes"
+            noRecordarVista
+            diasMarcados={todosLosBloques.map(b => b.fecha)}
+          />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <TouchableOpacity onPress={() => irAFecha(hoyIso)} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: tema.fondo, alignItems: 'center' }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>Hoy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setIrAFechaAbierto(false)} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: tema.fondo, alignItems: 'center' }}>
+              <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
 
     {/* ── Modal de edición rápida (doble tap en móvil / clic derecho en escritorio) ── */}
     <Modal

@@ -123,3 +123,10 @@ export function encabezadoSemana(
   if (!misma) return tituloSemanaDel(sem);
   return esPrimeroDePagina ? `${tituloSemanaDel(sem)} (sigue)` : null;
 }
+
+/** Punto 98: cuántas semanas hay entre la semana de `desde` y la de `hasta` (negativo si es antes). */
+export function semanasEntre(desde: string, hasta: string, primerDia: PrimerDia = 'lunes'): number {
+  const a = isoAFecha(inicioSemana(desde, primerDia)).getTime();
+  const b = isoAFecha(inicioSemana(hasta, primerDia)).getTime();
+  return Math.round((b - a) / (7 * 24 * 60 * 60 * 1000));
+}

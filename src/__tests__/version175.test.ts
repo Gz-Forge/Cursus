@@ -128,3 +128,15 @@ describe('colores del SelectorColor (29)', () => {
     expect(PALETA_16.every(esHex)).toBe(true);
   });
 });
+
+import { semanasEntre } from '../utils/calendario';
+
+describe('ir a una fecha desde el horario (98)', () => {
+  it('cuenta semanas entre la de hoy y la elegida', () => {
+    expect(semanasEntre('2026-10-28', '2026-10-26')).toBe(0);
+    expect(semanasEntre('2026-10-28', '2026-11-02')).toBe(1);
+    expect(semanasEntre('2026-10-28', '2026-10-25')).toBe(-1);
+    expect(semanasEntre('2026-10-28', '2026-11-01', 'domingo')).toBe(1);
+    expect(semanasEntre('2026-12-30', '2027-03-29')).toBe(13); // cruce de año y cambio de horario
+  });
+});
