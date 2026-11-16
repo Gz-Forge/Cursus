@@ -108,3 +108,23 @@ describe('lista de horarios agrupada por semana (24)', () => {
     expect(encabezadoSemana('2026-10-30', '2026-10-28', true)).toBe('Semana del 26/10 (sigue)');
   });
 });
+
+import { hexAHsv, hsvAHex, esHex, normalizarHex, PALETA_16 } from '../utils/colores';
+
+describe('colores del SelectorColor (29)', () => {
+  it('hex ↔ hsv ida y vuelta', () => {
+    for (const c of ['#4CAF50', '#2196F3', '#FF5722', '#000000', '#FFFFFF', '#607D8B']) {
+      expect(hsvAHex(hexAHsv(c))).toBe(c);
+    }
+    expect(hexAHsv('#FF0000')).toEqual({ h: 0, s: 1, v: 1 });
+  });
+
+  it('valida y normaliza el código', () => {
+    expect(esHex('#4caf50')).toBe(true);
+    expect(esHex('#4CAF5')).toBe(false);
+    expect(esHex('4CAF50')).toBe(false);
+    expect(normalizarHex(' 4caf50 ')).toBe('#4CAF50');
+    expect(PALETA_16).toHaveLength(16);
+    expect(PALETA_16.every(esHex)).toBe(true);
+  });
+});

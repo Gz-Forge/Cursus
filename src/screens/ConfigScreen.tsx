@@ -9,6 +9,7 @@ import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
 import { contarMateriasPorTipo } from '../utils/formulario';
 import { TablaUmbrales } from '../components/TablaUmbrales';
+import { SelectorColor } from '../components/SelectorColor';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
@@ -27,53 +28,9 @@ const COLORES_BLOQUES_DEFAULT = [
 ];
 
 // ── Paleta completa para el color picker ────────────────────────────────────
-const PALETA_COLOR_PICKER = [
-  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
-  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
-  '#F44336', '#3F51B5', '#FFEB3B', '#795548', '#9E9E9E',
-  '#ffffff', '#000000',
-];
-
-// ── Color picker: cuadrado tocable + paleta + hex input ─────────────────────
+// ── Color: paleta, selector visual y código (punto 29) ─────────────────────
 function ColorInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  const tema = useTema();
-  const [mostrarPaleta, setMostrarPaleta] = useState(false);
-  const isValidHex = /^#[0-9A-Fa-f]{6}$/.test(value);
-  return (
-    <View style={{ marginBottom: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <TouchableOpacity
-          onPress={() => setMostrarPaleta(v => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: isValidHex ? value : tema.borde, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento }}
-        />
-        <Text style={{ color: tema.textoSecundario, fontSize: 12, width: 52 }}>{label}</Text>
-        <TextInput
-          style={{ flex: 1, backgroundColor: tema.fondo, color: tema.texto, padding: 6, borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
-          value={value}
-          onChangeText={onChange}
-          placeholder="#RRGGBB"
-          placeholderTextColor={tema.textoSecundario}
-          maxLength={7}
-          autoCapitalize="characters"
-        />
-      </View>
-      {mostrarPaleta && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, padding: 8, backgroundColor: tema.fondo, borderRadius: 8 }}>
-          {PALETA_COLOR_PICKER.map(c => (
-            <TouchableOpacity
-              key={c}
-              onPress={() => { onChange(c); setMostrarPaleta(false); }}
-              style={{
-                width: 32, height: 32, borderRadius: 6, backgroundColor: c,
-                borderWidth: c.toLowerCase() === value.toLowerCase() ? 2.5 : 1,
-                borderColor: c.toLowerCase() === value.toLowerCase() ? (tema.acentoLineas ?? tema.acento) : tema.borde,
-              }}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
+  return <SelectorColor value={value} onChange={onChange} label={label} anchoLabel={52} />;
 }
 
 type Tab = 'notas' | 'horario' | 'app' | 'datos';
@@ -133,6 +90,8 @@ export function ConfigScreen() {
   const fondoPantalla = useFondoPantalla('config');
   const [acordeonesHorario, setAcordeonesHorario] = useState<Record<string, boolean>>({});
   const [acordeonBloques, setAcordeonBloques] = useState<Record<string, boolean>>({});
+  // Punto 29: color elegido para aplicar a todas las evaluaciones individuales de una materia
+  const [colorLote, setColorLote] = useState<Record<string, ColorBloque>>({});
   const [estadoExpandido, setEstadoExpandido] = useState<EstadoMateria | null>(null);
   const { getColor, getIcono, getLabel } = useEstadoEstilo();
   const ORDEN_ESTADOS_CONFIG: EstadoMateria[] = ['exonerado', 'aprobado', 'cursando', 'reprobado', 'recursar', 'por_cursar'];
@@ -866,6 +825,43 @@ export function ConfigScreen() {
                               <Text style={{ color: tema.textoSecundario, fontSize: 10, fontWeight: '600', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                                 Evaluaciones individuales
                               </Text>
+                              {/* Punto 29: un color para todas las evaluaciones individuales de la materia */}
+                              {evalsConFecha.length > 1 && (() => {
+                                const loteKey = `todas|${m.id}`;
+                                const loteAbierto = !!acordeonBloques[loteKey];
+                                const lote: ColorBloque = colorLote[m.id] ?? { fondo: '#FF9800', texto: '#ffffff' };
+                                const n = evalsConFecha.length;
+                                return (
+                                  <View>
+                                    <TouchableOpacity
+                                      onPress={() => toggleBloque(loteKey)}
+                                      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 }}
+                                    >
+                                      <View style={{ backgroundColor: lote.fondo, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}>
+                                        <Text style={{ color: lote.texto, fontSize: 13, fontWeight: '700' }}>Todas</Text>
+                                      </View>
+                                      <Text style={{ color: tema.textoSecundario, fontSize: 11, flex: 1 }}>Todas las evaluaciones individuales ({n})</Text>
+                                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{loteAbierto ? '▲' : '▼'}</Text>
+                                    </TouchableOpacity>
+                                    {loteAbierto && (
+                                      <View style={{ paddingLeft: 8, paddingBottom: 8 }}>
+                                        <ColorInput label="Fondo" value={lote.fondo} onChange={v => setColorLote(c => ({ ...c, [m.id]: { ...lote, fondo: v } }))} />
+                                        <ColorInput label="Texto" value={lote.texto} onChange={v => setColorLote(c => ({ ...c, [m.id]: { ...lote, texto: v } }))} />
+                                        <TouchableOpacity
+                                          onPress={() => {
+                                            const nuevos = { ...(config.coloresEvaluacionesSimples ?? {}) };
+                                            evalsConFecha.forEach(ev => { nuevos[ev.id] = { fondo: lote.fondo, texto: lote.texto }; });
+                                            actualizarConfig({ coloresEvaluacionesSimples: nuevos });
+                                          }}
+                                          style={{ alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: tema.acentoFondo ?? tema.acento }}
+                                        >
+                                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Aplicar a las {n}</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })()}
                               {evalsConFecha.map(ev => {
                                 const evalKey = `e|${ev.id}`;
                                 const evalExpandida = !!acordeonBloques[evalKey];
