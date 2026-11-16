@@ -1,6 +1,6 @@
 {
   "productName": "Cursus",
-  "version": "1.9.5",
+  "version": "2.0.0",
   "identifier": "com.gzforge.cursus",
   "build": {
     "frontendDist": "../dist",
