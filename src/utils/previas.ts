@@ -37,3 +37,27 @@ export function buscarPrevias(
 export function previaCumplida(estado: EstadoMateria, aprobadoHabilitaPrevias: boolean): boolean {
   return estado === 'exonerado' || (aprobadoHabilitaPrevias && estado === 'aprobado');
 }
+
+export interface RequisitosFaltantes {
+  /** Previas sin cumplir: número y, si existe, la materia. */
+  previas: { numero: number; materia?: Materia }[];
+  /** Créditos que faltan (0 si alcanzan). */
+  creditosFaltan: number;
+}
+
+/**
+ * Punto 17: qué le falta a una materia para poder cursarla.
+ * `estadoDe` y `creditos` vienen de calculos.ts (se pasan para no acoplar este módulo).
+ */
+export function requisitosFaltantes(
+  materia: Pick<Materia, 'previasNecesarias' | 'creditosNecesarios'>,
+  materias: Materia[],
+  estadoDe: (m: Materia) => EstadoMateria,
+  creditos: number,
+  aprobadoHabilitaPrevias: boolean,
+): RequisitosFaltantes {
+  const previas = materia.previasNecesarias
+    .map(numero => ({ numero, materia: materias.find(m => m.numero === numero) }))
+    .filter(p => !p.materia || !previaCumplida(estadoDe(p.materia), aprobadoHabilitaPrevias));
+  return { previas, creditosFaltan: Math.max(0, materia.creditosNecesarios - creditos) };
+}

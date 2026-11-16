@@ -92,3 +92,25 @@ describe('bloques en lote e importación (73, 75)', () => {
     expect(resumenImportacion([], i => i)).toMatchObject({ cantidad: 0, desde: null, semanas: 0 });
   });
 });
+
+import { requisitosFaltantes } from '../utils/previas';
+
+describe('aviso de requisitos (17)', () => {
+  const materias = [
+    { numero: 1, nombre: 'Cálculo I', e: 'exonerado' },
+    { numero: 2, nombre: 'Álgebra', e: 'aprobado' },
+    { numero: 3, nombre: 'Física', e: 'cursando' },
+  ] as any[];
+  const estadoDe = (m: any) => m.e;
+  it('lista previas faltantes y créditos', () => {
+    const r = requisitosFaltantes({ previasNecesarias: [1, 2, 3, 9], creditosNecesarios: 30 }, materias, estadoDe, 18, false);
+    expect(r.previas.map(p => p.numero)).toEqual([2, 3, 9]);
+    expect(r.previas[0].materia?.nombre).toBe('Álgebra');
+    expect(r.previas[2].materia).toBeUndefined();
+    expect(r.creditosFaltan).toBe(12);
+  });
+  it('con "aprobado habilita previas" y créditos suficientes', () => {
+    const r = requisitosFaltantes({ previasNecesarias: [1, 2], creditosNecesarios: 10 }, materias, estadoDe, 18, true);
+    expect(r).toEqual({ previas: [], creditosFaltan: 0 });
+  });
+});

@@ -33,6 +33,8 @@ import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
 import { PreviasEditor } from '../components/PreviasEditor';
 import { MedidorAsistencia } from '../components/MedidorAsistencia';
+import { AvisoRequisitosModal } from '../components/AvisoRequisitosModal';
+import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 
@@ -164,6 +166,7 @@ export function CrearMateriaScreen() {
   // ── Asistencia ──────────────────────────────────────────────────────
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -504,50 +507,26 @@ export function CrearMateriaScreen() {
     );
   };
 
+  const marcarCursando = () => setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+
+  // Punto 17: si no cumple los requisitos, se avisa qué falta y se puede marcar igual
   const handleToggleCursando = (v: boolean) => {
     if (!v) {
       setForm(f => ({ ...f, cursando: false }));
       return;
     }
-
-    const creditos = creditosAcumulados(materias, config);
-    const aprobadas = new Set(
-      materias
-        .filter(m => {
-          const estado = calcularEstadoFinal(m, config);
-          return estado === 'exonerado' ||
-            (config.aprobadoHabilitaPrevias && estado === 'aprobado');
-        })
-        .map(m => m.numero)
+    const r = requisitosFaltantes(
+      form,
+      materias.filter(m => m.id !== form.id),
+      m => calcularEstadoFinal(m, config),
+      creditosAcumulados(materias, config),
+      config.aprobadoHabilitaPrevias,
     );
-
-    const creditosOk = creditos >= form.creditosNecesarios;
-    const previasOk = form.previasNecesarias.every(p => aprobadas.has(p));
-
-    if (creditosOk && previasOk) {
-      setForm(f => ({ ...f, cursando: true, oportunidadesExamen: config.oportunidadesExamenDefault }));
+    if (r.previas.length === 0 && r.creditosFaltan === 0) {
+      marcarCursando();
       return;
     }
-
-    const faltantes: string[] = [];
-    if (!creditosOk) {
-      faltantes.push(`• Créditos: tenés ${creditos}, necesitás ${form.creditosNecesarios}`);
-    }
-    if (!previasOk) {
-      const previasFaltantes = form.previasNecesarias
-        .filter(p => !aprobadas.has(p))
-        .map(p => {
-          const m = materias.find(x => x.numero === p);
-          return `  - ${p}${m ? ` · ${m.nombre}` : ''}`;
-        });
-      faltantes.push(`• Previas pendientes:\n${previasFaltantes.join('\n')}`);
-    }
-
-    showAlert(
-      'No cumple los requisitos',
-      `No podés marcar esta materia como ${getLabel('cursando').toLowerCase()}:\n\n${faltantes.join('\n\n')}`,
-      'Entendido'
-    );
+    setAvisoRequisitos(r);
   };
 
   const confirmarFalta = () => {
@@ -1562,6 +1541,12 @@ export function CrearMateriaScreen() {
         </View>
       </Modal>
 
+      <AvisoRequisitosModal
+        faltantes={avisoRequisitos}
+        labelCursando={getLabel('cursando')}
+        onCancelar={() => setAvisoRequisitos(null)}
+        onMarcarIgual={() => { setAvisoRequisitos(null); marcarCursando(); }}
+      />
     </SafeAreaView>
   );
 }
