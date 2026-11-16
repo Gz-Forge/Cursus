@@ -39,6 +39,7 @@ import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 import { CampoSalon } from '../components/CampoSalon';
+import { SalidaIncompletaModal } from '../components/SalidaIncompletaModal';
 import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 import { EdicionLoteModal } from '../components/EdicionLoteModal';
 import { aplicarLote } from '../utils/bloquesLote';
@@ -433,10 +434,7 @@ export function EditMateriaScreen() {
   const guardar = () => {
     const faltantes = validarObligatorios();
     if (faltantes.length > 0) {
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
+      irAFaltantes(faltantes);
       showAlert(
         'Campos obligatorios',
         `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
@@ -447,25 +445,35 @@ export function EditMateriaScreen() {
     navigation.goBack();
   };
 
+
+  // ── Punto 79: salir con campos obligatorios vacíos ──
+  const scrollRef = useRef<ScrollView>(null);
+  const posCampos = useRef<Record<string, number>>({});
+  const saliendo = useRef(false);
+  const [salidaIncompleta, setSalidaIncompleta] = useState<{ faltantes: string[]; accion: any } | null>(null);
+  /** Resalta todos los campos que faltan y baja hasta el primero. */
+  const irAFaltantes = (faltantes: string[]) => {
+    setCamposError({ nombre: faltantes.includes('Nombre'), semestre: faltantes.includes('Semestre') });
+    setTabActiva('general');
+    setTimeout(() => {
+      const y = posCampos.current[faltantes[0]];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }, 80);
+  };
+  // Si la materia ya estaba completa, el autoguardado conservó la última versión válida:
+  // descartar solo pierde los cambios. Si vino incompleta (o es nueva), descartar la elimina.
+  const originalCompleta = useRef(!!materiaOriginal && !!materiaOriginal.nombre.trim() && materiaOriginal.semestre >= 1).current;
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-      const faltantes: string[] = [];
-      if (!form.nombre.trim()) faltantes.push('Nombre');
-      const n = parseInt(semestreStr, 10);
-      if (!semestreStr.trim() || isNaN(n) || n < 1) faltantes.push('Semestre');
+      if (saliendo.current) return;
+      const faltantes = validarObligatorios();
       if (faltantes.length === 0) return;
-
       e.preventDefault();
-      setCamposError({
-        nombre: faltantes.includes('Nombre'),
-        semestre: faltantes.includes('Semestre'),
-      });
-      showAlert(
-        'No podés salir',
-        `Completá los campos obligatorios antes de salir: ${faltantes.join(', ')}.`,
-      );
+      setSalidaIncompleta({ faltantes, accion: e.data.action });
     });
     return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation, form.nombre, semestreStr]);
 
   const handleEliminar = () => setShowConfirmEliminar(true);
@@ -776,7 +784,7 @@ export function EditMateriaScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tema.fondo }}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16 }}>
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
         {/* ── Estado actual + Cursando (punto 61) ── */}
@@ -792,12 +800,14 @@ export function EditMateriaScreen() {
         {tabActiva === 'general' && (<>
 
         <Text style={{ color: tema.acento, fontWeight: '600', marginBottom: 10 }}>INFORMACIÓN GENERAL</Text>
+        <View onLayout={e => { posCampos.current.Nombre = e.nativeEvent.layout.y; }}>
         {campo('Nombre', form.nombre, v => {
           setForm(f => ({ ...f, nombre: v }));
           if (v.trim()) setCamposError(e => ({ ...e, nombre: false }));
         }, false, 100, camposError.nombre)}
+        </View>
         {/* Punto 2: grilla de 2 columnas con − / + (tocar el número permite escribirlo) */}
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+        <View onLayout={e => { posCampos.current.Semestre = e.nativeEvent.layout.y; }} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
           <CampoNumerico
             label="Semestre"
             texto={semestreStr}
@@ -1893,6 +1903,21 @@ export function EditMateriaScreen() {
         onImportar={bloques => {
           setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
           setVistaPreviaImport(null);
+        }}
+      />
+      <SalidaIncompletaModal
+        faltantes={salidaIncompleta?.faltantes ?? null}
+        labelDescartar={originalCompleta ? 'Descartar cambios' : 'Descartar materia'}
+        detalleDescartar={originalCompleta
+          ? 'Si descartás, queda como estaba la última vez que estuvo completa.'
+          : 'Si descartás, la materia se elimina.'}
+        onCompletar={() => { const f = salidaIncompleta?.faltantes ?? []; setSalidaIncompleta(null); irAFaltantes(f); }}
+        onDescartar={() => {
+          const accion = salidaIncompleta?.accion;
+          setSalidaIncompleta(null);
+          if (!originalCompleta && esMateriaExistente) eliminarMateria(form.id, form.numero);
+          saliendo.current = true;
+          if (accion) navigation.dispatch(accion); else navigation.goBack();
         }}
       />
       <AvisoRequisitosModal

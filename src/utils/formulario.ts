@@ -45,3 +45,14 @@ export function contarMateriasPorTipo(materias: { tipoFormacion?: string }[]): R
   }
   return r;
 }
+
+/**
+ * Punto 79: título de la ventana al salir con campos obligatorios vacíos.
+ * ["Semestre"] → "Falta el semestre"; ["Nombre", "Semestre"] → "Faltan el nombre y el semestre".
+ */
+export function tituloFaltantes(faltantes: string[]): string {
+  const partes = faltantes.map(f => `el ${f.toLowerCase()}`);
+  if (partes.length === 0) return '';
+  if (partes.length === 1) return `Falta ${partes[0]}`;
+  return `Faltan ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`;
+}

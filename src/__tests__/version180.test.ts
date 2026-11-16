@@ -114,3 +114,13 @@ describe('aviso de requisitos (17)', () => {
     expect(r).toEqual({ previas: [], creditosFaltan: 0 });
   });
 });
+
+import { tituloFaltantes } from '../utils/formulario';
+
+describe('salir con datos incompletos (79)', () => {
+  it('título según lo que falta', () => {
+    expect(tituloFaltantes(['Semestre'])).toBe('Falta el semestre');
+    expect(tituloFaltantes(['Nombre', 'Semestre'])).toBe('Faltan el nombre y el semestre');
+    expect(tituloFaltantes([])).toBe('');
+  });
+});
