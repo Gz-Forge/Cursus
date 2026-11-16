@@ -8,6 +8,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo, generarPromptCombinado, ModuloIA } from '../utils/importExport';
 import { contarMateriasPorTipo } from '../utils/formulario';
+import { TablaUmbrales } from '../components/TablaUmbrales';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
@@ -511,9 +512,8 @@ export function ConfigScreen() {
           </Text>
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 6 }}>UMBRALES DE ESTADO (%)</Text>
-          {campoUmbral('Exoneración ≥', 'umbralExoneracion')}
-          {config.usarEstadoAprobado && campoUmbral('Aprobación ≥', 'umbralAprobacion')}
-          {campoUmbral('Oportunidad de Examen ≥', 'umbralPorExamen')}
+          {/* Punto 3: barra y tabla de umbrales (% ↔ nota) */}
+          <TablaUmbrales />
           {campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 

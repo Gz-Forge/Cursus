@@ -11,6 +11,7 @@ import {
 } from '../utils/calculos';
 import { parsearMes } from '../utils/fecha';
 import { confirmacionBorrarEvaluacion } from '../utils/ayudas';
+import { ultimoMaximo, ajustarNota } from '../utils/numerosNotas';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -351,9 +352,11 @@ interface Props {
   onEliminar: () => void;
   isColapsada: (id: string) => boolean;
   onToggleColapso: (id: string) => void;
+  /** Punto 64: máximo para una prueba nueva si el grupo todavía no tiene ninguna en modo Número. */
+  maximoSugerido?: number;
 }
 
-export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, onToggleColapso }: Props) {
+export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, onToggleColapso, maximoSugerido }: Props) {
   const tema = useTema();
   const { showAlert, showConfirm } = useAlert();
   const contribucion = calcularPorcentajeEvaluacion(evaluacion);
@@ -428,7 +431,13 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
       showAlert('Límite alcanzado', 'Máximo 50 pruebas por grupo.');
       return;
     }
-    const nueva: SubEvaluacion = { id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, nombre: '', tipoNota: 'numero', nota: null, notaMaxima: 10 };
+    // Punto 64: la prueba nueva trae el máximo de la anterior del grupo (o el último usado)
+    const maxPrevio = ultimoMaximo([grupo], []);
+    const tieneNumero = grupo.subEvaluaciones.some(s => s.tipoNota === 'numero');
+    const nueva: SubEvaluacion = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, nombre: '', tipoNota: 'numero', nota: null,
+      notaMaxima: tieneNumero ? maxPrevio : (maximoSugerido ?? maxPrevio),
+    };
     onChange({ ...grupo, subEvaluaciones: [...grupo.subEvaluaciones, nueva] });
   };
 
@@ -515,7 +524,10 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           <NotaInput
             style={[estilos.input, { flex: 0, width: 70 }]}
             value={evaluacion.nota}
-            onChange={nota => actualizarSimple({ nota })}
+            onChange={nota => actualizarSimple({
+              // Punto 65: una nota mayor que el máximo se ajusta sola (15/12 → 12/12)
+              nota: ajustarNota(nota, evaluacion.tipoNota === 'porcentaje' ? 100 : evaluacion.notaMaxima),
+            })}
             placeholder="—"
             placeholderTextColor={tema.textoSecundario}
           />
@@ -664,7 +676,9 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
               <NotaInput
                 style={[estilos.input, { flex: 0, width: 70 }]}
                 value={sub.nota}
-                onChange={nota => actualizarSub(i, { nota })}
+                onChange={nota => actualizarSub(i, {
+                  nota: ajustarNota(nota, sub.tipoNota === 'porcentaje' ? 100 : sub.notaMaxima),
+                })}
                 placeholder="—"
                 placeholderTextColor={tema.textoSecundario}
               />

@@ -16,13 +16,29 @@ interface Props {
   onToggle?: () => void;
   webGrid?: boolean;
   onToggleCursando?: (m: Materia, v: boolean) => void;
+  /** Punto 48: tarjeta "＋ Agregar materia" al final del semestre. */
+  onAgregar?: (semestre: number) => void;
 }
 
-export function SemestreSection({ semestre, materias, totalMaterias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid, onToggleCursando }: Props) {
+export function SemestreSection({ semestre, materias, totalMaterias, todasLasMaterias, config, colorAcento, onEditar, expandidoExterno, onToggle, webGrid, onToggleCursando, onAgregar }: Props) {
   const [expandidoLocal, setExpandidoLocal] = useState(true);
   const expandido = expandidoExterno !== undefined ? expandidoExterno : expandidoLocal;
   const toggleExpandido = onToggle ?? (() => setExpandidoLocal(v => !v));
   const tema = useTema();
+
+  const tarjetaAgregar = onAgregar ? (
+    <TouchableOpacity
+      onPress={() => onAgregar(semestre)}
+      accessibilityRole="button"
+      accessibilityLabel={`Agregar materia al ${semestre}° semestre`}
+      style={{
+        borderRadius: 10, padding: 12, marginVertical: 4, alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1.5, borderStyle: 'dashed', borderColor: colorAcento, minHeight: 48,
+      }}
+    >
+      <Text style={{ color: colorAcento, fontWeight: '700', fontSize: 14 }}>＋ Agregar materia</Text>
+    </TouchableOpacity>
+  ) : null;
 
   return (
     <View style={{ marginBottom: 8 }}>
@@ -58,9 +74,11 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
                 />
               </View>
             ))}
+            {tarjetaAgregar && <View style={{ width: '50%', paddingHorizontal: 4 }}>{tarjetaAgregar}</View>}
           </View>
         ) : (
-          materias.map(m => (
+          <>
+          {materias.map(m => (
             <MateriaCard
               key={m.id}
               materia={m}
@@ -70,7 +88,9 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
               mostrarToggleCursando={config.tarjetaMostrarToggleCursando ?? true}
               onToggleCursando={onToggleCursando ? (v) => onToggleCursando(m, v) : undefined}
             />
-          ))
+          ))}
+          {tarjetaAgregar}
+          </>
         )
       )}
     </View>
