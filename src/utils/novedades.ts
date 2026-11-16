@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '1.9.5',
+    items: [
+      'Las felicitaciones ahora son una animación corta que se cierra sola, y quedan guardadas en Ajustes → Datos → Registro de logros.',
+      'En el horario, cada evaluación muestra cuántos días faltan ("en 5 días", "mañana", "hoy"). Se puede apagar en general o en cada evaluación.',
+      'Temas listos para usar: Oscuro, Claro, Alto contraste, Océano, Bosque y Atardecer, con una vista previa de cómo queda la app.',
+      'Arriba de Ajustes hay un buscador: escribí lo que buscás y te lleva directo a ese ajuste.',
+      'Podés elegir no ver esta ventana de novedades cuando se actualiza la app (Ajustes → App).',
+      'Los botones que solo tienen un ícono ahora tienen una descripción para lectores de pantalla.',
+    ],
+  },
+  {
     version: '1.9.0',
     items: [
       '🎓 En Ajustes → App elegí cómo se ve el encabezado de cada semestre (barra, íconos o anillo, con sus créditos) y el estilo de las cifras de arriba de Carrera, con vista previa.',
