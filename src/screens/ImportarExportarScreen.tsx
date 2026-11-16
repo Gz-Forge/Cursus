@@ -261,7 +261,7 @@ function PanelImportar() {
 
     showAlert(
       'Formato no reconocido',
-      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Ajustes → Prompts IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla\n• Configuración: generada con "Generar configuración" en Prompts para IA\n• Colores: generados con el prompt de colores de horario',
+      'El archivo no tiene un formato conocido.\n\nFormatos aceptados:\n• Carrera: generado con el prompt de IA (Ajustes → Datos → Armar mi carrera con IA)\n• Plan completo: generado con "Todo en uno"\n• Exportación completa: generada desde esta pantalla\n• Configuración: generada con "Generar configuración" en Prompts para IA\n• Colores: generados con el prompt de colores de horario',
     );
   };
 
@@ -412,7 +412,7 @@ function PanelImportar() {
           • <Text style={{ color: tema.texto }}>Plan completo</Text>: carrera + horarios + evaluaciones en un JSON{'\n'}
           • <Text style={{ color: tema.texto }}>Exportación completa</Text>: generada desde esta pantalla{'\n\n'}
           💡 Encontrás los prompts en{' '}
-          <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Ajustes → Prompts para IA</Text>
+          <Text style={{ color: tema.acentoTexto ?? tema.acento }}>Ajustes → Datos → Armar mi carrera con IA</Text>
         </Text>
         <ZonaArchivo
           extensiones={['.json']}

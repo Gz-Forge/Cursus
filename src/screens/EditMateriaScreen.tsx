@@ -49,6 +49,9 @@ import { EdicionLoteModal } from '../components/EdicionLoteModal';
 import { aplicarLote } from '../utils/bloquesLote';
 
 
+// En web, las filas Cancelar + zona de archivo van en columna: sin flex: 1 cada celda ocupa su alto natural.
+const celdaFila = Platform.OS === 'web' ? {} : { flex: 1 };
+
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -1412,14 +1415,14 @@ export function EditMateriaScreen() {
                 ))}
               </View>
             )}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => { setModoImport(null); setTextoTabla(''); setFilasParseadas([]); setMostrarAcordeonCSV(false); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
               {filasParseadas.length === 0 ? (
-                <View style={{ flex: 1 }}>
+                <View style={celdaFila}>
                   <ZonaArchivo
                     compacta
                     extensiones={['.csv', '.txt']}
@@ -1439,7 +1442,7 @@ export function EditMateriaScreen() {
                     setForm(prev => ({ ...prev, bloques: [...(prev.bloques ?? []), ...nuevos] }));
                     setModoImport(null); setTextoTabla(''); setFilasParseadas([]); setMostrarAcordeonCSV(false);
                   }}
-                  style={{ flex: 1, padding: 9, backgroundColor: filasParseadas.some(f => !f.error) ? tema.acento : tema.tarjeta, borderRadius: 6, alignItems: 'center' }}>
+                  style={{ ...celdaFila, padding: 9, backgroundColor: filasParseadas.some(f => !f.error) ? tema.acento : tema.tarjeta, borderRadius: 6, alignItems: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '600' }}>
                     Agregar {filasParseadas.filter(f => !f.error).length} válidos
                   </Text>
@@ -1490,13 +1493,13 @@ export function EditMateriaScreen() {
                 </View>
               </View>
             )}
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
               <TouchableOpacity
                 onPress={() => { setModoImport(null); setMostrarAcordeonCSV(false); }}
-                style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                 <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
               </TouchableOpacity>
-              <View style={{ flex: 1 }}>
+              <View style={celdaFila}>
                 <ZonaArchivo
                   compacta
                   extensiones={['.json']}
@@ -1519,13 +1522,13 @@ export function EditMateriaScreen() {
                   Importá un archivo .ics (Google Calendar, Outlook, etc.).{'\n'}
                   Los eventos recurrentes semanales se expandirán N semanas.
                 </Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flexDirection: Platform.OS === 'web' ? 'column-reverse' : 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => setModoImport(null)}
-                    style={{ flex: 1, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
+                    style={{ ...celdaFila, padding: 9, backgroundColor: tema.fondo, borderRadius: 6, alignItems: 'center' }}>
                     <Text style={{ color: tema.textoSecundario }}>Cancelar</Text>
                   </TouchableOpacity>
-                  <View style={{ flex: 1 }}>
+                  <View style={celdaFila}>
                     <ZonaArchivo
                       compacta
                       extensiones={['.ics']}
