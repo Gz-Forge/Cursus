@@ -38,6 +38,7 @@ import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 import { CampoSalon } from '../components/CampoSalon';
+import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 
 
 const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -168,6 +169,7 @@ export function CrearMateriaScreen() {
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
+  const [vistaPreviaImport, setVistaPreviaImport] = useState<BloqueHorario[] | null>(null);
   const [faltaNueva, setFaltaNueva] = useState<{
     fechaStr: string; tipo: 'teorica' | 'practica'; nota: string; justificada: boolean;
   }>({ fechaStr: '', tipo: 'teorica', nota: '', justificada: false });
@@ -352,8 +354,7 @@ export function CrearMateriaScreen() {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
-      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
       showAlert('Error al importar JSON', e.message);
     }
@@ -390,7 +391,7 @@ export function CrearMateriaScreen() {
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+    setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     setModoImport(null);
     setEventosICS([]);
   };
@@ -1542,6 +1543,16 @@ export function CrearMateriaScreen() {
         </View>
       </Modal>
 
+      <VistaPreviaImportModal
+        bloques={vistaPreviaImport}
+        etiquetaTipo={t => tiposBloque.find(x => x.key === t)?.label ?? t}
+        primerDia={config.horarioPrimerDia ?? 'lunes'}
+        onCancelar={() => setVistaPreviaImport(null)}
+        onImportar={bloques => {
+          setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+          setVistaPreviaImport(null);
+        }}
+      />
       <AvisoRequisitosModal
         faltantes={avisoRequisitos}
         labelCursando={getLabel('cursando')}

@@ -39,6 +39,7 @@ import { requisitosFaltantes, RequisitosFaltantes } from '../utils/previas';
 import { encabezadoSemana } from '../utils/calendario';
 import { parsearMes } from '../utils/fecha';
 import { CampoSalon } from '../components/CampoSalon';
+import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 import { EdicionLoteModal } from '../components/EdicionLoteModal';
 import { aplicarLote } from '../utils/bloquesLote';
 
@@ -240,6 +241,7 @@ export function EditMateriaScreen() {
   const [mostrarFormFalta, setMostrarFormFalta] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
   const [avisoRequisitos, setAvisoRequisitos] = useState<RequisitosFaltantes | null>(null);
+  const [vistaPreviaImport, setVistaPreviaImport] = useState<BloqueHorario[] | null>(null);
   // Punto 73: selección de bloques para cambiarlos en lote (null = fuera del modo selección)
   const [seleccionLote, setSeleccionLote] = useState<Set<string> | null>(null);
   const [modalLote, setModalLote] = useState(false);
@@ -545,8 +547,7 @@ export function EditMateriaScreen() {
       const texto = await leerArchivo(['application/json', '*/*']);
       if (!texto) return;
       const bloques = parsearJSONMateria(texto);
-      setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
-      showAlert('Importado', `Se agregaron ${bloques.length} bloques.`);
+      setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     } catch (e: any) {
       showAlert('Error al importar JSON', e.message);
     }
@@ -583,7 +584,7 @@ export function EditMateriaScreen() {
       return;
     }
     const bloques = expandirEventosICS(eventosICS, semanas);
-    setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+    setVistaPreviaImport(bloques); // Punto 75: se confirma en la vista previa
     setModoImport(null);
     setEventosICS([]);
   };
@@ -1882,6 +1883,16 @@ export function EditMateriaScreen() {
           if (seleccionLote) setForm(f => ({ ...f, bloques: aplicarLote(f.bloques ?? [], seleccionLote, cambios) }));
           setModalLote(false);
           setSeleccionLote(null);
+        }}
+      />
+      <VistaPreviaImportModal
+        bloques={vistaPreviaImport}
+        etiquetaTipo={t => tiposBloque.find(x => x.key === t)?.label ?? t}
+        primerDia={config.horarioPrimerDia ?? 'lunes'}
+        onCancelar={() => setVistaPreviaImport(null)}
+        onImportar={bloques => {
+          setForm(f => ({ ...f, bloques: [...(f.bloques ?? []), ...bloques] }));
+          setVistaPreviaImport(null);
         }}
       />
       <AvisoRequisitosModal
