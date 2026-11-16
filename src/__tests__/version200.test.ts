@@ -23,6 +23,21 @@ import { registrarUso, quitarUltimoUso, textoOportunidades, textoUso } from '../
 import { sanitizarConfigImportada } from '../utils/configImport';
 import { aplicarConfigJson, configAJson } from '../utils/importExport';
 import { CONFIG_DEFAULT } from '../store/useStore';
+import {
+  jsonAMaterias,
+  materiasAJson,
+  normalizarEvaluacionesImportadas,
+  sanitizarTopeOpcional,
+  sanitizarHistorialOportunidades,
+  generarPromptConfig,
+  generarPromptEvaluaciones,
+  generarPromptCompleto,
+  generarPromptCombinado,
+} from '../utils/importExport';
+import { construirPayload } from '../utils/exportPayload';
+import { versionExportacion, esExportacionCompleta, reconstruirMaterias } from '../utils/importCompleto';
+import { codificarEvaluacionesQr, decodificarEvaluacionesQr } from '../utils/qrPayload';
+import { tituloFaltantes, faltantesGrupos, gruposQueExceden } from '../utils/formulario';
 import { useStore } from '../store/useStore';
 import { Config, Evaluacion, EvaluacionSimple, GrupoEvaluacion, Materia } from '../types';
 
@@ -607,5 +622,143 @@ describe('migración al cargar el perfil (store)', () => {
     expect(a.historialOportunidades![0].origen).toBe('periodo');
     expect(a.historialOportunidades![0].fecha).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(b.historialOportunidades).toBeUndefined();
+  });
+});
+
+
+describe('importar / exportar / QR de evaluaciones (2.0.0)', () => {
+  const evaluaciones: Evaluacion[] = [
+    { id: 'e1', tipo: 'simple', nombre: 'Parcial', pesoEnMateria: 60, tipoNota: 'numero', nota: 8, notaMaxima: 12 },
+    {
+      id: 'e2', tipo: 'simple', nombre: 'Extra', pesoEnMateria: 10, tipoNota: 'numero', nota: null, notaMaxima: 10,
+      opcional: true, topeOpcional: { tipo: 'porcentaje', valor: 70 },
+    },
+    {
+      id: 'e3', tipo: 'grupo', nombre: 'Prácticos', pesoEnMateria: 30, reparto: 'individual', opcional: true,
+      topeOpcional: { tipo: 'estado', estado: 'exonerado' },
+      subEvaluaciones: [
+        { id: 's1', nombre: 'P1', tipoNota: 'numero', nota: null, notaMaxima: 10, peso: 10 },
+        { id: 's2', nombre: 'P2', tipoNota: 'numero', nota: null, notaMaxima: 10, peso: 20 },
+      ],
+    },
+  ];
+
+  const materiaBase = (): Materia => ({
+    id: 'm1', numero: 1, nombre: 'Algebra', semestre: 1, creditosQueDA: 0, creditosNecesarios: 0,
+    previasNecesarias: [], esPreviaDe: [], cursando: true, usarNotaManual: false, notaManual: null,
+    tipoNotaManual: 'numero', evaluaciones, oportunidadesExamen: 2, bloques: [],
+    historialOportunidades: [{ fecha: '2026-07-31', origen: 'periodo' }, { fecha: '2026-08-02', origen: 'manual' }],
+  } as Materia);
+
+  it('ida y vuelta por jsonAMaterias conserva opcional, tope, reparto, pesos e historial', () => {
+    const [m] = jsonAMaterias([{ nombre: 'Algebra', semestre: 1, evaluaciones, historialOportunidades: materiaBase().historialOportunidades }], 2);
+    expect(m.evaluaciones).toMatchObject(evaluaciones);
+    expect(m.historialOportunidades).toEqual(materiaBase().historialOportunidades);
+  });
+
+  it('exportación completa v2 y reconstrucción conservan los campos', async () => {
+    const m = materiaBase();
+    const payload = await construirPayload({
+      inclNotas: true, inclEvaluaciones: true, inclHorarios: false, inclConfig: false,
+      perfilesSelec: [{ id: 'p1', nombre: 'P' } as any],
+      activo: { id: 'p1', materias: [m], config: CONFIG_DEFAULT },
+    });
+    expect(payload.version).toBe(2);
+    const reconstruidas = reconstruirMaterias(JSON.parse(JSON.stringify(payload.perfiles[0])), 2);
+    expect(reconstruidas[0].evaluaciones).toEqual(evaluaciones);
+    expect(reconstruidas[0].historialOportunidades).toEqual(m.historialOportunidades);
+  });
+
+  it('descarta topes inválidos sin tocar el resto de la evaluación', () => {
+    const malas = [
+      { id: 'a', tipo: 'simple', nombre: 'A', pesoEnMateria: 10, tipoNota: 'numero', nota: null, notaMaxima: 10, opcional: true, topeOpcional: { tipo: 'porcentaje', valor: 150 } },
+      { id: 'b', tipo: 'simple', nombre: 'B', pesoEnMateria: 10, tipoNota: 'numero', nota: null, notaMaxima: 10, opcional: true, topeOpcional: { tipo: 'estado', estado: 'cursando' } },
+      { id: 'c', tipo: 'simple', nombre: 'C', pesoEnMateria: 10, tipoNota: 'numero', nota: null, notaMaxima: 10, opcional: true, topeOpcional: 'aprobado' },
+      { id: 'd', tipo: 'grupo', nombre: 'D', pesoEnMateria: 10, reparto: 'raro', subEvaluaciones: [
+        { id: 'd1', nombre: 'D1', tipoNota: 'numero', nota: null, notaMaxima: 10, peso: -5 },
+        { id: 'd2', nombre: 'D2', tipoNota: 'numero', nota: null, notaMaxima: 10, peso: 5 },
+      ] },
+    ] as unknown as Evaluacion[];
+    const r = normalizarEvaluacionesImportadas(malas) as any[];
+    for (const i of [0, 1, 2]) {
+      expect(r[i].opcional).toBe(true);
+      expect(r[i].topeOpcional).toBeUndefined();
+    }
+    expect(r[3].reparto).toBeUndefined();
+    expect(r[3].subEvaluaciones[0].peso).toBeUndefined();
+    expect(r[3].subEvaluaciones[1].peso).toBe(5);
+    expect(sanitizarTopeOpcional({ tipo: 'porcentaje', valor: 0 })).toEqual({ tipo: 'porcentaje', valor: 0 });
+    expect(sanitizarTopeOpcional({ tipo: 'porcentaje', valor: NaN })).toBeUndefined();
+  });
+
+  it('valida el historial de oportunidades', () => {
+    expect(sanitizarHistorialOportunidades([
+      { fecha: '2026-01-02', origen: 'manual' },
+      { fecha: '02/01/2026', origen: 'manual' },
+      { fecha: '2026-01-03', origen: 'otro' },
+      null,
+    ])).toEqual([{ fecha: '2026-01-02', origen: 'manual' }]);
+    expect(sanitizarHistorialOportunidades('x')).toEqual([]);
+  });
+
+  it('el QR de evaluaciones conserva los campos nuevos y limpia lo inválido', () => {
+    const qr = JSON.parse(codificarEvaluacionesQr(evaluaciones));
+    expect(qr.type).toBe('cursus-evaluaciones');
+    expect(decodificarEvaluacionesQr(qr.data)).toEqual(evaluaciones);
+    const sucio = codificarEvaluacionesQr([
+      { ...evaluaciones[1], topeOpcional: { tipo: 'porcentaje', valor: 999 } } as any, 5 as any,
+    ]);
+    const leidas = decodificarEvaluacionesQr(JSON.parse(sucio).data) as any[];
+    expect(leidas).toHaveLength(1);
+    expect(leidas[0].topeOpcional).toBeUndefined();
+  });
+
+  it('materiasAJson sigue produciendo el formato de carrera', () => {
+    expect(materiasAJson([materiaBase()])[0].nombre).toBe('Algebra');
+  });
+});
+
+describe('versión del formato de exportación', () => {
+  it('lee versiones 1 y 2, y detecta una versión más nueva', () => {
+    expect(versionExportacion({ version: 1, perfiles: [] })).toBe(1);
+    expect(versionExportacion({ version: 2, perfiles: [] })).toBe(2);
+    expect(versionExportacion({ version: 3, perfiles: [] })).toBe(3);
+    expect(versionExportacion({ version: 2 })).toBeNull();
+    expect(versionExportacion({ version: '2', perfiles: [] })).toBeNull();
+    expect(versionExportacion([])).toBeNull();
+    expect(esExportacionCompleta({ version: 1, perfiles: [] })).toBe(true);
+    expect(esExportacionCompleta({ version: 2, perfiles: [] })).toBe(true);
+    expect(esExportacionCompleta({ version: 3, perfiles: [] })).toBe(false);
+  });
+});
+
+describe('prompts de IA (2.0.0)', () => {
+  const combinado = (mods: string[]) => generarPromptCombinado(new Set(mods) as any, CONFIG_DEFAULT, []);
+  it('config habla de periodosExamen y no de fechasLimiteExamen', () => {
+    for (const p of [generarPromptConfig(), generarPromptCompleto(), combinado(['config', 'evaluaciones'])]) {
+      expect(p).toContain('periodosExamen');
+      expect(p).not.toContain('fechasLimiteExamen');
+    }
+  });
+  it('evaluaciones explican opcional, tope y reparto', () => {
+    for (const p of [generarPromptEvaluaciones(), generarPromptCompleto(), combinado(['config', 'evaluaciones'])]) {
+      expect(p).toContain('opcional');
+      expect(p).toContain('topeOpcional');
+      expect(p).toContain('reparto');
+    }
+  });
+});
+
+describe('grupo que se pasa de su % como faltante', () => {
+  const grupo = (peso: number): Evaluacion => ({
+    id: 'g', tipo: 'grupo', nombre: 'Prácticos', pesoEnMateria: 30, reparto: 'individual',
+    subEvaluaciones: [{ id: 's', nombre: 'P1', tipoNota: 'numero', nota: null, notaMaxima: 10, peso }],
+  });
+  it('detecta grupos excedidos y arma el título', () => {
+    expect(gruposQueExceden([grupo(20)])).toEqual([]);
+    expect(gruposQueExceden([grupo(40)])).toEqual(['Prácticos']);
+    expect(faltantesGrupos([grupo(40)])).toEqual(['% del grupo "Prácticos"']);
+    expect(tituloFaltantes(faltantesGrupos([grupo(40)]))).toBe('Revisá el % del grupo Prácticos');
+    expect(tituloFaltantes(['Nombre', ...faltantesGrupos([grupo(40)])])).toBe('Falta el nombre. Revisá el % del grupo Prácticos');
   });
 });

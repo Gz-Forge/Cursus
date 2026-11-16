@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity } from 'react-native';
 import { useTema } from '../theme/ThemeContext';
-import { tituloFaltantes } from '../utils/formulario';
+import { tituloFaltantes, esFaltanteGrupo } from '../utils/formulario';
 
 interface Props {
   /** null = cerrado */
@@ -27,7 +27,10 @@ export function SalidaIncompletaModal({ faltantes, labelDescartar, detalleDescar
             {faltantes ? tituloFaltantes(faltantes) : ''}
           </Text>
           <Text style={{ color: tema.textoSecundario, fontSize: 14, marginBottom: 20 }}>
-            {faltantes && faltantes.length > 1 ? 'Son obligatorios' : 'Es obligatorio'} para guardar la materia. {detalleDescartar}
+            {faltantes && faltantes.length > 0 && faltantes.every(esFaltanteGrupo)
+              ? 'Las pruebas suman más que el % del grupo y así no se puede guardar la materia.'
+              : `${faltantes && faltantes.length > 1 ? 'Son obligatorios' : 'Es obligatorio'} para guardar la materia.`}{' '}
+            {detalleDescartar}
           </Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity

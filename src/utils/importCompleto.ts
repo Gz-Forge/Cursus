@@ -1,5 +1,5 @@
 import { Config, Materia } from '../types';
-import { jsonAMaterias, normalizarTipo } from './importExport';
+import { jsonAMaterias, normalizarTipo, normalizarEvaluacionesImportadas, sanitizarHistorialOportunidades } from './importExport';
 import type { MateriaJson } from './importExport';
 import { sanitizarConfigImportada, asegurarTemaCoherente } from './configImport';
 
@@ -18,8 +18,23 @@ export interface PerfilImportable {
 const esObjeto = (v: unknown): v is Record<string, any> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
+/** Última versión del formato de exportación completa que esta app sabe leer. */
+export const VERSION_EXPORTACION_ACTUAL = 2;
+
+/**
+ * Número de versión de un archivo de exportación completa (tiene `version` numérico y lista de perfiles),
+ * o null si el archivo no tiene esa forma.
+ */
+export function versionExportacion(datos: unknown): number | null {
+  if (!esObjeto(datos) || !Array.isArray(datos.perfiles)) return null;
+  const v = datos.version;
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : null;
+}
+
+/** Exportación completa en una versión que esta app entiende (1 o 2). */
 export function esExportacionCompleta(datos: unknown): boolean {
-  return esObjeto(datos) && datos.version === 1 && Array.isArray(datos.perfiles);
+  const v = versionExportacion(datos);
+  return v !== null && v <= VERSION_EXPORTACION_ACTUAL;
 }
 
 function limpiarBloques(bloques: unknown): Materia['bloques'] {
@@ -47,8 +62,11 @@ export function reconstruirMaterias(perfil: unknown, oportunidades: number): Mat
       ...m,
       previasNecesarias: Array.isArray(m.previasNecesarias) ? m.previasNecesarias : [],
       esPreviaDe: Array.isArray(m.esPreviaDe) ? m.esPreviaDe : [],
-      evaluaciones: Array.isArray(m.evaluaciones) ? m.evaluaciones : [],
+      evaluaciones: Array.isArray(m.evaluaciones) ? normalizarEvaluacionesImportadas(m.evaluaciones) : [],
       bloques: limpiarBloques(m.bloques),
+      ...(m.historialOportunidades !== undefined
+        ? { historialOportunidades: sanitizarHistorialOportunidades(m.historialOportunidades) }
+        : {}),
     }));
   }
 
@@ -72,7 +90,7 @@ export function reconstruirMaterias(perfil: unknown, oportunidades: number): Mat
       return {
         ...m,
         ...(nota !== undefined ? { usarNotaManual: true, notaManual: nota } : {}),
-        ...(evals ? { evaluaciones: evals } : {}),
+        ...(evals ? { evaluaciones: normalizarEvaluacionesImportadas(evals as any) } : {}),
       };
     }
     return m;

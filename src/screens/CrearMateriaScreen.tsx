@@ -27,7 +27,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { EstadoCursandoCard } from '../components/EstadoCursandoCard';
 import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
-import { nivelContador } from '../utils/formulario';
+import { nivelContador, gruposQueExceden, faltantesGrupos } from '../utils/formulario';
 import { CampoNumerico } from '../components/CampoNumerico';
 import { ultimoMaximo } from '../utils/numerosNotas';
 import { SelectorFecha } from '../components/SelectorFecha';
@@ -312,6 +312,12 @@ export function CrearMateriaScreen() {
         'Campos obligatorios',
         `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
       );
+      return;
+    }
+    const excedidos = gruposQueExceden(form.evaluaciones);
+    if (excedidos.length > 0) {
+      setTabActiva('general');
+      showAlert('Revisá los porcentajes', `En "${excedidos[0]}" las pruebas suman más que el % del grupo.`);
       return;
     }
     guardarMateria(form);

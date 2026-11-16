@@ -28,7 +28,7 @@ import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { EstadoCursandoCard } from '../components/EstadoCursandoCard';
 import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
-import { nivelContador } from '../utils/formulario';
+import { nivelContador, gruposQueExceden, faltantesGrupos } from '../utils/formulario';
 import { CampoNumerico } from '../components/CampoNumerico';
 import { ultimoMaximo } from '../utils/numerosNotas';
 import { SelectorFecha } from '../components/SelectorFecha';
@@ -434,6 +434,8 @@ export function EditMateriaScreen() {
     if (!form.nombre.trim()) return;
     const n = parseInt(semestreStr, 10);
     if (!semestreStr.trim() || isNaN(n) || n < 1) return;
+    // Con un grupo que se pasa de su %, no se autoguarda: queda la última versión válida.
+    if (gruposQueExceden(form.evaluaciones).length > 0) return;
     guardarMateria(form);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, semestreStr, esMateriaExistente, guardarMateria]);
@@ -454,6 +456,12 @@ export function EditMateriaScreen() {
         'Campos obligatorios',
         `Te faltan completar campos obligatorios: ${faltantes.join(', ')}.`,
       );
+      return;
+    }
+    const excedidos = gruposQueExceden(form.evaluaciones);
+    if (excedidos.length > 0) {
+      setTabActiva('general');
+      showAlert('Revisá los porcentajes', `En "${excedidos[0]}" las pruebas suman más que el % del grupo.`);
       return;
     }
     guardarMateria(form);
@@ -482,14 +490,14 @@ export function EditMateriaScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       if (saliendo.current) return;
-      const faltantes = validarObligatorios();
+      const faltantes = [...validarObligatorios(), ...faltantesGrupos(form.evaluaciones)];
       if (faltantes.length === 0) return;
       e.preventDefault();
       setSalidaIncompleta({ faltantes, accion: e.data.action });
     });
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, form.nombre, semestreStr]);
+  }, [navigation, form.nombre, form.evaluaciones, semestreStr]);
 
   const handleEliminar = () => setShowConfirmEliminar(true);
 

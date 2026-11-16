@@ -1,4 +1,4 @@
-import { Materia, BloqueHorario, Evaluacion, TipoBloque, EvaluacionSimple, GrupoEvaluacion, Config } from '../types';
+import { Materia, BloqueHorario, Evaluacion, TipoBloque, EvaluacionSimple, GrupoEvaluacion, Config, TopeOpcional, UsoOportunidad } from '../types';
 import { generarPromptHorario } from './horarioImportExport';
 
 export type ModuloIA = 'carrera' | 'horarios' | 'evaluaciones' | 'config' | 'colores';
@@ -77,6 +77,7 @@ export interface MateriaJson {
     descripcion?: string;
   }>;
   evaluaciones?: Evaluacion[];
+  historialOportunidades?: UsoOportunidad[]; // 2.0.0: solo en exportación completa
 }
 
 export function normalizarTipo(t: string): string {
@@ -107,15 +108,68 @@ export function extraerTiposNuevos(datos: MateriaJson[], existentes: string[]): 
   return nuevos;
 }
 
+const ESTADOS_TOPE = ['reprobado', 'aprobado', 'exonerado'];
+
+/** Valida un tope de evaluación opcional. Devuelve undefined si la forma es inválida. */
+export function sanitizarTopeOpcional(t: unknown): TopeOpcional | undefined {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return undefined;
+  const o = t as Record<string, unknown>;
+  if (o.tipo === 'estado' && typeof o.estado === 'string' && ESTADOS_TOPE.includes(o.estado)) {
+    return { tipo: 'estado', estado: o.estado as 'reprobado' | 'aprobado' | 'exonerado' };
+  }
+  if (o.tipo === 'porcentaje' && typeof o.valor === 'number' && isFinite(o.valor) && o.valor >= 0 && o.valor <= 100) {
+    return { tipo: 'porcentaje', valor: o.valor };
+  }
+  return undefined;
+}
+
+/**
+ * Deja válidos los campos de 2.0.0 de una evaluación (opcional, topeOpcional, reparto, peso de pruebas).
+ * Lo inválido se descarta campo por campo, sin descartar la evaluación.
+ */
+export function sanitizarCamposV2(ev: Evaluacion): Evaluacion {
+  const { opcional, topeOpcional, ...resto } = ev as any;
+  const out: any = { ...resto };
+  if (opcional === true) {
+    out.opcional = true;
+    const tope = sanitizarTopeOpcional(topeOpcional);
+    if (tope) out.topeOpcional = tope;
+  }
+  if (ev.tipo === 'grupo') {
+    delete out.reparto;
+    if (ev.reparto === 'equitativo' || ev.reparto === 'individual') out.reparto = ev.reparto;
+    out.subEvaluaciones = (Array.isArray(ev.subEvaluaciones) ? ev.subEvaluaciones : []).map(s => {
+      const { peso, ...sRest } = s as any;
+      return typeof peso === 'number' && isFinite(peso) && peso >= 0 ? { ...sRest, peso } : sRest;
+    });
+  }
+  return out as Evaluacion;
+}
+
+const ISO_FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Historial de oportunidades de examen: se descartan los items con forma inválida. */
+export function sanitizarHistorialOportunidades(h: unknown): UsoOportunidad[] {
+  if (!Array.isArray(h)) return [];
+  return h
+    .filter((x): x is Record<string, unknown> =>
+      !!x && typeof x === 'object' &&
+      typeof (x as any).fecha === 'string' && ISO_FECHA_RE.test((x as any).fecha) &&
+      ((x as any).origen === 'periodo' || (x as any).origen === 'manual'))
+    .map(x => ({ fecha: x.fecha as string, origen: x.origen as 'periodo' | 'manual' }));
+}
+
 export function normalizarEvaluacionesImportadas(evaluaciones: Evaluacion[]): Evaluacion[] {
   const norm = <T extends { tipoNota?: string; notaMaxima: number }>(x: T): T => {
     const tipoNota = x.tipoNota === 'porcentaje' ? 'porcentaje' : 'numero';
     return { ...x, tipoNota, notaMaxima: tipoNota === 'porcentaje' ? 100 : x.notaMaxima } as T;
   };
   return evaluaciones.map(ev =>
-    ev.tipo === 'grupo'
-      ? { ...ev, subEvaluaciones: ev.subEvaluaciones.map(norm) }
-      : norm(ev)
+    sanitizarCamposV2(
+      ev.tipo === 'grupo'
+        ? { ...ev, subEvaluaciones: ev.subEvaluaciones.map(norm) }
+        : norm(ev),
+    )
   );
 }
 
@@ -192,6 +246,7 @@ export function jsonAMaterias(datos: MateriaJson[], oportunidadesDefault: number
       oportunidadesExamen: oportunidadesDefault,
       tipoFormacion: d.tipo_formacion,
       bloques,
+      ...(Array.isArray(d.historialOportunidades) ? { historialOportunidades: sanitizarHistorialOportunidades(d.historialOportunidades) } : {}),
     };
   });
 
@@ -273,7 +328,19 @@ Reglas:
 - tipoNota: "numero" o "porcentaje".
 - notaMaxima: con tipoNota "numero", el puntaje máximo posible para esa evaluación (ej: 10, 12, 50). Con "porcentaje" debe ser 100 y "nota" va de 0 a 100.
 - nota: null si no hay nota aún.
-- En un grupo, el pesoEnMateria del grupo se reparte en partes iguales entre sus subEvaluaciones (un grupo de 30 con 2 pruebas pesa 15 por prueba). No pongas pesoEnMateria en las subEvaluaciones.
+- En un grupo, por defecto el pesoEnMateria del grupo se reparte en partes iguales entre sus subEvaluaciones (un grupo de 30 con 2 pruebas pesa 15 por prueba). No pongas pesoEnMateria en las subEvaluaciones.
+- Evaluaciones OPCIONALES: "opcional": true marca una evaluación (simple o grupo) que suma a la nota sin pasar de un tope y nunca la baja. Opcionalmente "topeOpcional" indica hasta dónde puede subir la nota, en uno de dos formatos: { "tipo": "estado", "estado": "reprobado" | "aprobado" | "exonerado" } o { "tipo": "porcentaje", "valor": 0-100 }. Sin tope, el tope es "aprobado".
+- Reparto en grupos: "reparto": "equitativo" (por defecto, partes iguales) o "individual". Con "individual", cada subEvaluación lleva su "peso" (% de la materia que vale esa prueba) y la suma de los pesos no debe superar el pesoEnMateria del grupo.
+
+Ejemplo corto con una opcional y un grupo con reparto individual:
+[
+  { "id": "1", "tipo": "simple", "nombre": "Parcial", "pesoEnMateria": 60, "tipoNota": "numero", "nota": null, "notaMaxima": 12 },
+  { "id": "2", "tipo": "simple", "nombre": "Trabajo extra", "pesoEnMateria": 10, "opcional": true, "topeOpcional": { "tipo": "estado", "estado": "aprobado" }, "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
+  { "id": "3", "tipo": "grupo", "nombre": "Prácticos", "pesoEnMateria": 30, "reparto": "individual", "subEvaluaciones": [
+    { "id": "3a", "nombre": "Práctico 1", "peso": 10, "tipoNota": "numero", "nota": null, "notaMaxima": 10 },
+    { "id": "3b", "nombre": "Práctico 2", "peso": 20, "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
+  ]}
+]
 
 Mis materias y sus evaluaciones:
 [describí acá: nombre de cada materia, exámenes, trabajos, pesos aproximados]
@@ -328,7 +395,10 @@ Reglas para "evaluaciones":
 - "tipo": "simple" para una evaluación, "grupo" para agrupar varias.
 - "pesoEnMateria": % que pesa en la nota final. La suma de todos debe ser 100.
 - "tipoNota": "numero" o "porcentaje". Con "porcentaje", "notaMaxima" debe ser 100 y "nota" va de 0 a 100. "nota": null si no hay nota aún.
-- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); el peso del grupo se reparte en partes iguales entre sus pruebas.
+- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); por defecto el peso del grupo se reparte en partes iguales entre sus pruebas.
+- "opcional": true (simple o grupo): la evaluación suma a la nota sin pasar de un tope y nunca la baja. "topeOpcional" (opcional): { "tipo": "estado", "estado": "reprobado" | "aprobado" | "exonerado" } o { "tipo": "porcentaje", "valor": 0-100 }.
+- En grupos, "reparto": "equitativo" (por defecto) o "individual". Con "individual", cada prueba lleva "peso" (% de la materia) y la suma no debe superar el pesoEnMateria del grupo.
+- Ejemplo: { "id": "ev2", "tipo": "simple", "nombre": "Trabajo extra", "pesoEnMateria": 10, "opcional": true, "topeOpcional": { "tipo": "porcentaje", "valor": 70 }, "tipoNota": "numero", "nota": null, "notaMaxima": 10 }
 
 Campos opcionales por materia: creditos_da, creditos_necesarios, previas, tipo_formacion, bloques, evaluaciones.
 
@@ -350,7 +420,8 @@ NOTAS Y UMBRALES:
 
 PERÍODOS DE EXAMEN:
 - modoExamen ("manual" o "automatico").
-- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos (solo si automatico).
+- periodosExamen (array de { "inicio", "fin" }): períodos de examen (solo si automatico). Formato 'DD-MM' si se repiten cada año (con examenRepetirCiclo: true) o 'YYYY-MM-DD' si son fechas puntuales. La oportunidad de examen se descuenta al terminar cada período.
+- examenRepetirCiclo (true/false): ¿los períodos se repiten todos los años?
 
 TIPOS DE FORMACIÓN:
 - tiposFormacion (array de strings): Ej: ["Básica","Específica","Electiva"].
@@ -967,10 +1038,12 @@ CAMPOS DE CONFIGURACIÓN:
 9. modoExamen ("automatico" o "manual")
    - "automatico": la app detecta automáticamente cuándo hay período de examen según fechas configuradas.
    - "manual": el usuario activa y desactiva el modo examen manualmente.
-   Si elegís "automatico", también necesito el campo fechasLimiteExamen.
+   Si elegís "automatico", también necesito el campo periodosExamen.
 
-10. fechasLimiteExamen (array de fechas YYYY-MM-DD)
-    Solo si modoExamen es "automatico". Fechas en que COMIENZA cada período de examen del año académico.
+10. periodosExamen (array de { "inicio", "fin" })
+    Solo si modoExamen es "automatico". Cada período de examen del año académico, con su fecha de inicio y de fin.
+    Si los períodos se repiten todos los años, usá el formato "DD-MM" (ej: { "inicio": "15-07", "fin": "31-07" }) y agregá "examenRepetirCiclo": true. Si son fechas puntuales, usá "YYYY-MM-DD".
+    La oportunidad de examen se descuenta al terminar el período.
     Si el usuario te proporciona un calendario o reglamento con estas fechas, extraélas directamente sin preguntar.
 
 11. tiposFormacion (array de strings)
@@ -1092,7 +1165,7 @@ FORMATO DEL JSON A GENERAR (incluí solo los campos confirmados):
   "oportunidadesExamenDefault": 3,
   "tiposFormacion": ["Básica", "Específica"],
   "modoExamen": "automatico",
-  "fechasLimiteExamen": ["2025-07-15", "2025-12-10"],
+  "periodosExamen": [{ "inicio": "2025-07-15", "fin": "2025-07-31" }, { "inicio": "2025-12-10", "fin": "2025-12-22" }],
   "labelTeorica": "Teórica",
   "abrevTeorica": "T",
   "labelPractica": "Práctica",
@@ -1307,7 +1380,10 @@ export function generarPromptCombinado(
         `- "tipo": "simple" para una evaluación, "grupo" para agrupar varias.`,
         `- "pesoEnMateria": % que pesa en la nota final. La suma de todos los ítems de una materia debe ser 100.`,
         `- "tipoNota": "numero" o "porcentaje". Con "porcentaje", "notaMaxima" debe ser 100 y "nota" va de 0 a 100. "nota": null si no hay nota aún.`,
-        `- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); el peso del grupo se reparte en partes iguales entre sus pruebas.`,
+        `- Para grupos: incluí "subEvaluaciones" (sin "tipo" ni "pesoEnMateria"); por defecto el peso del grupo se reparte en partes iguales entre sus pruebas.`,
+        `- "opcional": true (simple o grupo): la evaluación suma a la nota sin pasar de un tope y nunca la baja. "topeOpcional" (opcional): { "tipo": "estado", "estado": "reprobado" | "aprobado" | "exonerado" } o { "tipo": "porcentaje", "valor": 0-100 }.`,
+        `- En grupos, "reparto": "equitativo" (por defecto) o "individual". Con "individual", cada prueba lleva "peso" (% de la materia) y la suma no debe superar el pesoEnMateria del grupo.`,
+        `- Ejemplo de opcional: { "id": "ev2", "tipo": "simple", "nombre": "Trabajo extra", "pesoEnMateria": 10, "opcional": true, "topeOpcional": { "tipo": "porcentaje", "valor": 70 }, "tipoNota": "numero", "nota": null, "notaMaxima": 10 }`,
         `- "notaMaxima": puntaje máximo de esa evaluación (100 si el tipoNota es "porcentaje").`,
       );
     }
@@ -1347,7 +1423,7 @@ Campos disponibles (los más comunes):
 - aprobadoHabilitaPrevias (true/false): ¿"Aprobado" desbloquea correlativas?
 - oportunidadesExamenDefault (entero ≥ 1): oportunidades de examen por defecto.
 - modoExamen ("automatico" o "manual"): cómo se activa el modo examen.
-- fechasLimiteExamen (array YYYY-MM-DD): fechas de inicio de períodos de examen (si automatico).
+- periodosExamen (array de { "inicio", "fin" }): períodos de examen (si automatico). Formato 'DD-MM' si se repiten cada año (con examenRepetirCiclo: true) o 'YYYY-MM-DD'. La oportunidad se descuenta al terminar el período.
 - tiposFormacion (array de strings): categorías de materias. Ej: ["Básica", "Específica"].
 - horarioPrimerDia ("lunes" o "domingo"): primer día de la semana en el horario.
 - horarioMostrarEvaluaciones (true/false): mostrar evaluaciones con fecha en el horario.

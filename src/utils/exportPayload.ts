@@ -15,7 +15,7 @@ export interface ExportPerfilPayload {
 }
 
 export interface ExportPayload {
-  version: 1;
+  version: 1 | 2;
   exportadoEn: string;
   perfiles: ExportPerfilPayload[];
   /** Configuración del primer perfil exportado. Se mantiene para versiones anteriores de la app. */
@@ -141,7 +141,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
   }
 
   const payload: ExportPayload = {
-    version: 1,
+    version: 2,
     exportadoEn: new Date().toISOString(),
     perfiles,
   };

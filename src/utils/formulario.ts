@@ -2,6 +2,8 @@
  * Funciones puras de los formularios de materia (versión 1.5.0).
  */
 import { normalizarTipo } from './importExport';
+import { asignadoGrupo } from './calculos';
+import type { Evaluacion } from '../types';
 
 export type NivelContador = 'normal' | 'cerca' | 'lleno';
 
@@ -46,13 +48,38 @@ export function contarMateriasPorTipo(materias: { tipoFormacion?: string }[]): R
   return r;
 }
 
+const PREFIJO_GRUPO = '% del grupo "';
+
+/** Faltante que representa un grupo cuyas pruebas suman más que su %: `% del grupo "Prácticos"`. */
+export const esFaltanteGrupo = (f: string): boolean => f.startsWith(PREFIJO_GRUPO);
+
+/** Nombres de los grupos (reparto individual) cuyas pruebas suman más que el % del grupo. */
+export function gruposQueExceden(evaluaciones: Evaluacion[]): string[] {
+  return (evaluaciones ?? [])
+    .filter(ev => ev.tipo === 'grupo' && asignadoGrupo(ev).excede)
+    .map(ev => ev.nombre);
+}
+
+/** Un faltante por cada grupo que se pasa de su %: `% del grupo "Prácticos"`. */
+export function faltantesGrupos(evaluaciones: Evaluacion[]): string[] {
+  return gruposQueExceden(evaluaciones).map(n => `${PREFIJO_GRUPO}${n}"`);
+}
+
 /**
  * Punto 79: título de la ventana al salir con campos obligatorios vacíos.
  * ["Semestre"] → "Falta el semestre"; ["Nombre", "Semestre"] → "Faltan el nombre y el semestre".
+ * Con grupos que se pasan de su %: '% del grupo "Prácticos"' → "Revisá el % del grupo Prácticos".
  */
 export function tituloFaltantes(faltantes: string[]): string {
-  const partes = faltantes.map(f => `el ${f.toLowerCase()}`);
-  if (partes.length === 0) return '';
-  if (partes.length === 1) return `Falta ${partes[0]}`;
-  return `Faltan ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`;
+  const grupos = faltantes.filter(esFaltanteGrupo).map(f => f.slice(PREFIJO_GRUPO.length, -1));
+  const campos = faltantes.filter(f => !esFaltanteGrupo(f));
+  const partes = campos.map(f => `el ${f.toLowerCase()}`);
+  let titulo = '';
+  if (partes.length === 1) titulo = `Falta ${partes[0]}`;
+  else if (partes.length > 1) titulo = `Faltan ${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`;
+  if (grupos.length === 0) return titulo;
+  const rev = grupos.length === 1
+    ? `el % del grupo ${grupos[0]}`
+    : `el % de los grupos ${grupos.slice(0, -1).join(', ')} y ${grupos[grupos.length - 1]}`;
+  return titulo ? `${titulo}. Revisá ${rev}` : `Revisá ${rev}`;
 }
