@@ -16,19 +16,22 @@ interface Props {
   decimal?: boolean;
   error?: boolean;
   placeholder?: string;
+  /** Se llama solo al tocar − / + (no al escribir), con el cambio aplicado (+paso o −paso). */
+  onPaso?: (delta: number) => void;
 }
 
 /**
  * Punto 2 (y 21): número con − / +. Tocar el número permite escribirlo,
  * para valores grandes. Los límites los aplica − / +; al escribir valida quien lo usa.
  */
-export function CampoNumerico({ label, texto, onTexto, min, max, paso = 1, decimal = false, error = false, placeholder }: Props) {
+export function CampoNumerico({ label, texto, onTexto, min, max, paso = 1, decimal = false, error = false, placeholder, onPaso }: Props) {
   const tema = useTema();
   const actual = parseFloat(texto.replace(',', '.'));
   const base = isNaN(actual) ? min : actual;
   const cambiar = (delta: number) => {
     const n = pasoNumero(isNaN(actual) ? (delta > 0 ? min - paso : min) : base, delta, min, max);
     onTexto(String(n));
+    if (n !== base) onPaso?.(n > base ? paso : -paso);
   };
   const puedeRestar = !isNaN(actual) && base > min;
   const puedeSumar = max === undefined || isNaN(actual) || base < max;

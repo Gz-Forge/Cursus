@@ -15,7 +15,7 @@ import { QrScannerModal } from '../components/QrScannerModal';
 import { EvaluacionesRecibidasModal } from '../components/EvaluacionesRecibidasModal';
 import { conIdsNuevos } from '../utils/evaluacionesQr';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados } from '../utils/calculos';
+import { derivarEstado, calcularNotaTotal, calcularEstadoFinal, creditosAcumulados, avisoPeso } from '../utils/calculos';
 import { ayudaNotaExamen } from '../utils/ayudas';
 import {
   FilaParseada, parsearCSV, parsearJSONMateria, extraerEventosICS, expandirEventosICS,
@@ -33,7 +33,9 @@ import { CampoNumerico } from '../components/CampoNumerico';
 import { ultimoMaximo } from '../utils/numerosNotas';
 import { SelectorFecha } from '../components/SelectorFecha';
 import { SelectorHorario } from '../components/SelectorHorario';
-import { esIsoValida } from '../utils/calendario';
+import { esIsoValida, hoyIso } from '../utils/calendario';
+import { OportunidadesInfo } from '../components/OportunidadesInfo';
+import { registrarUso, quitarUltimoUso } from '../utils/oportunidades';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
 import { PreviasEditor } from '../components/PreviasEditor';
@@ -853,8 +855,10 @@ export function EditMateriaScreen() {
             min={0}
             max={99}
             onTexto={v => { const n = parseInt(v, 10); if (!isNaN(n)) setForm(f => ({ ...f, oportunidadesExamen: Math.max(0, Math.min(99, n)) })); }}
+            onPaso={delta => setForm(f => (delta < 0 ? registrarUso(f, hoyIso(), 'manual') : quitarUltimoUso(f)))}
           />
         </View>
+        <OportunidadesInfo materia={form} />
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
           <CampoNumerico
             label="Créditos que da"
@@ -949,6 +953,9 @@ export function EditMateriaScreen() {
               esNotaExamen={form.esNotaExamen}
               oportunidadesExamen={form.oportunidadesExamen}
             />
+            {avisoPeso(form.evaluaciones) && (
+              <Text style={{ color: '#FF9800', fontSize: 12, marginBottom: 8 }}>{avisoPeso(form.evaluaciones)}</Text>
+            )}
             {form.evaluaciones.map((ev, i) => (
               <EvaluacionItem
                 key={ev.id}
