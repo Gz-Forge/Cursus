@@ -8,8 +8,11 @@ import { useTema } from '../theme/ThemeContext';
 import { normalizarTipo } from '../utils/importExport';
 import { contarMateriasPorTipo } from '../utils/formulario';
 import { TablaUmbrales } from '../components/TablaUmbrales';
+import { CampoNumerico } from '../components/CampoNumerico';
+import { CampoUmbralExamen } from '../components/CampoUmbralExamen';
 import { SelectorColor } from '../components/SelectorColor';
 import { useNavigation } from '@react-navigation/native';
+import { aplicarTemaGuardado } from '../theme/temasGuardados';
 import { PeriodoExamenModal } from '../components/PeriodoExamenModal';
 import { SyncDispositivosModal } from '../components/SyncDispositivosModal';
 import { BorrarTodoModal } from '../components/BorrarTodoModal';
@@ -229,41 +232,24 @@ export function ConfigScreen() {
     return tieneBloques || tieneEvalsEnHorario;
   });
 
-  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault') => {
+  const campo = (label: string, key: 'notaMaxima' | 'oportunidadesExamenDefault', min: number, ayuda?: string) => {
     const str = key === 'notaMaxima' ? notaMaxStr : oportStr;
     const setStr = key === 'notaMaxima' ? setNotaMaxStr : setOportStr;
     return (
       <View style={{ marginBottom: 14 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-        <TextInput
-          style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80, textAlign: 'center' }}
-          value={str}
-          keyboardType="numeric"
-          onChangeText={v => {
-            setStr(v);
-            const n = Number(v);
-            if (!isNaN(n) && n >= 1) actualizarConfig({ [key]: n });
-          }}
-        />
-      </View>
-    );
-  };
-
-  const campoUmbral = (label: string, key: 'umbralExoneracion' | 'umbralAprobacion' | 'umbralPorExamen' | 'umbralExamenExoneracion') => {
-    const val = config[key] as number;
-    const equiv = ((val / 100) * config.notaMaxima).toFixed(1);
-    return (
-      <View style={{ marginBottom: 14 }}>
-        <Text style={{ color: tema.textoSecundario, fontSize: 13, marginBottom: 4 }}>{label}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <TextInput
-            style={{ backgroundColor: tema.tarjeta, color: tema.texto, padding: 10, borderRadius: 8, fontSize: 15, width: 80, textAlign: 'center' }}
-            value={String(val)}
-            keyboardType="numeric"
-            onChangeText={v => { const n = Number(v); if (!isNaN(n)) actualizarConfig({ [key]: Math.max(0, Math.min(100, n)) }); }}
+        <View style={{ width: 190 }}>
+          <CampoNumerico
+            label={label}
+            texto={str}
+            min={min}
+            onTexto={v => {
+              setStr(v);
+              const n = Number(v);
+              if (v.trim() !== '' && !isNaN(n) && n >= min) actualizarConfig({ [key]: n });
+            }}
           />
-          <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>→ {equiv} / {config.notaMaxima}</Text>
         </View>
+        {ayuda && <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 4 }}>{ayuda}</Text>}
       </View>
     );
   };
@@ -384,11 +370,18 @@ export function ConfigScreen() {
               {(['oscuro', 'claro', 'personalizado'] as const).map(t => (
                 <TouchableOpacity
                   key={t}
-                  onPress={() => actualizarConfig({ tema: t })}
+                  onPress={() => {
+                    if (t === 'personalizado') {
+                      const lista = config.temasGuardados ?? [];
+                      const activo = lista.find(g => g.id === config.temaGuardadoActivoId);
+                      const guardado = activo?.modo === 'personalizado' ? activo : lista.find(g => g.modo === 'personalizado');
+                      actualizarConfig(guardado ? aplicarTemaGuardado(guardado, config) : { tema: t });
+                    } else actualizarConfig({ tema: t });
+                  }}
                   style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: config.tema === t ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
                 >
                   <Text style={{ color: config.tema === t ? '#fff' : tema.textoSecundario, fontWeight: '600', fontSize: 12 }}>
-                    {t === 'claro' ? 'Claro' : t === 'oscuro' ? 'Oscuro' : 'Custom'}
+                    {t === 'claro' ? 'Claro' : t === 'oscuro' ? 'Oscuro' : 'Personalizado'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -396,6 +389,7 @@ export function ConfigScreen() {
           </Ancla>
           {/* Reemplaza al botón "Entrar a personalizar" (que solo se veía con Custom y llevaba a la misma pantalla) */}
           <Ancla id="temas-prearmados">
+            {config.tema === 'personalizado' ? (
             <TouchableOpacity
               onPress={() => navigation.navigate('TemaPersonalizado' as never)}
               accessibilityRole="button"
@@ -404,6 +398,7 @@ export function ConfigScreen() {
               <Text style={{ flex: 1, color: tema.texto, fontWeight: '600' }}>Más temas y personalización</Text>
               <Text style={{ color: tema.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
             </TouchableOpacity>
+            ) : <View style={{ height: 12 }} />}
           </Ancla>
           {(() => {
             const chip = (activo: boolean, label: string, onPress: () => void) => (
@@ -716,8 +711,8 @@ export function ConfigScreen() {
           <Ancla id="sistema-de-notas">
             <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>SISTEMA DE NOTAS</Text>
           </Ancla>
-          <Ancla id="nota-maxima">{campo('Nota máxima (ej: 12, 10, 100)', 'notaMaxima')}</Ancla>
-          <Ancla id="oportunidades-examen">{campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault')}</Ancla>
+          <Ancla id="nota-maxima">{campo('Nota máxima', 'notaMaxima', 1, 'Ej.: 12, 10 o 100.')}</Ancla>
+          <Ancla id="oportunidades-examen">{campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault', 1)}</Ancla>
 
           <Ancla id="periodos-examen">
             <TouchableOpacity
@@ -736,7 +731,7 @@ export function ConfigScreen() {
             {/* Punto 3: barra y tabla de umbrales (% ↔ nota) */}
             <TablaUmbrales />
           </Ancla>
-          <Ancla id="nota-minima-examen">{campoUmbral('Nota mínima para salvar examen ≥', 'umbralExamenExoneracion')}</Ancla>
+          <Ancla id="nota-minima-examen"><CampoUmbralExamen label="Nota mínima para salvar examen ≥" clave="umbralExamenExoneracion" /></Ancla>
           <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 16 }}>⚠️ Por debajo de "Oportunidad de Examen" se recursa directamente</Text>
 
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>ESTADOS</Text>
@@ -1303,11 +1298,10 @@ export function ConfigScreen() {
             </Ancla>
 
           <Ancla id="borrar-todo">
-          <Text style={{ color: '#FF5722', fontSize: 12, fontWeight: '700', marginTop: 24, marginBottom: 8 }}>ZONA DE PELIGRO</Text>
           <TouchableOpacity
             onPress={() => setMostrarBorrar(true)}
             accessibilityRole="button"
-            style={{ borderWidth: 1, borderColor: '#FF5722', borderRadius: 12, padding: 14, alignItems: 'center', backgroundColor: 'transparent' }}
+            style={{ borderWidth: 1, borderColor: '#FF5722', borderRadius: 12, padding: 14, alignItems: 'center', backgroundColor: 'transparent', marginTop: 16 }}
           >
             <Text style={{ color: '#FF5722', fontWeight: '700' }}>🗑 Borrar todo y empezar de cero</Text>
           </TouchableOpacity>

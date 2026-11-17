@@ -53,6 +53,7 @@ function TabNavigator() {
 
 export function RootNavigator() {
   const navRef = useNavigationContainerRef();
+  const tema = useTema();
   const materias = useStore(s => s.materias);
 
   return (
@@ -72,7 +73,14 @@ export function RootNavigator() {
           }
         }}
       >
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            headerStyle: { backgroundColor: tema.fondo, borderBottomColor: tema.borde },
+            headerTintColor: tema.texto,
+            headerTitleStyle: { color: tema.texto },
+          }}
+        >
           <Stack.Screen name="Tabs" component={TabNavigator} />
           <Stack.Screen name="EditMateria" component={EditMateriaScreen}
             options={{ headerShown: true, title: 'Editar materia' }} />
