@@ -49,6 +49,7 @@ import { SalidaIncompletaModal } from '../components/SalidaIncompletaModal';
 import { VistaPreviaImportModal } from '../components/VistaPreviaImportModal';
 import { EdicionLoteModal } from '../components/EdicionLoteModal';
 import { aplicarLote } from '../utils/bloquesLote';
+import { generarICS, materiaTieneEventosICS } from '../utils/exportarICS';
 
 
 // En web, las filas Cancelar + zona de archivo van en columna: sin flex: 1 cada celda ocupa su alto natural.
@@ -669,6 +670,18 @@ export function EditMateriaScreen() {
     }
   };
 
+  const exportarCalendarioICS = async () => {
+    try {
+      await compartirArchivo(
+        `${form.nombre.replace(/\s+/g, '_') || 'materia'}.ics`,
+        generarICS([form], { incluirEvaluaciones: true }),
+        'text/calendar',
+      );
+    } catch (e: any) {
+      showAlert('Error al exportar', e.message);
+    }
+  };
+
   const importarEvaluaciones = async () => {
     try {
       const texto = await leerArchivo(['application/json', '*/*']);
@@ -994,6 +1007,14 @@ export function EditMateriaScreen() {
                 style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
               >
                 <Text style={{ color: tema.texto }}>↑ Exportar evaluaciones (.json)</Text>
+              </TouchableOpacity>
+            )}
+            {materiaTieneEventosICS(form) && (
+              <TouchableOpacity
+                onPress={exportarCalendarioICS}
+                style={{ backgroundColor: tema.tarjeta, padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 6 }}
+              >
+                <Text style={{ color: tema.texto }}>↑ Exportar al calendario (.ics)</Text>
               </TouchableOpacity>
             )}
             <View style={{ marginBottom: 6 }}>
