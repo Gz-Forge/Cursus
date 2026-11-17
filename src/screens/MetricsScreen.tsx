@@ -147,13 +147,13 @@ export function MetricsScreen() {
   const creditosTotal = materias.reduce((a, m) => a + m.creditosQueDA, 0);
 
   // ── Promedio ponderado por créditos ───────────────────────────────────────
-  const materiasConNota = materias.filter(m => obtenerNotaFinal(m) !== null);
+  const materiasConNota = materias.filter(m => obtenerNotaFinal(m, config) !== null);
   const creditosSumados = materiasConNota.reduce((a, m) => a + m.creditosQueDA, 0);
   const promedioGeneral: number | null = (() => {
     if (materiasConNota.length === 0) return null;
     if (creditosSumados === 0)
-      return materiasConNota.reduce((a, m) => a + obtenerNotaFinal(m)!, 0) / materiasConNota.length;
-    return materiasConNota.reduce((a, m) => a + obtenerNotaFinal(m)! * m.creditosQueDA, 0) / creditosSumados;
+      return materiasConNota.reduce((a, m) => a + obtenerNotaFinal(m, config)!, 0) / materiasConNota.length;
+    return materiasConNota.reduce((a, m) => a + obtenerNotaFinal(m, config)! * m.creditosQueDA, 0) / creditosSumados;
   })();
   const promedioEnEscala = promedioGeneral !== null
     ? parseFloat(((promedioGeneral / 100) * config.notaMaxima).toFixed(2))
@@ -196,12 +196,12 @@ export function MetricsScreen() {
 
   // ── Promedio acumulado ────────────────────────────────────────────────────
   const promedioAcumuladoData = semestres.map(sem => {
-    const matsHastaSem = materias.filter(m => m.semestre <= sem && obtenerNotaFinal(m) !== null);
+    const matsHastaSem = materias.filter(m => m.semestre <= sem && obtenerNotaFinal(m, config) !== null);
     if (matsHastaSem.length === 0) return null;
     const crTot = matsHastaSem.reduce((a, m) => a + m.creditosQueDA, 0);
     const avg = crTot > 0
-      ? matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m)! * m.creditosQueDA, 0) / crTot
-      : matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m)!, 0) / matsHastaSem.length;
+      ? matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m, config)! * m.creditosQueDA, 0) / crTot
+      : matsHastaSem.reduce((a, m) => a + obtenerNotaFinal(m, config)!, 0) / matsHastaSem.length;
     return {
       value: parseFloat(((avg / 100) * config.notaMaxima).toFixed(2)),
       label: `${sem}°`,
@@ -213,9 +213,9 @@ export function MetricsScreen() {
 
   // ── Gráfico 1: Promedio por semestre (línea) ─────────────────────────────
   const datosLinea = semestres.map(sem => {
-    const mats = materias.filter(m => m.semestre === sem && obtenerNotaFinal(m) !== null);
+    const mats = materias.filter(m => m.semestre === sem && obtenerNotaFinal(m, config) !== null);
     if (mats.length === 0) return null;
-    const avg = mats.reduce((a, m) => a + obtenerNotaFinal(m)!, 0) / mats.length;
+    const avg = mats.reduce((a, m) => a + obtenerNotaFinal(m, config)!, 0) / mats.length;
     return { value: parseFloat(((avg / 100) * config.notaMaxima).toFixed(2)), label: `${sem}°` };
   }).filter(Boolean) as { value: number; label: string }[];
   const { maxValue: lineMax, noOfSections: lineSections } = yAxisNota(config.notaMaxima);
@@ -231,7 +231,7 @@ export function MetricsScreen() {
 
   const barrasBase = barrasNotasObtenidas(
     materias.flatMap(m => {
-      const n = obtenerNotaFinal(m);
+      const n = obtenerNotaFinal(m, config);
       return n === null ? [] : [{ valor: (n / 100) * config.notaMaxima, item: m }];
     }),
     { modo: notasModo, eje: notasEje, notaMaxima: config.notaMaxima, redondeo: notasRedondeo },
@@ -631,7 +631,7 @@ export function MetricsScreen() {
                             })}
                           </View>
                           <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 8 }}>
-                            {ejemploRedondeo(notasRedondeo, materias, config.notaMaxima)}
+                            {ejemploRedondeo(notasRedondeo, materias, config.notaMaxima, config)}
                           </Text>
                         </>
                       )}

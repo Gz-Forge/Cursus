@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import LZString from 'lz-string';
+import { codificarEvaluacionesQr } from '../utils/qrPayload';
 import { useTema } from '../theme/ThemeContext';
 import { Evaluacion } from '../types';
 
@@ -22,11 +22,7 @@ export function EvaluacionesQrModal({ visible, evaluaciones, onCerrar }: Props) 
     setCargando(true);
     const id = setTimeout(() => {
       try {
-        const payload = JSON.stringify({
-          type: 'cursus-evaluaciones',
-          data: LZString.compressToBase64(JSON.stringify(evaluaciones)),
-        });
-        setQrData(payload);
+        setQrData(codificarEvaluacionesQr(evaluaciones));
       } catch {
         setQrData(null);
       } finally {

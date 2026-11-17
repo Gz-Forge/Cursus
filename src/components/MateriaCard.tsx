@@ -52,7 +52,7 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   const tema = useTema();
   const { getColor, getIcono, getLabel, getLabelSingular } = useEstadoEstilo();
 
-  const notaPct = obtenerNotaFinal(materia);
+  const notaPct = obtenerNotaFinal(materia, config);
   const estado = calcularEstadoFinal(materia, config);
   const icono = getIcono(estado);
   const color = getColor(estado);

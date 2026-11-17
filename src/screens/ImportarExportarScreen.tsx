@@ -19,7 +19,7 @@ import { QrShareModal } from '../components/QrShareModal';
 import { generarQrDataUrls, descargarQrsPng, descargarQrsPdf, descargarQrsZip } from '../utils/qrDescarga';
 import { Materia, Perfil, Config } from '../types';
 import { detectarDuplicados, extraerTiposNuevos, aplicarConfigJson, mergeImportar, materiasAJson, previsualizarImportacion } from '../utils/importExport';
-import { leerExportacionCompleta, esExportacionCompleta, combinarConfig, resumenConfig, type PerfilImportable } from '../utils/importCompleto';
+import { leerExportacionCompleta, esExportacionCompleta, versionExportacion, VERSION_EXPORTACION_ACTUAL, combinarConfig, resumenConfig, type PerfilImportable } from '../utils/importCompleto';
 import { sanitizarConfigImportada } from '../utils/configImport';
 import { DuplicadosModal } from '../components/DuplicadosModal';
 import { ZonaArchivo } from '../components/ZonaArchivo';
@@ -220,6 +220,13 @@ function PanelImportar() {
     if (Array.isArray(datos) && (datos as any[])[0]?.nombre && (datos as any[])[0]?.semestre !== undefined) {
       const tiposNuevos = extraerTiposNuevos(datos as any, config.tiposFormacion);
       setPendingImport({ json: datos as MateriaJson[], tiposNuevos });
+      return;
+    }
+
+    // Exportación completa de una versión más nueva que la que entiende esta app
+    const versionArchivo = versionExportacion(datos);
+    if (versionArchivo !== null && versionArchivo > VERSION_EXPORTACION_ACTUAL) {
+      showAlert('Archivo de una versión más nueva', 'Este archivo es de una versión más nueva de Cursus. Actualizá la app para importarlo.');
       return;
     }
 

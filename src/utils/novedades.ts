@@ -16,6 +16,16 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '2.0.0',
+    items: [
+      'Evaluaciones opcionales: marcá una evaluación como opcional y elegí hasta qué nota puede llevarte. Suma, pero nunca te baja la nota.',
+      'En los grupos de evaluaciones podés repartir el porcentaje en partes iguales o darle a cada prueba su propio porcentaje.',
+      'Si los porcentajes de las evaluaciones no suman 100%, te avisamos cuánto falta o sobra.',
+      'Los períodos de examen ahora son rangos de fechas, que elegís en un calendario y ves en una línea del año. Tus fechas de antes se pasaron solas.',
+      'Las oportunidades de examen muestran cuántas te quedan, cuándo es el próximo período y el historial de las que usaste.',
+    ],
+  },
+  {
     version: '1.9.5',
     items: [
       'Las felicitaciones ahora son una animación corta que se cierra sola, y quedan guardadas en Ajustes → Datos → Registro de logros.',

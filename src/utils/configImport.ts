@@ -1,4 +1,5 @@
 import { Config, EstadoMateria, TipoBloque } from '../types';
+import { claveFecha } from './periodosExamen';
 
 /**
  * Validación de un objeto Config que viene de afuera (archivo de exportación completa).
@@ -123,6 +124,15 @@ const fechaIso: Validador = v =>
 const fechaLimite: Validador = v =>
   typeof v === 'string' && (RE_DDMM.test(v) || fechaIso(v) !== INVALIDO) ? v : INVALIDO;
 
+/** Período de examen: inicio y fin con el mismo formato y inicio <= fin (orden de calendario dentro del año). */
+const periodoExamen: Validador = v => {
+  const r = forma({ inicio: fechaLimite, fin: fechaLimite })(v);
+  if (r === INVALIDO) return INVALIDO;
+  const { inicio, fin } = r as { inicio: string; fin: string };
+  if (RE_DDMM.test(inicio) !== RE_DDMM.test(fin)) return INVALIDO;
+  return claveFecha(inicio) <= claveFecha(fin) ? r : INVALIDO;
+};
+
 /** Logro del perfil: tipo válido, número entero ≥ 1 y fecha ISO. Los ítems inválidos se descartan. */
 const logro: Validador = forma({
   tipo: uno('semestre', 'anio', 'carrera'),
@@ -153,7 +163,8 @@ const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   labelOtro: texto(60),
   mostrarNombreCompletoEnBloque: bool,
   modoExamen: uno('manual', 'automatico'),
-  fechasLimiteExamen: arr(fechaLimite, 100),
+  fechasLimiteExamen: arr(fechaLimite, 100), // deprecado: se convierte a periodosExamen
+  periodosExamen: arr(periodoExamen, 100),
   fechasEjecutadas: arr(fechaIso),
   examenRepetirCiclo: bool,
   tarjetaCreditosBadge: uno('da', 'necesita', 'ambos'),
@@ -255,10 +266,17 @@ export function sanitizarConfigImportada(raw: unknown): ConfigImportada {
   }
 
   // Las fechas de examen deben coincidir con el modo "repetir cada año" que queda vigente.
+  const ciclo = config.examenRepetirCiclo === true;
+  const formatoOk = (f: string) => (ciclo ? RE_DDMM.test(f) : RE_ISO.test(f));
   if (Array.isArray(config.fechasLimiteExamen)) {
-    const ciclo = config.examenRepetirCiclo === true;
-    config.fechasLimiteExamen = (config.fechasLimiteExamen as string[])
-      .filter(f => (ciclo ? RE_DDMM.test(f) : RE_ISO.test(f)));
+    config.fechasLimiteExamen = (config.fechasLimiteExamen as string[]).filter(formatoOk);
+  }
+  if (Array.isArray(config.periodosExamen)) {
+    config.periodosExamen = (config.periodosExamen as { inicio: string; fin: string }[])
+      .filter(p => formatoOk(p.inicio) && formatoOk(p.fin));
+  } else if (Array.isArray(config.fechasLimiteExamen)) {
+    // Archivo de una versión anterior: cada fecha suelta pasa a ser un período de un día.
+    config.periodosExamen = (config.fechasLimiteExamen as string[]).map(f => ({ inicio: f, fin: f }));
   }
 
   return { config: config as Partial<Config>, ignorados, imagenesDescartadas };

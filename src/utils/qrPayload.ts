@@ -1,5 +1,6 @@
 import LZString from 'lz-string';
-import { MateriaJson } from './importExport';
+import { MateriaJson, normalizarEvaluacionesImportadas } from './importExport';
+import type { Evaluacion } from '../types';
 
 export const CHUNK_SIZE = 800;
 
@@ -69,4 +70,23 @@ export function esChunkQR(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Contenido del QR de evaluaciones (tipo `cursus-evaluaciones`). Incluye los campos de 2.0.0. */
+export function codificarEvaluacionesQr(evaluaciones: Evaluacion[]): string {
+  return JSON.stringify({
+    type: 'cursus-evaluaciones',
+    data: LZString.compressToBase64(JSON.stringify(evaluaciones)),
+  });
+}
+
+/** Lee el `data` de un QR `cursus-evaluaciones`. Valida los campos de 2.0.0 (lo inválido se descarta). */
+export function decodificarEvaluacionesQr(data: string): Evaluacion[] {
+  const json = LZString.decompressFromBase64(data);
+  const lista = JSON.parse(json ?? '[]');
+  if (!Array.isArray(lista)) throw new Error('No es array');
+  const validas = lista.filter(
+    (e: any) => e && typeof e === 'object' && (e.tipo === 'simple' || (e.tipo === 'grupo' && Array.isArray(e.subEvaluaciones))),
+  );
+  return normalizarEvaluacionesImportadas(validas as Evaluacion[]);
 }

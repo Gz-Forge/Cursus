@@ -11,6 +11,8 @@ import {
   MAX_NOMBRE,
 } from '../utils/perfiles';
 import { renumerarMaterias, calcularEstadoFinal } from '../utils/calculos';
+import { migrarPeriodosExamen } from '../utils/periodosExamen';
+import { registrarUso } from '../utils/oportunidades';
 
 export const CONFIG_DEFAULT: Config = {
   tema: 'oscuro',
@@ -34,7 +36,7 @@ export const CONFIG_DEFAULT: Config = {
   labelOtro: 'Otro',
   mostrarNombreCompletoEnBloque: false,
   modoExamen: 'manual',
-  fechasLimiteExamen: [],
+  periodosExamen: [],
   fechasEjecutadas: [],
   tarjetaCreditosBadge: 'da',
   tarjetaBadgeOrden: 'da_primero',
@@ -99,6 +101,26 @@ interface Store extends AppState {
   eliminarPerfil: (id: string) => Promise<void>;
 }
 
+/**
+ * Config de un perfil recién leído del storage: aplica las migraciones sobre la config guardada
+ * (antes de mezclarla con los defaults, porque si no `periodosExamen: []` taparía las fechas viejas)
+ * y la mezcla con CONFIG_DEFAULT. `migrada` indica que hay que volver a persistir.
+ */
+function configDeEstado(estado: AppState): { config: Config; migrada: boolean } {
+  const cambios = migrarPeriodosExamen((estado.config ?? {}) as Config);
+  return {
+    config: { ...CONFIG_DEFAULT, ...estado.config, ...(cambios ?? {}) },
+    migrada: cambios !== null,
+  };
+}
+
+/** Fecha de hoy 'YYYY-MM-DD' en hora local. */
+function hoyLocalIso(): string {
+  const d = new Date();
+  const dos = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
 export const useStore = create<Store>((set, get) => ({
   materias: [],
   config: CONFIG_DEFAULT,
@@ -110,9 +132,15 @@ export const useStore = create<Store>((set, get) => ({
     await migrarSiNecesario();
     const meta = await cargarMeta();
     const estado = await cargarPerfilEstado(meta.activoId);
+    const { config, migrada } = configDeEstado(estado);
+    if (migrada) {
+      guardarPerfilEstado(meta.activoId, { materias: estado.materias ?? [], config }, { marcarModificado: false }).catch(
+        e => { if (__DEV__) console.error('[store] cargar: fallo al persistir la migración', e); },
+      );
+    }
     set({
       materias: estado.materias ?? [],
-      config: { ...CONFIG_DEFAULT, ...estado.config },
+      config,
       perfilActivoId: meta.activoId,
       perfiles: meta.perfiles,
       cargado: true,
@@ -173,10 +201,11 @@ export const useStore = create<Store>((set, get) => ({
   decrementarPeriodoExamen: () => {
     const { perfilActivoId, materias, config } = get();
     const antes = new Map(materias.map(m => [m.id, m.oportunidadesExamen]));
+    const hoy = hoyLocalIso();
     const nuevas = materias.map(m => {
       const estado = calcularEstadoFinal(m, config);
       if (estado === 'aprobado' || estado === 'reprobado') {
-        return { ...m, oportunidadesExamen: Math.max(0, m.oportunidadesExamen - 1) };
+        return { ...registrarUso(m, hoy, 'periodo'), oportunidadesExamen: Math.max(0, m.oportunidadesExamen - 1) };
       }
       return m;
     });
@@ -196,11 +225,15 @@ export const useStore = create<Store>((set, get) => ({
     // actualizarConfig) ya persiste al storage inmediatamente. Un save redundante aquí
     // compite en escritura async con esas mutaciones (race condition R3-06).
     const estado = await cargarPerfilEstado(id);
+    const { config, migrada } = configDeEstado(estado);
+    if (migrada) {
+      await guardarPerfilEstado(id, { materias: estado.materias ?? [], config }, { marcarModificado: false });
+    }
     const meta = await cargarMeta();
     await guardarMeta({ ...meta, activoId: id });
     set({
       materias: estado.materias ?? [],
-      config: { ...CONFIG_DEFAULT, ...estado.config },
+      config,
       perfilActivoId: id,
     });
   },
@@ -249,9 +282,13 @@ export const useStore = create<Store>((set, get) => ({
     await guardarMeta(nuevaMeta);
     if (meta.activoId === id) {
       const estado = await cargarPerfilEstado(nuevoActivoId);
+      const { config, migrada } = configDeEstado(estado);
+      if (migrada) {
+        await guardarPerfilEstado(nuevoActivoId, { materias: estado.materias ?? [], config }, { marcarModificado: false });
+      }
       set({
         materias: estado.materias ?? [],
-        config: { ...CONFIG_DEFAULT, ...estado.config },
+        config,
         perfilActivoId: nuevoActivoId,
         perfiles: nuevosPerfiles,
       });

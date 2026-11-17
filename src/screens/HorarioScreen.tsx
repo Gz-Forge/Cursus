@@ -224,7 +224,7 @@ export function HorarioScreen() {
       if (ev.tipo === 'grupo') {
         const sub = ev.subEvaluaciones.find(s => s.id === id);
         if (sub) {
-          return { nombre: sub.nombre || ev.nombre, nota: sub.nota, notaMaxima: sub.notaMaxima, tipoNota: sub.tipoNota, peso: pesoSubEvaluacion(ev) };
+          return { nombre: sub.nombre || ev.nombre, nota: sub.nota, notaMaxima: sub.notaMaxima, tipoNota: sub.tipoNota, peso: pesoSubEvaluacion(ev, sub) };
         }
       }
     }

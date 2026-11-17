@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTema } from '../theme/ThemeContext';
 import { useAlert } from '../contexts/AlertContext';
 import LZString from 'lz-string';
-import { decodeCarrera, esChunkQR, joinChunks } from '../utils/qrPayload';
+import { decodeCarrera, esChunkQR, joinChunks, decodificarEvaluacionesQr } from '../utils/qrPayload';
 import { jsonAMaterias, extraerTiposNuevos, aplicarConfigJson } from '../utils/importExport';
 import { useStore } from '../store/useStore';
 import { Evaluacion } from '../types';
@@ -83,9 +83,7 @@ export function QrScannerModal({ visible, onCerrar, onEvaluacionesDetectadas, on
       if (parsed.type === 'cursus-evaluaciones' && onEvaluacionesDetectadas) {
         procesando.current = true;
         try {
-          const decoded = LZString.decompressFromBase64(parsed.data);
-          const evaluaciones: Evaluacion[] = JSON.parse(decoded ?? '[]');
-          if (!Array.isArray(evaluaciones)) throw new Error('No es array');
+          const evaluaciones: Evaluacion[] = decodificarEvaluacionesQr(parsed.data);
           onEvaluacionesDetectadas(evaluaciones);
           onCerrar();
         } catch (e) {

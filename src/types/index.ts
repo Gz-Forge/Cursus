@@ -8,6 +8,11 @@ export type EstadoMateria =
 
 export type TipoNota = 'numero' | 'porcentaje';
 
+/** Hasta qué nota puede llevar una evaluación opcional: un estado (según los umbrales) o un % fijo. */
+export type TopeOpcional =
+  | { tipo: 'estado'; estado: 'reprobado' | 'aprobado' | 'exonerado' }
+  | { tipo: 'porcentaje'; valor: number };
+
 export interface EvaluacionSimple {
   id: string;
   tipo: 'simple';
@@ -21,6 +26,8 @@ export interface EvaluacionSimple {
   horaFin?: number;        // minutos desde 00:00, duración opcional
   salon?: string;          // salón donde ocurre (opcional)
   ocultarCuentaRegresiva?: boolean; // 1.9.5: no mostrar la cuenta regresiva de esta evaluación en el horario
+  opcional?: boolean;      // 2.0.0: evaluación opcional: suma a la nota pero no es obligatoria, con tope
+  topeOpcional?: TopeOpcional; // 2.0.0: hasta dónde puede subir la nota gracias a esta opcional (default: aprobado)
 }
 
 export interface SubEvaluacion {
@@ -34,6 +41,7 @@ export interface SubEvaluacion {
   horaFin?: number;        // minutos desde 00:00
   salon?: string;          // salón donde ocurre (opcional)
   ocultarCuentaRegresiva?: boolean; // 1.9.5: no mostrar la cuenta regresiva de esta sub-evaluación en el horario
+  peso?: number;           // 2.0.0: % de la materia que vale esta prueba (solo con reparto 'individual' del grupo)
 }
 
 export interface GrupoEvaluacion {
@@ -42,6 +50,9 @@ export interface GrupoEvaluacion {
   nombre: string;
   pesoEnMateria: number;   // % total del grupo sobre la nota final
   subEvaluaciones: SubEvaluacion[];
+  reparto?: 'equitativo' | 'individual'; // 2.0.0: cómo se reparte el peso entre las pruebas (default 'equitativo')
+  opcional?: boolean;      // 2.0.0: grupo opcional: suma a la nota pero no es obligatorio, con tope
+  topeOpcional?: TopeOpcional; // 2.0.0: hasta dónde puede subir la nota gracias a este grupo (default: aprobado)
 }
 
 export type Evaluacion = EvaluacionSimple | GrupoEvaluacion;
@@ -92,6 +103,13 @@ export interface Materia {
   faltasMaxTeorica?: number;
   faltasMaxPractica?: number;
   faltas?: RegistroFalta[];
+  historialOportunidades?: UsoOportunidad[]; // 2.0.0: usos de oportunidades de examen (más viejo primero)
+}
+
+/** Una oportunidad de examen que se usó, ya sea por un período o a mano. */
+export interface UsoOportunidad {
+  fecha: string;                 // 'YYYY-MM-DD'
+  origen: 'periodo' | 'manual';
 }
 
 export interface FondoPantalla {
@@ -147,6 +165,12 @@ export interface TemaPersonalizado {
   coloresSemestres?: ColoresSemestres;
 }
 
+/** Rango de un período de examen. 'YYYY-MM-DD', o 'DD-MM' si `examenRepetirCiclo`. */
+export interface PeriodoExamen {
+  inicio: string;
+  fin: string;
+}
+
 /** Idiomas disponibles (por ahora solo español; el tipo está pensado para sumar más). */
 export type Idioma = 'es';
 
@@ -180,9 +204,11 @@ export interface Config {
   labelOtro: string;      // nombre completo editable, default 'Otro'
   mostrarNombreCompletoEnBloque: boolean; // si true, muestra label en vez de abrev en el horario
   modoExamen: 'manual' | 'automatico';
-  fechasLimiteExamen: string[];   // ISO: 'YYYY-MM-DD' (ciclo=false) o 'DD-MM' (ciclo=true)
+  /** @deprecated 2.0.0: reemplazado por `periodosExamen` (se migra al cargar). Se conserva para migrar e importar archivos viejos. */
+  fechasLimiteExamen?: string[];  // ISO: 'YYYY-MM-DD' (ciclo=false) o 'DD-MM' (ciclo=true)
+  periodosExamen?: PeriodoExamen[]; // 2.0.0: períodos de examen por rango (default [])
   fechasEjecutadas: string[];     // fechas ya procesadas, siempre 'YYYY-MM-DD'
-  examenRepetirCiclo?: boolean;   // si true, fechasLimiteExamen almacena 'DD-MM' y se repite cada año
+  examenRepetirCiclo?: boolean;   // si true, los períodos de examen almacenan 'DD-MM' y se repite cada año
   // Tarjeta config
   tarjetaCreditosBadge: 'da' | 'necesita' | 'ambos';
   tarjetaBadgeOrden: 'da_primero' | 'necesita_primero';

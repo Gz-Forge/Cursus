@@ -15,7 +15,7 @@ export interface ExportPerfilPayload {
 }
 
 export interface ExportPayload {
-  version: 1;
+  version: 1 | 2;
   exportadoEn: string;
   perfiles: ExportPerfilPayload[];
   /** Configuración del primer perfil exportado. Se mantiene para versiones anteriores de la app. */
@@ -62,6 +62,7 @@ function evaluacionesSinNotas(evaluaciones: Evaluacion[]): Evaluacion[] {
 export function limpiarMateriaParaExportar(
   m: Materia,
   opts: Pick<OpcionesExport, 'inclNotas' | 'inclEvaluaciones' | 'inclHorarios'>,
+  config?: Config,
 ): Materia {
   const out: Materia = { ...m };
 
@@ -82,7 +83,7 @@ export function limpiarMateriaParaExportar(
     out.notaManual = null;
     delete out.esNotaExamen;
   } else if (opts.inclNotas) {
-    const notaFinal = obtenerNotaFinal(m);
+    const notaFinal = obtenerNotaFinal(m, config);
     out.evaluaciones = [];
     out.usarNotaManual = notaFinal !== null;
     out.notaManual = notaFinal;
@@ -104,7 +105,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
       ? { materias: opts.activo.materias, config: opts.activo.config }
       : await cargarPerfilEstado(perfil.id);
 
-    const materiasLimpias = (estado.materias ?? []).map(m => limpiarMateriaParaExportar(m, opts));
+    const materiasLimpias = (estado.materias ?? []).map(m => limpiarMateriaParaExportar(m, opts, estado.config));
 
     const entry: ExportPerfilPayload = {
       id: perfil.id,
@@ -140,7 +141,7 @@ export async function construirPayload(opts: OpcionesExport): Promise<ExportPayl
   }
 
   const payload: ExportPayload = {
-    version: 1,
+    version: 2,
     exportadoEn: new Date().toISOString(),
     perfiles,
   };
