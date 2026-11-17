@@ -16,6 +16,17 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '2.0.1',
+    items: [
+      'Tus temas: cada tema se puede editar, cambiarle el nombre y volver al original. Las miniaturas muestran tus colores.',
+      'Búsqueda más cómoda: elegí entre Todas, Cursando, Cursar y Examen, y filtrá por estado y tipo con chips, sin abrir ventanas.',
+      'Marcá una materia en Búsqueda sin escribir (clic derecho en la computadora) y alterná entre "Previa de" y "Sus previas".',
+      'En Materias disponibles elegís qué estados contar, incluido Por cursar.',
+      'Nota máxima y oportunidades con − y +, y la nota mínima para salvar examen se puede escribir en % o en nota.',
+      'Las listas desplegables se abren encima, sin mover lo que está abajo, y la flecha para volver se ve en todos los temas.',
+    ],
+  },
+  {
     version: '2.0.0',
     items: [
       'Evaluaciones opcionales: marcá una evaluación como opcional y elegí hasta qué nota puede llevarte. Suma, pero nunca te baja la nota.',
