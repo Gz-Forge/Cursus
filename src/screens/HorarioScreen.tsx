@@ -20,7 +20,10 @@ import {
 import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_BLOQUE, textoBloque } from '../utils/horarioLayout';
 import { SelectorHorario } from '../components/SelectorHorario';
 import { SelectorFecha } from '../components/SelectorFecha';
-import { semanasEntre } from '../utils/calendario';
+import { semanasEntre, sumarMeses, tituloMes } from '../utils/calendario';
+import { COLORES_MATERIA_DEFAULT } from '../utils/vistaMes';
+import { generarICS } from '../utils/exportarICS';
+import { VistaMesHorario } from '../components/VistaMesHorario';
 import { mostrarCuentaRegresiva, textoCuentaRegresiva } from '../utils/cuentaRegresiva';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import {
@@ -43,11 +46,6 @@ const HORA_DEF_FIN   = 22 * 60;
 const PX_POR_MIN     = 1.2;
 const HORA_PX        = 60 * PX_POR_MIN; // 72px por hora
 const TIME_COL_W     = 38;
-
-const COLORES_BLOQUES = [
-  '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688',
-  '#E91E63', '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
-];
 
 function fmtHora(mins: number): string {
   return `${Math.floor(mins / 60).toString().padStart(2, '0')}:${(mins % 60).toString().padStart(2, '0')}`;
@@ -160,6 +158,13 @@ export function HorarioScreen() {
   const isFocused = useIsFocused();
   const navigation = useNavigation<any>();
   const [weekOffset, setWeekOffset] = useState(0);
+  // 2.0.5: vista Semana | Mes
+  const [vista, setVista] = useState<'semana' | 'mes'>('semana');
+  const [mesIso, setMesIso] = useState(() => isoDate(new Date()).slice(0, 8) + '01');
+  const [diaSel, setDiaSel] = useState(() => isoDate(new Date()));
+  const [mostrarPeriodos, setMostrarPeriodos] = useState(true);
+  const [formatoExport, setFormatoExport] = useState<'json' | 'ics'>('json');
+  const [icsIncluirEvaluaciones, setIcsIncluirEvaluaciones] = useState(true);
   const [tickHoraActual, setTickHoraActual] = useState(0);
   const [modalExport, setModalExport] = useState(false);
   const [modalImport, setModalImport] = useState(false);
@@ -335,6 +340,7 @@ export function HorarioScreen() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [cardEnEdicion]);
 
+  const irAHoyMesRef = React.useRef<(() => void) | null>(null);
   // ← → / A D para navegar entre semanas y Espacio para ir a hoy (escritorio, punto 86)
   React.useEffect(() => {
     if (Platform.OS !== 'web' || !isFocused) return;
@@ -347,17 +353,17 @@ export function HorarioScreen() {
       const tag = activo?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select' || activo?.isContentEditable) return;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        setWeekOffset(w => w - 1);
+        if (vista === 'mes') setMesIso(m => sumarMeses(m, -1)); else setWeekOffset(w => w - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        setWeekOffset(w => w + 1);
+        if (vista === 'mes') setMesIso(m => sumarMeses(m, 1)); else setWeekOffset(w => w + 1);
       } else if (e.key === ' ') {
         e.preventDefault();
-        setWeekOffset(0);
+        if (vista === 'mes') irAHoyMesRef.current?.(); else setWeekOffset(0);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isFocused, cardEnEdicion]);
+  }, [isFocused, cardEnEdicion, vista]);
 
   React.useEffect(() => {
     if (!config.horarioMostrarLineaHoraActual) return;
@@ -673,7 +679,11 @@ export function HorarioScreen() {
     try {
       const elegidas = materias.filter(m => seleccionadas.has(m.id));
       if (elegidas.length === 0) return;
-      await compartirArchivo('horarios.json', exportarJSONMultiMateria(elegidas), 'application/json');
+      if (formatoExport === 'ics') {
+        await compartirArchivo('horarios.ics', generarICS(elegidas, { incluirEvaluaciones: icsIncluirEvaluaciones }), 'text/calendar');
+      } else {
+        await compartirArchivo('horarios.json', exportarJSONMultiMateria(elegidas), 'application/json');
+      }
       cerrarModal();
     } catch (e: any) {
       showAlert('Error al exportar', e.message);
@@ -684,8 +694,13 @@ export function HorarioScreen() {
     try {
       const elegidas = materias.filter(m => seleccionadas.has(m.id));
       if (elegidas.length === 0) return;
-      await Clipboard.setStringAsync(exportarJSONMultiMateria(elegidas));
-      showAlert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
+      if (formatoExport === 'ics') {
+        await Clipboard.setStringAsync(generarICS(elegidas, { incluirEvaluaciones: icsIncluirEvaluaciones }));
+        showAlert('Copiado', 'El calendario (.ics) fue copiado al portapapeles.');
+      } else {
+        await Clipboard.setStringAsync(exportarJSONMultiMateria(elegidas));
+        showAlert('Copiado', 'El JSON de horarios fue copiado al portapapeles.');
+      }
     } catch (e: any) {
       showAlert('Error al copiar', e.message);
     }
@@ -927,7 +942,7 @@ export function HorarioScreen() {
     const configurado = config.coloresHorario?.[materiaId]?.[tipo];
     if (configurado) return configurado;
     const mat = materias.find(m => m.id === materiaId);
-    const fondo = COLORES_BLOQUES[(mat?.numero ?? 0) % COLORES_BLOQUES.length];
+    const fondo = COLORES_MATERIA_DEFAULT[(mat?.numero ?? 0) % COLORES_MATERIA_DEFAULT.length];
     return { fondo, texto: '#ffffff' };
   };
   const sigla = (tipo: BloqueHorario['tipo']): string => {
@@ -1072,9 +1087,71 @@ export function HorarioScreen() {
     }
   };
   const irAFecha = (iso: string) => {
-    setWeekOffset(semanasEntre(hoyIso, iso, (config.horarioPrimerDia ?? 'lunes') as 'lunes' | 'domingo'));
+    if (vista === 'mes') {
+      setMesIso(iso.slice(0, 8) + '01');
+      setDiaSel(iso);
+    } else {
+      setWeekOffset(semanasEntre(hoyIso, iso, (config.horarioPrimerDia ?? 'lunes') as 'lunes' | 'domingo'));
+    }
     setIrAFechaAbierto(false);
   };
+  const irAHoyMes = () => { setMesIso(hoyIso.slice(0, 8) + '01'); setDiaSel(hoyIso); };
+  irAHoyMesRef.current = irAHoyMes;
+  const navAnterior = () => { if (vista === 'mes') setMesIso(m => sumarMeses(m, -1)); else setWeekOffset(w => w - 1); };
+  const navSiguiente = () => { if (vista === 'mes') setMesIso(m => sumarMeses(m, 1)); else setWeekOffset(w => w + 1); };
+  const mesEsActual = mesIso.slice(0, 7) === hoyIso.slice(0, 7);
+  const cambiarVista = (v: 'semana' | 'mes') => {
+    if (v === vista) return;
+    if (v === 'mes') {
+      // Mes de la semana que se está viendo; selecciona hoy si cae en ese mes
+      const medio = fechasSemanaDisplay[3] ?? hoyIso;
+      const mes = medio.slice(0, 8) + '01';
+      setMesIso(mes);
+      setDiaSel(hoyIso.startsWith(mes.slice(0, 7)) ? hoyIso : mes);
+    }
+    setVista(v);
+  };
+  const seleccionarDiaMes = (iso: string) => {
+    setDiaSel(iso);
+    if (!iso.startsWith(mesIso.slice(0, 7))) setMesIso(iso.slice(0, 8) + '01');
+  };
+  const dobleToqueDiaMes = (iso: string) => {
+    setDiaSel(iso);
+    setWeekOffset(semanasEntre(hoyIso, iso, (config.horarioPrimerDia ?? 'lunes') as 'lunes' | 'domingo'));
+    setVista('semana');
+  };
+  // Si el día seleccionado no está en el mes mostrado, vale hoy (si cae en el mes) o el primero
+  const diaSelEfectivo = diaSel.startsWith(mesIso.slice(0, 7))
+    ? diaSel
+    : (hoyIso.startsWith(mesIso.slice(0, 7)) ? hoyIso : mesIso);
+  const selectorVista = (
+    <View style={{ flexDirection: 'row', marginTop: 4, borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento, overflow: 'hidden' }}>
+      {(['semana', 'mes'] as const).map(v => {
+        const activo = vista === v;
+        return (
+          <TouchableOpacity
+            key={v}
+            onPress={() => cambiarVista(v)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activo }}
+            accessibilityLabel={v === 'semana' ? 'Vista semana' : 'Vista mes'}
+            style={{ paddingHorizontal: 12, paddingVertical: 3, backgroundColor: activo ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '600', color: activo ? '#fff' : tema.textoSecundario }}>
+              {v === 'semana' ? 'Semana' : 'Mes'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+  const tituloCabecera = vista === 'mes'
+    ? tituloMes(mesIso)
+    : `${fmtFechaCorta(fechasSemanaDisplay[0])} — ${fmtFechaCorta(fechasSemanaDisplay[6])}`;
+  const ayudaCabecera = vista === 'mes'
+    ? { activo: mesEsActual, texto: mesEsActual ? 'Este mes' : 'Ir a hoy' }
+    : { activo: weekOffset === 0, texto: weekOffset === 0 ? 'Esta semana' : 'Ir a hoy' };
+  const irAHoyCabecera = () => { if (vista === 'mes') irAHoyMes(); else setWeekOffset(0); };
 
   // Punto 100: guardar la edición rápida (botón "Guardar" y tecla Enter en escritorio)
   const guardarEdicionRapida = () => {
@@ -1163,27 +1240,28 @@ export function HorarioScreen() {
           <>
             {/* Nav: ocupa el espacio disponible y centra su contenido */}
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana anterior" onPress={() => setWeekOffset(w => w - 1)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes anterior' : 'Semana anterior'} onPress={navAnterior}>
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
                 {/* Punto 98: doble clic (o doble toque) sobre la fecha abre un calendario para saltar de semana */}
-                <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel="Semana visible. Doble toque para ir a una fecha.">
+                <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes visible. Doble toque para ir a una fecha.' : 'Semana visible. Doble toque para ir a una fecha.'}>
                   <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                    {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
+                    {tituloCabecera}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setWeekOffset(0)}>
-                  <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
-                    {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
+                <TouchableOpacity onPress={irAHoyCabecera}>
+                  <Text style={{ color: ayudaCabecera.activo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
+                    {ayudaCabecera.texto}
                   </Text>
                 </TouchableOpacity>
+                {selectorVista}
                 {/* Punto 86: ayuda de los atajos de teclado (escritorio) */}
                 <Text style={{ color: tema.textoSecundario, fontSize: 10, marginTop: 2, opacity: 0.8 }}>
-                  ← → semanas · Espacio hoy
+                  {vista === 'mes' ? '← → meses · Espacio hoy' : '← → semanas · Espacio hoy'}
                 </Text>
               </View>
-              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana siguiente" onPress={() => setWeekOffset(w => w + 1)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes siguiente' : 'Semana siguiente'} onPress={navSiguiente}>
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
               </TouchableOpacity>
             </View>
@@ -1216,22 +1294,23 @@ export function HorarioScreen() {
         ) : (
           <>
             {/* Móvil: layout original */}
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana anterior" onPress={() => setWeekOffset(w => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes anterior' : 'Semana anterior'} onPress={navAnterior} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel="Semana visible. Doble toque para ir a una fecha.">
+              <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes visible. Doble toque para ir a una fecha.' : 'Semana visible. Doble toque para ir a una fecha.'}>
                 <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
-                  {fmtFechaCorta(fechasSemanaDisplay[0])} — {fmtFechaCorta(fechasSemanaDisplay[6])}
+                  {tituloCabecera}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setWeekOffset(0)}>
-                <Text style={{ color: weekOffset === 0 ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
-                  {weekOffset === 0 ? 'Esta semana' : 'Ir a hoy'}
+              <TouchableOpacity onPress={irAHoyCabecera}>
+                <Text style={{ color: ayudaCabecera.activo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
+                  {ayudaCabecera.texto}
                 </Text>
               </TouchableOpacity>
+              {selectorVista}
             </View>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Semana siguiente" onPress={() => setWeekOffset(w => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes siguiente' : 'Semana siguiente'} onPress={navSiguiente} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>▶</Text>
             </TouchableOpacity>
             <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -1263,6 +1342,22 @@ export function HorarioScreen() {
         )}
       </View>
 
+      {vista === 'mes' && (
+        <VistaMesHorario
+          materias={materias}
+          config={config}
+          tema={tema}
+          mesIso={mesIso}
+          diaSel={diaSelEfectivo}
+          onSeleccionarDia={seleccionarDiaMes}
+          onDobleToqueDia={dobleToqueDiaMes}
+          mostrarPeriodos={mostrarPeriodos}
+          onTogglePeriodos={() => setMostrarPeriodos(v => !v)}
+          onAbrirMateria={(materiaId) => navigation.navigate('EditMateria', { materiaId })}
+        />
+      )}
+      {/* La vista semana queda montada (oculta) en modo Mes para conservar sus medidas */}
+      <View style={{ flex: vista === 'semana' ? 1 : 0, display: vista === 'semana' ? 'flex' : 'none' }}>
       {/* Cabecera con días y fechas — sincronizada con scroll horizontal de la grilla */}
       <View style={{ flexDirection: 'row', backgroundColor: surfaceBg, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
         <View style={{ width: TIME_COL_W, paddingVertical: 4 }} />
@@ -2073,6 +2168,7 @@ export function HorarioScreen() {
           </ScrollView>
         </Animated.ScrollView>
       </View>
+      </View>
 
       <Modal visible={modalExport} transparent animationType="fade" onRequestClose={() => cerrarModal()}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cerrar" style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end', alignItems: Platform.OS === 'web' ? 'center' : 'stretch', padding: Platform.OS === 'web' ? 24 : 0 }} activeOpacity={1} onPress={() => cerrarModal()}>
@@ -2081,8 +2177,48 @@ export function HorarioScreen() {
               Exportar horarios
             </Text>
             <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 12 }}>
-              Seleccioná las materias a incluir en el JSON
+              {formatoExport === 'ics' ? 'Seleccioná las materias a incluir en el calendario' : 'Seleccioná las materias a incluir en el JSON'}
             </Text>
+
+            {/* Formato */}
+            <View style={{ flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento, overflow: 'hidden', marginBottom: 10 }}>
+              {([['json', 'JSON'], ['ics', 'Calendario (.ics)']] as const).map(([f, etiqueta]) => {
+                const activo = formatoExport === f;
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    onPress={() => setFormatoExport(f)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: activo }}
+                    style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: activo ? (tema.acentoFondo ?? tema.acento) : 'transparent' }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: activo ? '#fff' : tema.textoSecundario }}>{etiqueta}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {formatoExport === 'ics' && (
+              <View style={{ marginBottom: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setIcsIncluirEvaluaciones(v => !v)}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: icsIncluirEvaluaciones }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                >
+                  <View style={{
+                    width: 34, height: 20, borderRadius: 10, padding: 2,
+                    backgroundColor: icsIncluirEvaluaciones ? (tema.acentoFondo ?? tema.acento) : tema.borde,
+                    alignItems: icsIncluirEvaluaciones ? 'flex-end' : 'flex-start',
+                  }}>
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff' }} />
+                  </View>
+                  <Text style={{ color: tema.texto, fontSize: 13 }}>Incluir evaluaciones</Text>
+                </TouchableOpacity>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 4 }}>
+                  Para Google Calendar, Outlook o Apple Calendar.
+                </Text>
+              </View>
+            )}
 
             {/* Seleccionar todas */}
             <TouchableOpacity
@@ -2129,7 +2265,13 @@ export function HorarioScreen() {
             {seleccionadas.size > 0 && (
               <ScrollView horizontal style={{ marginTop: 10, backgroundColor: tema.tarjeta, borderRadius: 6, padding: 8, maxHeight: 80 }}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 9, fontFamily: 'monospace' }} numberOfLines={5}>
-                  {(() => { const j = exportarJSONMultiMateria(materias.filter(m => seleccionadas.has(m.id))); return j.length > 300 ? j.slice(0, 300) + '…' : j; })()}
+                  {(() => {
+                    const elegidas = materias.filter(m => seleccionadas.has(m.id));
+                    const j = formatoExport === 'ics'
+                      ? generarICS(elegidas, { incluirEvaluaciones: icsIncluirEvaluaciones })
+                      : exportarJSONMultiMateria(elegidas);
+                    return j.length > 300 ? j.slice(0, 300) + '…' : j;
+                  })()}
                 </Text>
               </ScrollView>
             )}
@@ -2190,7 +2332,7 @@ export function HorarioScreen() {
               <Text style={{ fontSize: 22 }}>📤</Text>
               <View>
                 <Text style={{ color: tema.texto, fontWeight: '600', fontSize: 14 }}>Exportar</Text>
-                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Compartir horarios como archivo JSON</Text>
+                <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Como archivo JSON o para tu calendario (.ics)</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
