@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Materia, Config, EstadoMateria } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
@@ -41,14 +41,32 @@ interface Props {
   onEditar: () => void;
   onToggleCursando?: (v: boolean) => void;
   mostrarToggleCursando?: boolean;
-  onLongPress?: () => void;
+  /** Marcar/fijar la materia: toque largo en celular, clic derecho en web y escritorio. */
+  onMarcar?: () => void;
   pinned?: boolean;
   /** Texto buscado: se resalta en el nombre de la materia. */
   resaltar?: string;
 }
 
-export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onLongPress, pinned, resaltar }: Props) {
+export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onToggleCursando, mostrarToggleCursando, onMarcar, pinned, resaltar }: Props) {
   const [expandida, setExpandida] = useState(false);
+  const esWeb = Platform.OS === 'web';
+  const envolturaRef = useRef<View>(null);
+  const onMarcarRef = useRef(onMarcar);
+  onMarcarRef.current = onMarcar;
+  const marcable = !!onMarcar;
+  // Web/escritorio: clic derecho (contextmenu) sobre el nodo DOM, sin menú del navegador.
+  useEffect(() => {
+    if (!esWeb || !marcable) return;
+    const nodo = envolturaRef.current as unknown as HTMLElement | null;
+    if (!nodo || typeof nodo.addEventListener !== 'function') return;
+    const alClicDerecho = (e: Event) => {
+      e.preventDefault();
+      onMarcarRef.current?.();
+    };
+    nodo.addEventListener('contextmenu', alClicDerecho);
+    return () => nodo.removeEventListener('contextmenu', alClicDerecho);
+  }, [esWeb, marcable]);
   const tema = useTema();
   const { getColor, getIcono, getLabel, getLabelSingular } = useEstadoEstilo();
 
@@ -139,7 +157,8 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
   }
 
   return (
-    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={onLongPress} activeOpacity={0.75}>
+    <View ref={envolturaRef}>
+    <TouchableOpacity style={s.tarjeta} onPress={() => setExpandida(!expandida)} onLongPress={esWeb ? undefined : onMarcar} activeOpacity={0.75}>
       {dosLineas ? (
         <View>
           <Text style={[s.nombre, { fontWeight: '700', flex: undefined }]}>{titulo}</Text>
@@ -249,5 +268,6 @@ export function MateriaCard({ materia, todasLasMaterias, config, onEditar, onTog
         </TouchableOpacity>
       )}
     </TouchableOpacity>
+    </View>
   );
 }
