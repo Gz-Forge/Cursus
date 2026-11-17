@@ -16,6 +16,15 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '2.0.5',
+    items: [
+      'Vista Mes en Horarios: elegí "Semana | Mes" y mirá todas tus evaluaciones del mes, con un punto del color de cada materia.',
+      'Tocá un día para ver sus evaluaciones y abrir la materia; con doble toque saltás a esa semana.',
+      'En la vista Mes podés marcar los días de tus períodos de examen.',
+      'Exportá tus clases y evaluaciones a Google Calendar, Outlook o Apple Calendar con un archivo .ics, desde Horarios o desde cada materia.',
+    ],
+  },
+  {
     version: '2.0.1',
     items: [
       'Tus temas: cada tema se puede editar, cambiarle el nombre y volver al original. Las miniaturas muestran tus colores.',
