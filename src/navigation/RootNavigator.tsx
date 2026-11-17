@@ -1,7 +1,7 @@
 // Cursus/src/navigation/RootNavigator.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Platform, Text } from 'react-native';
-import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useTema } from '../theme/ThemeContext';
@@ -55,12 +55,27 @@ export function RootNavigator() {
   const navRef = useNavigationContainerRef();
   const tema = useTema();
   const materias = useStore(s => s.materias);
+  // Luminancia aproximada del fondo para elegir la base clara u oscura de react-navigation.
+  const hex = /^#[0-9a-f]{6}$/i.test(tema.fondo) ? tema.fondo : '#121212';
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const fondoClaro = (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5;
+  // Memorizado: un objeto nuevo en cada render hace que la navegación se vuelva a dibujar entera.
+  const temaNavegacion = useMemo(() => {
+    const base = fondoClaro ? DefaultTheme : DarkTheme;
+    return {
+      ...base,
+      colors: { ...base.colors, primary: tema.acento, background: tema.fondo, card: tema.fondo, text: tema.texto, border: tema.borde },
+    };
+  }, [fondoClaro, tema.acento, tema.fondo, tema.texto, tema.borde]);
 
   return (
     <View style={{ flex: 1, flexDirection: Platform.OS === 'web' ? 'row' : 'column' }}>
       {Platform.OS === 'web' && <WebSidebar navRef={navRef} />}
       <NavigationContainer
         ref={navRef}
+        // Colores de navegación desde el tema de la app: así el encabezado, su título y la flecha
+        // de volver siempre contrastan (antes quedaba el encabezado por defecto con la flecha del color del fondo).
+        theme={temaNavegacion}
         onReady={() => {
           const incompleta = materias.find(
             m => !m.nombre.trim() || !(m.semestre >= 1)

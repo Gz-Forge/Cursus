@@ -876,7 +876,7 @@ export function CarreraScreen() {
               </Text>
             ) : !hayTextoBusqueda && resultadoBusqueda.total > 0 ? (
               <Text style={{ color: tema.textoSecundario, marginBottom: 6, fontSize: 11 }}>
-                {isWeb ? 'Clic derecho' : 'Mantené apretada'} una materia para marcarla y ver sus previas.
+                {isWeb ? 'Hacé clic derecho en una materia' : 'Mantené apretada una materia'} para marcarla y ver sus previas.
               </Text>
             ) : null}
 
