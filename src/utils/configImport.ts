@@ -1,4 +1,4 @@
-import { Config, EstadoMateria, TipoBloque } from '../types';
+import { Config, EstadoMateria, TemaPersonalizado, TipoBloque } from '../types';
 import { claveFecha } from './periodosExamen';
 
 /**
@@ -118,6 +118,21 @@ const temaPersonalizado = forma(
   },
 );
 
+/** Tema guardado (2.0.1): base es el id del prearmado de origen o null. */
+const temaGuardado: Validador = v => {
+  const r = forma(
+    { id: texto(64), nombre: texto(24), modo: uno('oscuro', 'claro', 'personalizado') },
+    { colores: temaPersonalizado },
+  )(v);
+  if (r === INVALIDO) return INVALIDO;
+  const o = v as Record<string, unknown>;
+  const base = o.base === null || o.base === undefined ? null : texto(64)(o.base);
+  if (base === INVALIDO) return INVALIDO;
+  const t = r as { id: string; nombre: string };
+  if (!t.id || !t.nombre.trim()) return INVALIDO;
+  return { ...(r as object), base };
+};
+
 const fechaIso: Validador = v =>
   typeof v === 'string' && RE_ISO.test(v) && !isNaN(new Date(v).getTime()) ? v : INVALIDO;
 
@@ -143,6 +158,8 @@ const logro: Validador = forma({
 const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   tema: uno('oscuro', 'claro', 'personalizado'),
   temaPersonalizado,
+  temasGuardados: arr(temaGuardado, 50),
+  temaGuardadoActivoId: texto(64),
   notaMaxima: num(1, 1000),
   umbralExoneracion: num(0, 100),
   umbralAprobacion: num(0, 100),
@@ -206,6 +223,7 @@ const ESQUEMA: { [K in keyof Required<Config>]: Validador } = {
   creditosModalIncluirAprobado: bool,
   disponiblesModalIncluirAprobado: bool,
   disponiblesModalIncluirRecursar: bool,
+  disponiblesModalIncluirPorCursar: bool,
   barraProgresoEvaluaciones: bool,
   encabezadoSemestreEstilo: uno('materias', 'barra', 'iconos', 'anillo'),
   encabezadoSemestreCreditos: bool,
@@ -287,14 +305,22 @@ export function sanitizarConfigImportada(raw: unknown): ConfigImportada {
  * que son archivos locales (no se pueden abrir en otro equipo).
  */
 export function configParaExportar(config: Config): Config {
+  const limpiar = (tp: TemaPersonalizado): TemaPersonalizado => {
+    const limpio = { ...tp };
+    for (const f of FONDOS) {
+      const fondo = limpio[f];
+      if (fondo && fondo.tipo === 'imagen' && !esImagenPortable(fondo.valor)) delete limpio[f];
+    }
+    return limpio;
+  };
   const tp = config.temaPersonalizado;
-  if (!tp) return config;
-  const limpio = { ...tp };
-  for (const f of FONDOS) {
-    const fondo = limpio[f];
-    if (fondo && fondo.tipo === 'imagen' && !esImagenPortable(fondo.valor)) delete limpio[f];
-  }
-  return { ...config, temaPersonalizado: limpio };
+  const guardados = config.temasGuardados;
+  if (!tp && !guardados) return config;
+  return {
+    ...config,
+    ...(tp ? { temaPersonalizado: limpiar(tp) } : {}),
+    ...(guardados ? { temasGuardados: guardados.map(t => (t.colores ? { ...t, colores: limpiar(t.colores) } : t)) } : {}),
+  };
 }
 
 /**

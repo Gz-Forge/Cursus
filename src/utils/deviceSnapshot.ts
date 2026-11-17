@@ -28,7 +28,7 @@ export async function capturarSnapshot(): Promise<DeviceSyncPayload> {
 
     const estado = await cargarPerfilEstado(meta.activoId);
     // Excluir temaPersonalizado: es apariencia local, no se sincroniza
-    const configParaSync: Config = { ...estado.config, temaPersonalizado: undefined };
+    const configParaSync: Config = { ...estado.config, temaPersonalizado: undefined, temasGuardados: undefined, temaGuardadoActivoId: undefined };
 
     return {
       version: 2,
@@ -51,6 +51,8 @@ export async function aplicarSnapshot(payload: DeviceSyncPayload): Promise<void>
       const configFinal: Config = asegurarTemaCoherente({
         ...e.config,
         temaPersonalizado: estadoActual.config.temaPersonalizado,
+        temasGuardados: estadoActual.config.temasGuardados,
+        temaGuardadoActivoId: estadoActual.config.temaGuardadoActivoId,
       }, estadoActual.config.tema);
       await guardarPerfilEstado(e.perfilId, { materias: e.materias, config: configFinal });
     }
@@ -93,7 +95,7 @@ export async function aplicarPerfilSync(
       if (usados.has(nuevoId)) throw new Error('Colisión de ID de perfil, reintentá');
 
       // El tema personalizado no viaja: sin él, "personalizado" quedaría sin colores.
-      const configFinal: Config = asegurarTemaCoherente({ ...estadoEmisor.config, temaPersonalizado: undefined });
+      const configFinal: Config = asegurarTemaCoherente({ ...estadoEmisor.config, temaPersonalizado: undefined, temasGuardados: undefined, temaGuardadoActivoId: undefined });
       await guardarPerfilEstado(nuevoId, { materias: estadoEmisor.materias, config: configFinal });
       await guardarMeta({
         activoId: nuevoId,
@@ -104,6 +106,8 @@ export async function aplicarPerfilSync(
       const configFinal: Config = asegurarTemaCoherente({
         ...estadoEmisor.config,
         temaPersonalizado: estadoActual.config.temaPersonalizado,
+        temasGuardados: estadoActual.config.temasGuardados,
+        temaGuardadoActivoId: estadoActual.config.temaGuardadoActivoId,
       }, estadoActual.config.tema);
       await guardarPerfilEstado(target, { materias: estadoEmisor.materias, config: configFinal });
       await guardarMeta({

@@ -443,7 +443,7 @@ export function MetricsScreen() {
                     <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 6, marginLeft: 16 }}>
                       <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 8 }}>Estilo:</Text>
                       <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {chipOpcion((config.metricasProgresoEstilo ?? 'lista') === 'lista', 'Lista (como ahora)', () => actualizarConfig({ metricasProgresoEstilo: 'lista' }))}
+                        {chipOpcion((config.metricasProgresoEstilo ?? 'lista') === 'lista', 'Lista', () => actualizarConfig({ metricasProgresoEstilo: 'lista' }))}
                         {chipOpcion(config.metricasProgresoEstilo === 'anillo', 'Anillo y cifras', () => actualizarConfig({ metricasProgresoEstilo: 'anillo' }))}
                       </View>
                     </View>

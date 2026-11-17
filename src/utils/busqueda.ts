@@ -52,7 +52,7 @@ export function placeholderBusqueda(
   return `¿Qué necesita ${ej}?`;
 }
 
-export type Mostrar = 'todas' | 'para_cursar' | 'para_examen';
+export type Mostrar = 'todas' | 'cursando' | 'para_cursar' | 'para_examen';
 
 export interface FiltrosBusqueda {
   modo: ModoBusqueda;

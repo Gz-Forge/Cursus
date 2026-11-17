@@ -32,7 +32,8 @@ import {
   FRASE_UN_ANIO_RESTANTE, FRASE_DOS_SEMESTRES_RESTANTES,
   FRASE_UN_SEMESTRE_RESTANTE, FRASE_CARRERA_COMPLETA,
 } from '../utils/frases';
-import { ModoBusqueda, Mostrar, placeholderBusqueda, filtrosAplicados } from '../utils/busqueda';
+import { Mostrar, placeholderBusqueda } from '../utils/busqueda';
+import { alternarEnLista, pasaFiltrosVista, materiasRelacionadas, estadoCuentaComoDisponible, RelacionPrevias } from '../utils/busquedaFiltros';
 import { creditosSugeridos } from '../utils/numerosNotas';
 import { periodosTerminadosPendientes } from '../utils/periodosExamen';
 
@@ -50,12 +51,11 @@ export function CarreraScreen() {
   const isFocused = useIsFocused();
   const [vista, setVista] = useState<Vista>('carrera');
   const [semestreActual, setSemestreActual] = useState(1);
-  const [filtroEstado, setFiltroEstado] = useState<EstadoMateria | null>(null);
-  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  const [filtroEstados, setFiltroEstados] = useState<EstadoMateria[]>([]);
+  const [filtroTipos, setFiltroTipos] = useState<string[]>([]);
   const [mostrar, setMostrar] = useState<Mostrar>('todas');
   const [textoBusqueda, setTextoBusqueda] = useState('');
-  const [modoBusqueda, setModoBusqueda] = useState<ModoBusqueda>('nombre');
-  const [modalFiltrosBusqueda, setModalFiltrosBusqueda] = useState(false);
+  const [relacionPrevias, setRelacionPrevias] = useState<RelacionPrevias>('previa_de');
   const [tooltipExpandir, setTooltipExpandir] = useState(false);
   const chipsSemRef = React.useRef<ScrollView>(null);
   const chipsSemLayout = React.useRef<Record<number, { x: number; w: number }>>({});
@@ -90,6 +90,13 @@ export function CarreraScreen() {
   const agruparCreditos = config.creditosModalAgruparTipo ?? false;
   const dispIncluirAprobado = config.disponiblesModalIncluirAprobado ?? false;
   const dispIncluirRecursar = config.disponiblesModalIncluirRecursar ?? false;
+  const dispIncluirPorCursar = config.disponiblesModalIncluirPorCursar ?? true;
+  const opcionesDisponibles = {
+    porCursar: dispIncluirPorCursar,
+    recursar: dispIncluirRecursar,
+    aprobado: dispIncluirAprobado,
+    usarEstadoAprobado: !!config.usarEstadoAprobado,
+  };
 
   // Lista + total de "Créditos obtenidos"
   const listaCreditosMostrados = materias
@@ -120,14 +127,11 @@ export function CarreraScreen() {
       const previasOk = m.previasNecesarias.every(p => aprobadasParaHabilitar.has(p));
       const creditosOk = creditosParaHabilitar >= m.creditosNecesarios;
       if (!previasOk || !creditosOk) return false;
-      const e = calcularEstadoFinal(m, config);
-      if (e === 'por_cursar') return true;
-      if (e === 'recursar') return dispIncluirRecursar;
-      if (e === 'aprobado' && config.usarEstadoAprobado) return dispIncluirAprobado;
-      return false;
+      return estadoCuentaComoDisponible(calcularEstadoFinal(m, config), opcionesDisponibles);
     })
     .sort((a, b) => a.semestre !== b.semestre ? a.semestre - b.semestre : a.numero - b.numero);
   const disponibles = listaDisponiblesMostradas.length;
+  const sinEstadosDisponibles = !dispIncluirPorCursar && !dispIncluirRecursar && !(config.usarEstadoAprobado && dispIncluirAprobado);
 
   // Renderiza lista de materias en grid 2 cols (web) o lista simple (móvil)
   const renderMateriasList = (lista: Materia[], opciones?: { resaltar?: string; fijable?: boolean }) => {
@@ -141,7 +145,7 @@ export function CarreraScreen() {
         onToggleCursando={(v) => handleToggleCursandoCard(m, v)}
         resaltar={opciones?.resaltar}
         {...(opciones?.fijable ? {
-          onLongPress: () => setMateriaPinned(prev => prev?.numero === m.numero ? null : m),
+          onMarcar: () => setMateriaPinned(prev => prev?.numero === m.numero ? null : m),
           pinned: materiaPinned?.numero === m.numero,
         } : {})}
       />
@@ -190,7 +194,11 @@ export function CarreraScreen() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isFocused, vista]);
 
-  const tiposFormacion = [...new Set(materias.map(m => m.tipoFormacion).filter((t): t is string => !!t))];
+  // Tipos de formación configurados (más los que usen las materias, por si quedaron sueltos)
+  const tiposFormacion = [...new Set([
+    ...(config.tiposFormacion ?? []),
+    ...materias.map(m => m.tipoFormacion).filter((t): t is string => !!t),
+  ])];
 
   // ── Pestaña Semestre: chips desplazables, centrados en el semestre actual ──
   const centrarChipSem = React.useCallback((sem: number, animated = true) => {
@@ -202,73 +210,67 @@ export function CarreraScreen() {
     if (vista === 'semestre') centrarChipSem(semestreActual);
   }, [semestreActual, vista, centrarChipSem]);
 
-  // ── Pestaña Búsqueda: resultados según texto, modo y filtros ──
-  // La lógica de filtrado es la de siempre; acá solo se calcula una vez para
-  // poder mostrar el total ("Ver N materias") y el estado vacío.
+  // ── Pestaña Búsqueda: subpestañas + chips a la vista, texto y materia marcada ──
   const hayTextoBusqueda = textoBusqueda.length > 0;
-  const filtrosBusqueda = { modo: modoBusqueda, mostrar, estado: filtroEstado, tipo: filtroTipo, hayTexto: hayTextoBusqueda };
-  const filtrosBusquedaActivos = filtrosAplicados(filtrosBusqueda);
+  const filtrosVistaActivos = mostrar !== 'todas' || filtroEstados.length > 0 || filtroTipos.length > 0;
   const limpiarFiltrosBusqueda = () => {
-    setModoBusqueda('nombre');
     setMostrar('todas');
-    setFiltroEstado(null);
-    setFiltroTipo(null);
+    setFiltroEstados([]);
+    setFiltroTipos([]);
     setMateriaPinned(null);
   };
-  const etiquetaModo: Record<ModoBusqueda, string> = { nombre: 'Nombre', es_previa_de: 'Es previa de', sus_previas: 'Sus previas' };
-  const etiquetaMostrar: Record<Mostrar, string> = { todas: 'Todas', para_cursar: '📚 Para cursar', para_examen: '📝 Para dar examen' };
+  const etiquetaMostrar: Record<Mostrar, string> = {
+    todas: 'Todas', cursando: getLabel('cursando'), para_cursar: 'Cursar', para_examen: 'Examen',
+  };
+  const etiquetaRelacion: Record<RelacionPrevias, string> = { previa_de: 'Previa de', sus_previas: 'Sus previas' };
+  const pinnedActual = materiaPinned ? materias.find(x => x.numero === materiaPinned.numero) ?? null : null;
 
   type SeccionBusqueda = { titulo?: string; lista: Materia[] };
-  const resultadoBusqueda = ((): { secciones: SeccionBusqueda[]; total: number; vacio: string; resumen?: string } => {
+  const resultadoBusqueda = ((): { secciones: SeccionBusqueda[]; total: number; vacio: string; resumen?: string; avisoRelacion?: string } => {
     if (vista !== 'busqueda') return { secciones: [], total: 0, vacio: '' };
+    if (pinnedActual) {
+      const rel = materiasRelacionadas(materias, pinnedActual, relacionPrevias);
+      return {
+        secciones: [
+          { titulo: 'Materia marcada', lista: [pinnedActual] },
+          { titulo: etiquetaRelacion[relacionPrevias], lista: rel },
+        ].filter(sec => sec.lista.length > 0),
+        total: 1 + rel.length,
+        vacio: '',
+        avisoRelacion: rel.length === 0
+          ? (relacionPrevias === 'previa_de'
+            ? 'Esta materia no es requisito directo de ninguna otra.'
+            : 'Esta materia no tiene previas requeridas.')
+          : undefined,
+      };
+    }
+    const numerosDisp = new Set(materiasDisponibles(materias, config));
+    const filtros = { mostrar, estados: filtroEstados as string[], tipos: filtroTipos };
+    let lista = materias.filter(m =>
+      pasaFiltrosVista(m, calcularEstadoFinal(m, config), filtros, numerosDisp, !!config.usarEstadoAprobado)
+    );
     if (hayTextoBusqueda) {
       const q = textoBusqueda.trim().toLowerCase();
-      const matchBusqueda = (m: Materia) => m.nombre.toLowerCase().includes(q) || String(m.numero).includes(q);
-      let lista: Materia[];
-      let vacio: string;
-      if (modoBusqueda === 'nombre') {
-        lista = materias.filter(matchBusqueda);
-        vacio = 'No hay materias con ese nombre o número.';
-      } else if (modoBusqueda === 'es_previa_de') {
-        const nums = materiaPinned
-          ? new Set([materiaPinned.numero])
-          : new Set(materias.filter(matchBusqueda).map(m => m.numero));
-        lista = materias.filter(m => m.previasNecesarias.some(n => nums.has(n)));
-        vacio = 'Esta materia no es requisito directo de ninguna otra.';
-      } else {
-        const ids = materiaPinned
-          ? new Set(materiaPinned.previasNecesarias)
-          : new Set(materias.filter(matchBusqueda).flatMap(m => m.previasNecesarias));
-        lista = materias.filter(m => ids.has(m.numero));
-        vacio = 'Esta materia no tiene previas requeridas.';
-      }
-      if (modoBusqueda !== 'nombre' && !materiaPinned && !materias.some(matchBusqueda)) {
-        vacio = 'Ninguna materia coincide con ese nombre o número.';
-      }
-      return { secciones: [{ lista }], total: lista.length, vacio };
+      lista = lista.filter(m => m.nombre.toLowerCase().includes(q) || String(m.numero).includes(q));
+      return {
+        secciones: [{ lista }],
+        total: lista.length,
+        vacio: filtrosVistaActivos ? 'No hay materias con ese nombre o número en esta vista.' : 'No hay materias con ese nombre o número.',
+      };
     }
     if (mostrar === 'para_cursar') {
-      const numerosDisp = new Set(materiasDisponibles(materias, config));
-      const lista = materias.filter(m => {
-        const estado = calcularEstadoFinal(m, config);
-        if (estado === 'cursando') return false;
-        if (numerosDisp.has(m.numero)) return true;
-        if (config.usarEstadoAprobado && estado === 'aprobado') return true;
-        return false;
-      });
       const primerSem = lista.filter(m => m.semestre % 2 === 1);
       const segundoSem = lista.filter(m => m.semestre % 2 === 0);
       return {
         secciones: [
           { titulo: '1° semestre del año', lista: primerSem },
           { titulo: '2° semestre del año', lista: segundoSem },
-        ].filter(s => s.lista.length > 0),
+        ].filter(sec => sec.lista.length > 0),
         total: lista.length,
         vacio: 'No hay materias disponibles para cursar.',
       };
     }
     if (mostrar === 'para_examen') {
-      const lista = materias.filter(m => ['reprobado', 'aprobado'].includes(calcularEstadoFinal(m, config)));
       return {
         secciones: [{ lista }],
         total: lista.length,
@@ -276,15 +278,12 @@ export function CarreraScreen() {
         resumen: `${lista.length} materia${lista.length !== 1 ? 's' : ''} pendiente${lista.length !== 1 ? 's' : ''} de examen`,
       };
     }
-    const lista = materias.filter(m => {
-      const estadoOk = filtroEstado === null || calcularEstadoFinal(m, config) === filtroEstado;
-      const tipoOk = filtroTipo === null || m.tipoFormacion === filtroTipo;
-      return estadoOk && tipoOk;
-    });
     return {
       secciones: [{ lista }],
       total: lista.length,
-      vacio: materias.length === 0 ? 'Todavía no cargaste materias.' : 'Ninguna materia cumple estos filtros.',
+      vacio: materias.length === 0
+        ? 'Todavía no cargaste materias.'
+        : mostrar === 'cursando' ? `No hay materias en estado ${getLabel('cursando')}.` : 'Ninguna materia cumple estos filtros.',
     };
   })();
 
@@ -598,6 +597,63 @@ export function CarreraScreen() {
         ))}
       </View>
 
+      {/* Búsqueda: subpestañas + chips de filtros a la vista */}
+      {vista === 'busqueda' && (() => {
+        const chip = (key: string, label: string, activo: boolean, onPress: () => void, colorActivo?: string) => (
+          <TouchableOpacity
+            key={key}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activo }}
+            style={{
+              paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1,
+              borderColor: activo ? (colorActivo ?? tema.acentoLineas ?? tema.acento) : tema.borde,
+              backgroundColor: activo ? (colorActivo ?? tema.acentoFondo ?? tema.acento) : tema.tarjeta,
+            }}
+          >
+            <Text style={{ color: activo ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: activo ? '600' : '400' }} numberOfLines={1}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+        const estadosChips = ORDEN_ESTADOS_FILTRO.filter(e => e !== 'aprobado' || config.usarEstadoAprobado);
+        const hayChips = (mostrar === 'todas' && estadosChips.length > 0) || tiposFormacion.length > 0;
+        return (
+          <View style={{ backgroundColor: surfaceBg, borderBottomWidth: 1, borderBottomColor: tema.borde }}>
+            <View style={{ flexDirection: 'row' }}>
+              {(Object.keys(etiquetaMostrar) as Mostrar[]).map(k => (
+                <TouchableOpacity
+                  key={k}
+                  onPress={() => { setMostrar(k); setMateriaPinned(null); }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mostrar === k }}
+                  style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: mostrar === k ? (tema.acentoLineas ?? tema.acento) : 'transparent' }}
+                >
+                  <Text numberOfLines={1} style={{ color: mostrar === k ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontWeight: '600', fontSize: 13 }}>
+                    {etiquetaMostrar[k]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {hayChips && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ gap: 6, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' }}
+              >
+                {mostrar === 'todas' && estadosChips.map(e =>
+                  chip(`e_${e}`, `${getIcono(e)} ${getLabel(e)}`, filtroEstados.includes(e), () => { setFiltroEstados(prev => alternarEnLista(prev, e)); setMateriaPinned(null); }, getColor(e))
+                )}
+                {tiposFormacion.map(t =>
+                  chip(`t_${t}`, t, filtroTipos.includes(t), () => { setFiltroTipos(prev => alternarEnLista(prev, t)); setMateriaPinned(null); })
+                )}
+              </ScrollView>
+            )}
+          </View>
+        );
+      })()}
+
       <Animated.ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -777,13 +833,13 @@ export function CarreraScreen() {
         {/* VISTA BÚSQUEDA */}
         {vista === 'busqueda' && (
           <>
-            {/* Buscador + chip "Filtros · N" */}
+            {/* Buscador + botón "Previa de / Sus previas" (con una materia marcada) */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', backgroundColor: tema.tarjeta, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}>
                 <Text style={{ color: tema.textoSecundario, fontSize: 16 }}>🔍</Text>
                 <TextInput
                   style={{ flex: 1, minWidth: 0, color: tema.texto, fontSize: 14 }}
-                  placeholder={placeholderBusqueda(modoBusqueda, materias)}
+                  placeholder={placeholderBusqueda('nombre', materias)}
                   placeholderTextColor={tema.textoSecundario}
                   value={textoBusqueda}
                   onChangeText={v => {
@@ -798,58 +854,31 @@ export function CarreraScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              <TouchableOpacity
-                onPress={() => setModalFiltrosBusqueda(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Filtros, ${filtrosBusquedaActivos.length} activos`}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: filtrosBusquedaActivos.length > 0 ? (tema.acentoLineas ?? tema.acento) : tema.borde,
-                  backgroundColor: filtrosBusquedaActivos.length > 0 ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
-                }}
-              >
-                <Text style={{ color: filtrosBusquedaActivos.length > 0 ? '#fff' : tema.textoSecundario, fontSize: 13, fontWeight: '600' }}>
-                  Filtros{filtrosBusquedaActivos.length > 0 ? ` · ${filtrosBusquedaActivos.length}` : ''}
-                </Text>
-              </TouchableOpacity>
+              {pinnedActual && (
+                <TouchableOpacity
+                  onPress={() => setRelacionPrevias(r => r === 'previa_de' ? 'sus_previas' : 'previa_de')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mostrar: ${etiquetaRelacion[relacionPrevias]}. Tocar para cambiar`}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16,
+                    borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
+                    backgroundColor: tema.acentoFondo ?? tema.acento,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{etiquetaRelacion[relacionPrevias]}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {/* Un chip por filtro activo, con ✕ para quitarlo */}
-            {filtrosBusquedaActivos.length > 0 && (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                {filtrosBusquedaActivos.map(f => {
-                  const { label, quitar } = f === 'modo'
-                    ? { label: `Buscar en: ${etiquetaModo[modoBusqueda]}`, quitar: () => { setModoBusqueda('nombre'); setMateriaPinned(null); } }
-                    : f === 'mostrar'
-                    ? { label: etiquetaMostrar[mostrar], quitar: () => setMostrar('todas') }
-                    : f === 'estado' && filtroEstado
-                    ? { label: `${getIcono(filtroEstado)} ${getLabel(filtroEstado)}`, quitar: () => setFiltroEstado(null) }
-                    : { label: filtroTipo ?? '', quitar: () => setFiltroTipo(null) };
-                  return (
-                    <TouchableOpacity accessibilityRole="button"
-                      key={f}
-                      onPress={quitar}
-                      accessibilityLabel={`Quitar filtro ${label}`}
-                      style={{
-                        flexDirection: 'row', alignItems: 'center', gap: 6,
-                        paddingLeft: 10, paddingRight: 8, paddingVertical: 5, borderRadius: 14,
-                        borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento,
-                      }}
-                    >
-                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>{label}</Text>
-                      <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>✕</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            {materiaPinned && (
+            {pinnedActual ? (
               <Text style={{ color: tema.acentoTexto ?? tema.acento, marginBottom: 4, fontSize: 12 }}>
-                📌 Referencia: {materiaPinned.nombre}
+                📌 Marcada: {pinnedActual.nombre}
               </Text>
-            )}
+            ) : !hayTextoBusqueda && resultadoBusqueda.total > 0 ? (
+              <Text style={{ color: tema.textoSecundario, marginBottom: 6, fontSize: 11 }}>
+                {isWeb ? 'Hacé clic derecho en una materia' : 'Mantené apretada una materia'} para marcarla y ver sus previas.
+              </Text>
+            ) : null}
 
             {resultadoBusqueda.total === 0 ? (
               /* Sin resultados */
@@ -861,16 +890,16 @@ export function CarreraScreen() {
                 <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center' }}>
                   {resultadoBusqueda.vacio}
                 </Text>
-                {(filtrosBusquedaActivos.length > 0 || hayTextoBusqueda) && (
+                {(filtrosVistaActivos || hayTextoBusqueda) && (
                   <TouchableOpacity
                     onPress={() => {
-                      if (filtrosBusquedaActivos.length > 0) limpiarFiltrosBusqueda();
+                      if (filtrosVistaActivos) limpiarFiltrosBusqueda();
                       else { setTextoBusqueda(''); setMateriaPinned(null); }
                     }}
                     style={{ marginTop: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, backgroundColor: tema.acentoFondo ?? tema.acento }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '600' }}>
-                      {filtrosBusquedaActivos.length > 0 ? 'Limpiar filtros' : 'Borrar búsqueda'}
+                      {filtrosVistaActivos ? 'Limpiar filtros' : 'Borrar búsqueda'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -888,11 +917,16 @@ export function CarreraScreen() {
                       </Text>
                     )}
                     {renderMateriasList(sec.lista, {
-                      resaltar: hayTextoBusqueda && modoBusqueda === 'nombre' ? textoBusqueda : undefined,
-                      fijable: hayTextoBusqueda,
+                      resaltar: hayTextoBusqueda ? textoBusqueda : undefined,
+                      fijable: true,
                     })}
                   </React.Fragment>
                 ))}
+                {resultadoBusqueda.avisoRelacion && (
+                  <Text style={{ color: tema.textoSecundario, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>
+                    {resultadoBusqueda.avisoRelacion}
+                  </Text>
+                )}
               </>
             )}
           </>
@@ -1177,12 +1211,12 @@ export function CarreraScreen() {
 
                   {/* Config de estados */}
                   <View style={{ backgroundColor: tema.superficie, borderRadius: 10, padding: 12, marginBottom: 14, gap: 10 }}>
-                    {/* Por cursar — fijo ON */}
+                    {/* Por cursar */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ color: tema.texto, fontSize: 13 }}>Por cursar</Text>
+                      <Text style={{ color: tema.texto, fontSize: 13 }}>{getLabel('por_cursar')}</Text>
                       <Switch
-                        value={true}
-                        disabled
+                        value={dispIncluirPorCursar}
+                        onValueChange={v => actualizarConfig({ disponiblesModalIncluirPorCursar: v })}
                         trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
                         thumbColor="#fff"
                       />
@@ -1216,7 +1250,9 @@ export function CarreraScreen() {
                   <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator persistentScrollbar>
                     {listaDisponiblesMostradas.length === 0 ? (
                       <Text style={{ color: tema.textoSecundario, textAlign: 'center', paddingVertical: 16, fontSize: 13 }}>
-                        Sin materias disponibles con estos filtros
+                        {sinEstadosDisponibles
+                          ? 'Elegí al menos un estado para ver materias disponibles.'
+                          : 'Sin materias disponibles con estos filtros'}
                       </Text>
                     ) : (
                       <>
@@ -1249,117 +1285,6 @@ export function CarreraScreen() {
                 </>
               );
             })()}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Hoja de filtros de la pestaña Búsqueda */}
-      <Modal visible={modalFiltrosBusqueda} transparent animationType="fade" onRequestClose={() => setModalFiltrosBusqueda(false)}>
-        <View style={{
-          flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: isWeb ? 'center' : 'flex-end', alignItems: isWeb ? 'center' : 'stretch',
-          padding: isWeb ? 24 : 0,
-        }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cerrar"
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            onPress={() => setModalFiltrosBusqueda(false)}
-          />
-          <View style={{
-            backgroundColor: tema.superficie, borderRadius: isWeb ? 16 : 0,
-            borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20,
-            paddingBottom: isWeb ? 20 : 20 + safeBottomModal,
-            width: isWeb ? '100%' : undefined, maxWidth: isWeb ? 440 : undefined,
-            maxHeight: screenHeight * 0.85,
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 16, flex: 1 }}>Filtros</Text>
-              {filtrosBusquedaActivos.length > 0 && (
-                <TouchableOpacity onPress={limpiarFiltrosBusqueda}>
-                  <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13, fontWeight: '600' }}>Limpiar</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <ScrollView style={{ flexGrow: 0 }}>
-              {(() => {
-                const chip = (key: string, label: string, activo: boolean, onPress: () => void, colorActivo?: string) => (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={onPress}
-                    accessibilityState={{ selected: activo }}
-                    style={{
-                      paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
-                      backgroundColor: activo ? (colorActivo ?? tema.acentoFondo ?? tema.acento) : tema.tarjeta,
-                    }}
-                  >
-                    <Text style={{ color: activo ? '#fff' : tema.textoSecundario, fontSize: 13, fontWeight: activo ? '600' : '400' }} numberOfLines={1}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-                const titulo = (t: string, nota?: string) => (
-                  <View style={{ marginBottom: 6, marginTop: 4 }}>
-                    <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '700' }}>{t}</Text>
-                    {nota && <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>{nota}</Text>}
-                  </View>
-                );
-                const fila = (children: React.ReactNode, atenuada = false) => (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14, opacity: atenuada ? 0.5 : 1 }}>
-                    {children}
-                  </View>
-                );
-                const estadosPresentes = new Set(materias.map(m => calcularEstadoFinal(m, config)));
-                const estadosChip = ORDEN_ESTADOS_FILTRO.filter(e =>
-                  (e !== 'aprobado' || config.usarEstadoAprobado) && (estadosPresentes.has(e) || filtroEstado === e)
-                );
-                const notaTexto = hayTextoBusqueda ? 'Se aplica con el buscador vacío.' : undefined;
-                return (
-                  <>
-                    {titulo('Buscar en', 'Para "Es previa de" y "Sus previas", mantené apretada una materia para fijarla.')}
-                    {fila((Object.keys(etiquetaModo) as ModoBusqueda[]).map(k =>
-                      chip(k, etiquetaModo[k], modoBusqueda === k, () => { setModoBusqueda(k); setMateriaPinned(null); })
-                    ))}
-
-                    {titulo('Mostrar', notaTexto)}
-                    {fila((Object.keys(etiquetaMostrar) as Mostrar[]).map(k =>
-                      chip(k, etiquetaMostrar[k], mostrar === k, () => setMostrar(k))
-                    ), hayTextoBusqueda)}
-
-                    {mostrar === 'todas' && (
-                      <>
-                        {titulo('Estado', notaTexto)}
-                        {fila([
-                          chip('todos', 'Todos', filtroEstado === null, () => setFiltroEstado(null)),
-                          ...estadosChip.map(e =>
-                            chip(e, `${getIcono(e)} ${getLabel(e)}`, filtroEstado === e, () => setFiltroEstado(prev => prev === e ? null : e), getColor(e))
-                          ),
-                        ], hayTextoBusqueda)}
-
-                        {tiposFormacion.length > 0 && (
-                          <>
-                            {titulo('Tipo de formación', notaTexto)}
-                            {fila([
-                              chip('todos', 'Todos', filtroTipo === null, () => setFiltroTipo(null)),
-                              ...tiposFormacion.map(t =>
-                                chip(t, t, filtroTipo === t, () => setFiltroTipo(prev => prev === t ? null : t))
-                              ),
-                            ], hayTextoBusqueda)}
-                          </>
-                        )}
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </ScrollView>
-
-            <TouchableOpacity
-              onPress={() => setModalFiltrosBusqueda(false)}
-              style={{ marginTop: 8, padding: 12, backgroundColor: tema.acentoFondo ?? tema.acento, borderRadius: 8, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700' }}>
-                Ver {resultadoBusqueda.total} materia{resultadoBusqueda.total !== 1 ? 's' : ''}
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
