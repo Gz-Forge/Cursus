@@ -136,6 +136,15 @@ export interface ColoresScreen {
   borde?: string;
 }
 
+/** 2.0.1: un tema guardado. `base` indica de qué tema prearmado salió (para "Restaurar original"); null si es propio. */
+export interface TemaGuardado {
+  id: string;
+  nombre: string;
+  base: string | null;
+  modo: 'oscuro' | 'claro' | 'personalizado';
+  colores?: TemaPersonalizado;
+}
+
 export interface TemaPersonalizado {
   fondo: string;
   tarjeta: string;
@@ -251,6 +260,11 @@ export interface Config {
   creditosModalIncluirAprobado?: boolean;      // toggle "Incluir Aprobado" en el modal de Créditos obtenidos
   disponiblesModalIncluirAprobado?: boolean;   // toggle "Incluir Aprobado" en el modal de Materias disponibles
   disponiblesModalIncluirRecursar?: boolean;   // toggle "Incluir Recursar" en el modal de Materias disponibles
+  disponiblesModalIncluirPorCursar?: boolean;  // 2.0.1: toggle "Por cursar" en el modal de Materias disponibles (default true)
+  /** 2.0.1: temas guardados del usuario (cada opción de tema es editable y renombrable). */
+  temasGuardados?: TemaGuardado[];
+  /** 2.0.1: id del tema guardado activo (cuando tema === 'personalizado'). */
+  temaGuardadoActivoId?: string;
   barraProgresoEvaluaciones?: boolean;         // default true — barra de progreso de notas en Editar/Crear materia
   encabezadoSemestreEstilo?: 'materias' | 'barra' | 'iconos' | 'anillo'; // 1.9.0: resumen en el encabezado de cada semestre (default 'materias')
   encabezadoSemestreCreditos?: boolean;        // 1.9.0: mostrar créditos obtenidos/total en el encabezado del semestre (default false)

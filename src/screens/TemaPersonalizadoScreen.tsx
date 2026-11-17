@@ -7,11 +7,15 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { useTema, ThemeContext, sanitizarTema } from '../theme/ThemeContext';
-import { TEMAS_PREARMADOS, aplicarTemaPrearmado, temaPrearmadoActivo } from '../theme/temasPrearmados';
+import { TEMAS_PREARMADOS } from '../theme/temasPrearmados';
+import {
+  migrarTemas, aplicarTemaGuardado, coloresMiniatura, renombrarTema, restaurarTema,
+  guardarColoresEnTema, nombreTemaValido, puedeRestaurar, MAX_NOMBRE_TEMA,
+} from '../theme/temasGuardados';
 import { MateriaCard } from '../components/MateriaCard';
 import { SemestreSection } from '../components/SemestreSection';
 import { BarraProgresoNotas } from '../components/BarraProgresoNotas';
-import { Materia } from '../types';
+import { Materia, TemaGuardado } from '../types';
 import { temaOscuro, estadoColores } from '../theme/colors';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
@@ -957,180 +961,141 @@ function MetricasPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: Fo
   );
 }
 
-// ── Preview fiel: Configuración ───────────────────────────────────────────────
+// ── Preview fiel: Configuración (réplica estática de la pantalla de Ajustes, con la pestaña App activa) ──
 function ConfigPreview({ draft, fondo }: { draft: TemaPersonalizado; fondo: FondoPantalla | undefined }) {
   const t = draft;
   const { getLabel } = useEstadoEstilo();
+  const acText = t.acentoTexto ?? t.acento;
+  const acFondo = t.acentoFondo ?? t.acento;
+  const acLineas = t.acentoLineas ?? t.acento;
 
-  const SecTitulo = ({ title }: { title: string }) => (
-    <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 }}>{title}</Text>
+  const Titulo = ({ title }: { title: string }) => (
+    <Text style={{ color: acText, fontSize: 14, fontWeight: '600', marginBottom: 10, marginTop: 4 }}>{title}</Text>
   );
-  const CampoFake = ({ label, value, ancho }: { label: string; value: string; ancho?: number }) => (
-    <View style={{ marginBottom: 12 }}>
-      <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 3 }}>{label}</Text>
-      <View style={{ backgroundColor: t.tarjeta, borderRadius: 8, padding: 10, ...(ancho ? { width: ancho } : {}) }}>
-        <Text style={{ color: t.texto, fontSize: 14 }}>{value}</Text>
-      </View>
+  const Chip = ({ activo, label }: { activo: boolean; label: string }) => (
+    <View style={{
+      flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+      backgroundColor: activo ? acFondo : t.fondo,
+      borderWidth: 1, borderColor: activo ? acLineas : t.borde,
+    }}>
+      <Text style={{ color: activo ? '#fff' : t.textoSecundario, fontSize: 12, fontWeight: '600' }}>{label}</Text>
     </View>
   );
-  const ToggleFila = ({ label, on, desc }: { label: string; on: boolean; desc?: string }) => (
-    <View style={{ marginBottom: 12 }}>
+  const Interruptor = ({ label, desc, on }: { label: string; desc: string; on: boolean }) => (
+    <View style={{ marginBottom: 14 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ flex: 1, marginRight: 12 }}>
-          <Text style={{ color: t.texto, fontSize: 13 }}>{label}</Text>
-          {desc && <Text style={{ color: t.textoSecundario, fontSize: 11, marginTop: 2 }}>{desc}</Text>}
+          <Text style={{ color: t.texto, fontSize: 14 }}>{label}</Text>
+          <Text style={{ color: t.textoSecundario, fontSize: 11, marginTop: 2 }}>{desc}</Text>
         </View>
-        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? (t.acentoFondo ?? t.acento) : t.borde,
+        <View style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: on ? acFondo : t.borde,
           justifyContent: 'center', paddingHorizontal: 3 }}>
-          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff',
-            alignSelf: on ? 'flex-end' : 'flex-start' }} />
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignSelf: on ? 'flex-end' : 'flex-start' }} />
         </View>
       </View>
     </View>
   );
-  const BotonFila = ({ label, acento }: { label: string; acento?: boolean }) => (
-    <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, alignItems: 'center',
-      marginBottom: 16, borderWidth: 1, borderColor: acento ? (t.acentoLineas ?? t.acento) : t.borde }}>
-      <Text style={{ color: acento ? (t.acentoTexto ?? t.acento) : t.texto, fontWeight: acento ? '700' : '600', fontSize: 13 }}>{label}</Text>
-    </View>
-  );
-  const Acordeon = ({ titulo, subtitulo }: { titulo: string; subtitulo: string }) => (
-    <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8,
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-      <View style={{ flex: 1, marginRight: 8 }}>
-        <Text style={{ color: t.texto, fontWeight: '700', fontSize: 13 }}>{titulo}</Text>
-        <Text style={{ color: t.textoSecundario, fontSize: 12, marginTop: 2 }}>{subtitulo}</Text>
-      </View>
-      <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 15 }}>▼</Text>
+  const cajaEjemplo = { backgroundColor: t.tarjeta, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8, marginBottom: 10 } as const;
+  const filaEstilo = (descripcion: string) => (
+    <View style={{ marginBottom: 8 }}>
+      <Text style={{ color: t.texto, fontSize: 14 }}>Estilo</Text>
+      <Text style={{ color: t.textoSecundario, fontSize: 11, marginTop: 2 }}>{descripcion}</Text>
     </View>
   );
 
   return (
     <PreviewWrapper draft={draft} fondo={fondo}>
-      {/* APARIENCIA */}
-      <SecTitulo title="APARIENCIA" />
+      {/* Buscador */}
+      <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, borderWidth: 1, borderColor: t.borde, paddingHorizontal: 12, marginBottom: 12 }}>
+        <Text style={{ color: t.textoSecundario, fontSize: 14, paddingVertical: 10 }}>Buscar un ajuste…</Text>
+      </View>
+
+      {/* Pestañas */}
+      <View style={{ flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: t.borde }}>
+        {[['📊', 'Notas'], ['📅', 'Horario'], ['🎨', 'App'], ['📦', 'Datos']].map(([icono, label]) => {
+          const activa = label === 'App';
+          return (
+            <View key={label} style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}>
+              <Text style={{ fontSize: 18 }}>{icono}</Text>
+              <Text style={{ color: activa ? acText : t.textoSecundario, fontSize: 11, fontWeight: activa ? '700' : '400', marginTop: 2 }}>{label}</Text>
+              {activa && <View style={{ position: 'absolute', bottom: 0, left: 8, right: 8, height: 2, backgroundColor: acFondo, borderRadius: 1 }} />}
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Apariencia */}
+      <Titulo title="APARIENCIA" />
       <View style={{ flexDirection: 'row', backgroundColor: t.tarjeta, borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
-        {(['Oscuro', 'Claro', 'Custom'] as const).map((op, i) => (
-          <View key={op} style={{ flex: 1, padding: 12, alignItems: 'center',
-            backgroundColor: i === 2 ? (t.acentoFondo ?? t.acento) : 'transparent' }}>
-            <Text style={{ color: i === 2 ? '#fff' : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>{op}</Text>
-          </View>
-        ))}
-      </View>
-      <BotonFila label="🎨  Entrar a personalizar →" acento />
-
-      {/* SISTEMA DE NOTAS */}
-      <SecTitulo title="SISTEMA DE NOTAS" />
-      <CampoFake label="Nota máxima (ej: 12, 10, 100)" value="12" />
-      <CampoFake label="Oportunidades de examen por defecto" value="3" />
-      <BotonFila label="📅  Configurar períodos de examen" />
-      <Text style={{ color: t.textoSecundario, fontSize: 11, textAlign: 'center', marginTop: -12, marginBottom: 14 }}>
-        Modo actual: Manual
-      </Text>
-
-      {/* UMBRALES */}
-      <SecTitulo title="UMBRALES DE ESTADO (%)" />
-      {[
-        { label: 'Exoneración ≥', val: '75', equiv: '9.0 / 12' },
-        { label: 'Aprobación ≥',  val: '50', equiv: '6.0 / 12' },
-        { label: 'Oportunidad de Examen ≥',  val: '30', equiv: '3.6 / 12' },
-        { label: 'Nota mínima examen ≥', val: '60', equiv: '7.2 / 12' },
-      ].map(u => (
-        <View key={u.label} style={{ marginBottom: 12 }}>
-          <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 3 }}>{u.label}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ backgroundColor: t.tarjeta, borderRadius: 8, padding: 10, width: 70 }}>
-              <Text style={{ color: t.texto, fontSize: 14 }}>{u.val}</Text>
+        {['Oscuro', 'Claro', 'Personalizado'].map(op => {
+          const activo = op === 'Personalizado';
+          return (
+            <View key={op} style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: activo ? acFondo : 'transparent' }}>
+              <Text style={{ color: activo ? '#fff' : t.textoSecundario, fontWeight: '600', fontSize: 12 }}>{op}</Text>
             </View>
-            <Text style={{ color: t.textoSecundario, fontSize: 12 }}>→ {u.equiv}</Text>
-          </View>
-        </View>
-      ))}
-      <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 14 }}>
-        {`⚠️ ${getLabel('recursar')} se asigna automáticamente al resto`}
-      </Text>
+          );
+        })}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: t.tarjeta, padding: 14, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: t.borde }}>
+        <Text style={{ flex: 1, color: t.texto, fontWeight: '600' }}>Más temas y personalización</Text>
+        <Text style={{ color: t.textoSecundario, fontSize: 22, marginLeft: 8 }}>›</Text>
+      </View>
 
-      {/* ESTADOS */}
-      <SecTitulo title="ESTADOS" />
-      <ToggleFila label={`Usar estado "${getLabel('aprobado')}"`} on={true}
-        desc="Algunas carreras van directo a exonerado o recursar" />
-      <ToggleFila label={`"${getLabel('aprobado')}" habilita previas`} on={false}
-        desc="Si está desactivado, solo exonerado desbloquea materias siguientes" />
-
-      {/* TIPOS DE FORMACIÓN */}
-      <SecTitulo title="TIPOS DE FORMACIÓN" />
-      <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-        <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 8 }}>Sin tipos definidos</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ flex: 1, backgroundColor: t.fondo, borderRadius: 8, padding: 8 }}>
-            <Text style={{ color: t.textoSecundario, fontSize: 12 }}>Nuevo tipo...</Text>
-          </View>
-          <View style={{ backgroundColor: t.acentoFondo ?? t.acento, padding: 8, borderRadius: 8, justifyContent: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>+ Agregar</Text>
-          </View>
+      {/* Encabezado de semestre */}
+      <Titulo title="ENCABEZADO DE SEMESTRE" />
+      {filaEstilo('Qué se ve a la derecha del nombre de cada semestre en Carrera.')}
+      <View style={cajaEjemplo}>
+        <View style={{
+          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+          paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 2, borderBottomColor: acLineas,
+        }}>
+          <Text style={{ color: acLineas, fontWeight: '700', fontSize: 15 }}>▼ 3° Semestre</Text>
+          <Text style={{ color: t.textoSecundario, fontSize: 12 }}>2/5 materias</Text>
         </View>
       </View>
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+        <Chip activo label="Simple" />
+        <Chip activo={false} label="Barra" />
+        <Chip activo={false} label="Íconos" />
+        <Chip activo={false} label="Anillo" />
+      </View>
 
-      {/* TIPOS DE BLOQUE */}
-      <SecTitulo title="TIPOS DE BLOQUE DE HORARIO" />
-      <Text style={{ color: t.textoSecundario, fontSize: 11, marginBottom: 8 }}>
-        Editá el nombre completo y la abreviatura (máx. 3 caracteres) de cada tipo.
-      </Text>
-      <View style={{ backgroundColor: t.tarjeta, borderRadius: 10, padding: 14, marginBottom: 8 }}>
-        {[
-          { label: 'Teórica',  abrev: 'T'  },
-          { label: 'Práctica', abrev: 'P'  },
-          { label: 'Parcial',  abrev: '★'  },
-          { label: 'Otro',     abrev: 'O'  },
-        ].map(tipo => (
-          <View key={tipo.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <View style={{ flex: 1, backgroundColor: t.fondo, borderRadius: 8, padding: 8 }}>
-              <Text style={{ color: t.texto, fontSize: 13 }}>{tipo.label}</Text>
-            </View>
-            <View style={{ backgroundColor: t.fondo, borderRadius: 8, padding: 8, width: 52, alignItems: 'center' }}>
-              <Text style={{ color: t.texto, fontSize: 14, fontWeight: '700' }}>{tipo.abrev}</Text>
-            </View>
+      {/* Cifras de carrera */}
+      <Titulo title="CIFRAS DE CARRERA" />
+      {filaEstilo(`Los números de arriba de Carrera: créditos, ${getLabel('exonerado').toLowerCase()} y disponibles.`)}
+      <View style={[cajaEjemplo, { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10 }]}>
+        {[['47', 'Créditos'], ['9', getLabel('exonerado')], ['3', 'Disponibles']].map(([valor, etiqueta]) => (
+          <View key={etiqueta} style={{ alignItems: 'center' }}>
+            <Text style={{ color: acLineas, fontSize: 20, fontWeight: '700' }}>{valor}</Text>
+            <Text style={{ color: t.textoSecundario, fontSize: 11 }}>{etiqueta}</Text>
           </View>
         ))}
       </View>
-      <ToggleFila label="Mostrar nombre completo en el horario" on={false}
-        desc='Muestra "Teórica" en vez de "T" en los bloques' />
-      <ToggleFila label="Mostrar evaluaciones en el horario" on={true}
-        desc="Muestra las evaluaciones con fecha como bloques especiales (📝) en la vista semanal" />
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+        <Chip activo label="Simple" />
+        <Chip activo={false} label="Con meta" />
+        <Chip activo={false} label="Anillo" />
+      </View>
+      <Text style={{ color: t.textoSecundario, fontSize: 11, marginBottom: 20 }}>Solo el número.</Text>
 
-      {/* COLORES EN HORARIO */}
-      <SecTitulo title="CONFIGURACIÓN DE COLORES EN HORARIO" />
-      <View style={{ marginBottom: 16 }}>
-        {['Álgebra I', 'Programación I'].map(nombre => (
-          <View key={nombre} style={{ marginBottom: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-              backgroundColor: t.tarjeta, borderRadius: 10, padding: 14 }}>
-              <Text style={{ color: t.texto, fontWeight: '600', flex: 1, fontSize: 13 }}>{nombre}</Text>
-              <Text style={{ color: t.acentoTexto ?? t.acento, fontSize: 14 }}>▼</Text>
-            </View>
-          </View>
-        ))}
+      {/* Tarjetas de materia */}
+      <Titulo title="TARJETAS DE MATERIA" />
+      <View style={{ backgroundColor: t.tarjeta, padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 20 }}>
+        <Text style={{ color: t.texto, fontWeight: '600' }}>🃏  Configurar tarjetas de materia</Text>
       </View>
 
-      {/* IMPORTAR / EXPORTAR */}
-      <SecTitulo title="IMPORTAR / EXPORTAR" />
-      <BotonFila label="📦 Gestionar importación y exportación →" />
-
-      {/* TARJETAS */}
-      <SecTitulo title="TARJETAS DE MATERIA" />
-      <BotonFila label="🃏  Configurar tarjetas de materia" />
-
-      {/* PROMPTS */}
-      <SecTitulo title="PROMPTS PARA IA" />
-      <Text style={{ color: t.textoSecundario, fontSize: 12, marginBottom: 12 }}>
-        Copiá el prompt que necesites y pegalo en tu IA favorita.
-      </Text>
-      <Acordeon titulo="Generar plan de carrera"
-        subtitulo="Usalo cuando querés cargar toda tu carrera (materias, semestres, previas) desde cero." />
-      <Acordeon titulo="Generar horarios JSON"
-        subtitulo="Usalo cuando tenés los horarios de tus materias y querés importarlos a la app." />
-      <Acordeon titulo="Generar evaluaciones JSON"
-        subtitulo="Usalo para generar el esquema de evaluaciones de una materia e importarlo." />
+      {/* Motivación */}
+      <Titulo title="MOTIVACIÓN" />
+      <Interruptor
+        label="Felicitaciones por semestre completo"
+        desc="Mostrá un mensaje motivacional cuando exonerás todas las materias de un semestre"
+        on
+      />
+      <Interruptor
+        label="Felicitaciones por año completo"
+        desc="Mostrá un mensaje motivacional cuando exonerás todas las materias de un año académico"
+        on={false}
+      />
     </PreviewWrapper>
   );
 }
@@ -1227,6 +1192,20 @@ export function TemaPersonalizadoScreen() {
   const [cambiosSinGuardar, setCambiosSinGuardar] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [renombrando, setRenombrando] = useState(false);
+  const [nombreEdit, setNombreEdit] = useState('');
+
+  // Tus temas: la store los migra al cargar; el respaldo cubre el instante previo a esa migración.
+  const temas: TemaGuardado[] = config.temasGuardados ?? migrarTemas(config)?.temasGuardados ?? [];
+  const activoBase = config.temaGuardadoActivoId ?? migrarTemas(config)?.temaGuardadoActivoId ?? 'oscuro';
+  const idActivo =
+    config.tema === 'personalizado'
+      ? activoBase
+      : (temas.find(t => t.id === activoBase && t.modo === config.tema)?.id ?? config.tema);
+  const temaActivo = temas.find(t => t.id === idActivo);
+  const PAGINA = 4;
+  const [paginaTemas, setPaginaTemas] = useState(() => Math.max(0, Math.floor(temas.findIndex(t => t.id === idActivo) / PAGINA)));
+  const totalPaginas = Math.max(1, Math.ceil(temas.length / PAGINA));
 
   const actualizarDraft = (parcial: Partial<TemaPersonalizado>) => {
     setDraft(prev => ({ ...prev, ...parcial }));
@@ -1244,7 +1223,13 @@ export function TemaPersonalizadoScreen() {
       );
       return;
     }
-    actualizarConfig({ tema: 'personalizado', temaPersonalizado: draft });
+    const idDestino = temaActivo?.id ?? idActivo;
+    actualizarConfig({
+      tema: 'personalizado',
+      temaPersonalizado: draft,
+      temasGuardados: guardarColoresEnTema(temas, idDestino, draft),
+      temaGuardadoActivoId: idDestino,
+    });
     setCambiosSinGuardar(false);
     setGuardadoOk(true);
     setTimeout(() => setGuardadoOk(false), 2500);
@@ -1263,27 +1248,65 @@ export function TemaPersonalizadoScreen() {
     }
   };
 
-  const temaActivoId = temaPrearmadoActivo(config);
-  const esPropio = temaActivoId === null && config.tema === 'personalizado';
-  const aplicarPrearmado = (id: string) => {
-    const t = TEMAS_PREARMADOS.find(x => x.id === id);
-    if (!t) return;
+  /** Colores completos con los que arranca el editor al elegir un tema. */
+  const draftDe = (t: TemaGuardado): TemaPersonalizado => {
+    if (t.colores) return { ...t.colores };
+    const p = TEMAS_PREARMADOS.find(x => x.id === (t.modo === 'claro' ? 'claro' : 'oscuro'));
+    return { ...(p ? p.colores : temaOscuro) };
+  };
+
+  const elegirTema = (t: TemaGuardado) => {
+    if (t.id === idActivo && !cambiosSinGuardar) return;
     const aplicar = () => {
-      actualizarConfig(aplicarTemaPrearmado(id));
-      setDraft({ ...t.colores });
+      actualizarConfig(aplicarTemaGuardado(t, config));
+      setDraft(draftDe(t));
       setCambiosSinGuardar(false);
       setGuardadoOk(false);
+      setRenombrando(false);
     };
-    if (esPropio) {
+    if (cambiosSinGuardar) {
       showConfirm(
-        'Reemplazar tu tema',
-        `Tu tema personalizado se va a reemplazar por "${t.nombre}". Esta acción no se puede deshacer.`,
+        'Cambios sin guardar',
+        `Tenés cambios sin guardar en el editor. Si cambiás a "${t.nombre}" se pierden.`,
         aplicar,
-        { labelConfirmar: 'Reemplazar', destructivo: true },
+        { labelConfirmar: 'Cambiar de tema', destructivo: true },
       );
     } else {
       aplicar();
     }
+  };
+
+  const empezarRenombrar = () => {
+    if (!temaActivo) return;
+    setNombreEdit(temaActivo.nombre);
+    setRenombrando(true);
+  };
+  const confirmarNombre = () => {
+    if (!temaActivo) return;
+    if (!nombreTemaValido(nombreEdit)) {
+      showAlert('Nombre inválido', `El nombre no puede estar vacío ni tener más de ${MAX_NOMBRE_TEMA} caracteres.`);
+      return;
+    }
+    actualizarConfig({ temasGuardados: renombrarTema(temas, temaActivo.id, nombreEdit) });
+    setRenombrando(false);
+  };
+  const restaurarOriginal = () => {
+    if (!temaActivo) return;
+    showConfirm(
+      'Restaurar original',
+      `"${temaActivo.nombre}" vuelve a su nombre y colores de fábrica. Se pierden tus cambios en este tema.`,
+      () => {
+        const nuevos = restaurarTema(temas, temaActivo.id);
+        const t = nuevos.find(x => x.id === temaActivo.id);
+        if (!t) return;
+        actualizarConfig({ temasGuardados: nuevos, ...aplicarTemaGuardado(t, config) });
+        setDraft(draftDe(t));
+        setCambiosSinGuardar(false);
+        setGuardadoOk(false);
+        setRenombrando(false);
+      },
+      { labelConfirmar: 'Restaurar', destructivo: true },
+    );
   };
 
   return (
@@ -1320,41 +1343,118 @@ export function TemaPersonalizadoScreen() {
         <ScrollView contentContainerStyle={{ padding: 16 }}>
           <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
-            {/* Temas prearmados */}
+            {/* Tus temas: 4 por página */}
             <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>Temas</Text>
-            <ScrollView
-              horizontal showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 20 }} contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
-            >
-              {TEMAS_PREARMADOS.map(t => {
-                const activo = temaActivoId === t.id;
-                const c = t.colores;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    onPress={() => aplicarPrearmado(t.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Tema ${t.nombre}${activo ? ', activo' : ''}`}
-                    style={{ width: 96, alignItems: 'center' }}
-                  >
-                    <View style={{
-                      width: 96, height: 64, borderRadius: 10, padding: 8, backgroundColor: c.fondo,
-                      borderWidth: 2, borderColor: activo ? tema.acento : tema.borde, justifyContent: 'space-between',
-                    }}>
-                      <View style={{ height: 16, borderRadius: 4, backgroundColor: c.tarjeta, borderWidth: 1, borderColor: c.borde }} />
-                      <View style={{ height: 4, width: '60%', borderRadius: 2, backgroundColor: c.acento }} />
-                      <View style={{ height: 4, width: '85%', borderRadius: 2, backgroundColor: c.texto }} />
-                    </View>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: activo ? tema.acento : tema.textoSecundario, fontSize: 12, fontWeight: activo ? '700' : '400', marginTop: 6 }}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 }}>
+              <TouchableOpacity
+                onPress={() => setPaginaTemas(p => Math.max(0, p - 1))}
+                disabled={paginaTemas === 0}
+                accessibilityRole="button" accessibilityLabel="Temas anteriores"
+                style={{ width: 28, height: 64, justifyContent: 'center', alignItems: 'center', opacity: paginaTemas === 0 ? 0.3 : 1 }}
+              >
+                <Text style={{ color: tema.texto, fontSize: 26 }}>‹</Text>
+              </TouchableOpacity>
+              <View style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
+                {Array.from({ length: PAGINA }, (_, i) => temas[paginaTemas * PAGINA + i]).map((t, i) => {
+                  if (!t) return <View key={`vacio-${i}`} style={{ flex: 1 }} />;
+                  const activo = t.id === idActivo;
+                  const c = coloresMiniatura(t);
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => elegirTema(t)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Tema ${t.nombre}${activo ? ', activo' : ''}`}
+                      style={{ flex: 1 }}
                     >
-                      {t.nombre}
+                      <View style={{
+                        height: 64, borderRadius: 10, padding: 8, backgroundColor: c.fondo,
+                        borderWidth: 2, borderColor: activo ? tema.acento : tema.borde, justifyContent: 'space-between',
+                      }}>
+                        <View style={{ height: 16, borderRadius: 4, backgroundColor: c.tarjeta }} />
+                        <View style={{ height: 4, width: '60%', borderRadius: 2, backgroundColor: c.acento }} />
+                        <View style={{ height: 4, width: '85%', borderRadius: 2, backgroundColor: c.texto }} />
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        style={{ color: activo ? tema.acento : tema.textoSecundario, fontSize: 12, fontWeight: activo ? '700' : '400', marginTop: 6, textAlign: 'center' }}
+                      >
+                        {t.nombre}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TouchableOpacity
+                onPress={() => setPaginaTemas(p => Math.min(totalPaginas - 1, p + 1))}
+                disabled={paginaTemas >= totalPaginas - 1}
+                accessibilityRole="button" accessibilityLabel="Temas siguientes"
+                style={{ width: 28, height: 64, justifyContent: 'center', alignItems: 'center', opacity: paginaTemas >= totalPaginas - 1 ? 0.3 : 1 }}
+              >
+                <Text style={{ color: tema.texto, fontSize: 26 }}>›</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
+              {Array.from({ length: totalPaginas }, (_, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => setPaginaTemas(i)}
+                  accessibilityRole="button" accessibilityLabel={`Página ${i + 1} de temas`}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: i === paginaTemas ? tema.acento : tema.borde }} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Tema activo: renombrar y restaurar */}
+            {temaActivo && (
+              <View style={{ marginBottom: 20 }}>
+                {renombrando ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TextInput
+                      value={nombreEdit}
+                      onChangeText={setNombreEdit}
+                      maxLength={MAX_NOMBRE_TEMA}
+                      autoFocus
+                      placeholder="Nombre del tema"
+                      placeholderTextColor={tema.textoSecundario}
+                      accessibilityLabel="Nombre del tema"
+                      onSubmitEditing={confirmarNombre}
+                      style={{ flex: 1, color: tema.texto, backgroundColor: tema.tarjeta, borderRadius: 8, borderWidth: 1, borderColor: tema.borde, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14 }}
+                    />
+                    <TouchableOpacity onPress={confirmarNombre} style={{ backgroundColor: tema.acento, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Aceptar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setRenombrando(false)} style={{ paddingHorizontal: 8, paddingVertical: 9 }}>
+                      <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Cancelar</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Text numberOfLines={1} style={{ color: tema.texto, fontSize: 13, fontWeight: '600', flexShrink: 1 }}>
+                      {temaActivo.nombre}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                    <TouchableOpacity
+                      onPress={empezarRenombrar}
+                      accessibilityRole="button"
+                      style={{ borderWidth: 1, borderColor: tema.borde, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                    >
+                      <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Cambiar nombre</Text>
+                    </TouchableOpacity>
+                    {puedeRestaurar(temaActivo) && (
+                      <TouchableOpacity
+                        onPress={restaurarOriginal}
+                        accessibilityRole="button"
+                        style={{ borderWidth: 1, borderColor: tema.borde, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                      >
+                        <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>Restaurar original</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
 
             <Text style={{ color: tema.texto, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>Personalizar</Text>
 

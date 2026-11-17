@@ -12,6 +12,7 @@ import {
 } from '../utils/perfiles';
 import { renumerarMaterias, calcularEstadoFinal } from '../utils/calculos';
 import { migrarPeriodosExamen } from '../utils/periodosExamen';
+import { migrarTemas } from '../theme/temasGuardados';
 import { registrarUso } from '../utils/oportunidades';
 
 export const CONFIG_DEFAULT: Config = {
@@ -107,7 +108,9 @@ interface Store extends AppState {
  * y la mezcla con CONFIG_DEFAULT. `migrada` indica que hay que volver a persistir.
  */
 function configDeEstado(estado: AppState): { config: Config; migrada: boolean } {
-  const cambios = migrarPeriodosExamen((estado.config ?? {}) as Config);
+  const cambiosPeriodos = migrarPeriodosExamen((estado.config ?? {}) as Config);
+  const cambiosTemas = migrarTemas((estado.config ?? {}) as Config);
+  const cambios = cambiosPeriodos || cambiosTemas ? { ...(cambiosPeriodos ?? {}), ...(cambiosTemas ?? {}) } : null;
   return {
     config: { ...CONFIG_DEFAULT, ...estado.config, ...(cambios ?? {}) },
     migrada: cambios !== null,
