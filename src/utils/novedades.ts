@@ -16,6 +16,16 @@ export interface NovedadesVersion {
  */
 export const NOVEDADES: NovedadesVersion[] = [
   {
+    version: '2.1.0',
+    items: [
+      'Plazo para dar examen: en Ajustes > Notas elegí cuántos años tenés y si aplica a reprobadas, aprobadas o ambas. Si vence antes de usar tus oportunidades, la materia pasa a recursar.',
+      'Asistencia por porcentaje: cargá el % mínimo de teórico o práctico y la app calcula cuántas veces podés faltar según tus clases. Cuando no te quedan faltas, te avisa.',
+      'Para agregar una materia a un semestre, mantené presionado su encabezado 3 segundos (o clic derecho en la computadora).',
+      'La vista Mes de Horarios muestra también tus clases con el color de cada materia, y podés elegir ver solo las evaluaciones.',
+      'Las notas usan coma decimal, podés borrar cualquier uso del historial de oportunidades y el cuello de botella marca bien el semestre siguiente.',
+    ],
+  },
+  {
     version: '2.0.5',
     items: [
       'Vista Mes en Horarios: elegí "Semana | Mes" y mirá todas tus evaluaciones del mes, con un punto del color de cada materia.',

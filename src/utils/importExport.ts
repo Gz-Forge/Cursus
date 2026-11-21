@@ -159,6 +159,32 @@ export function sanitizarHistorialOportunidades(h: unknown): UsoOportunidad[] {
     .map(x => ({ fecha: x.fecha as string, origen: x.origen as 'periodo' | 'manual' }));
 }
 
+/**
+ * Deja válidos los campos de 2.1.0 de una materia (plazo para examen y asistencia por porcentaje).
+ * Lo inválido se descarta campo por campo. Devuelve una copia.
+ */
+export function sanitizarCamposMateriaV21<T extends Partial<Materia>>(m: T): T {
+  const out: any = { ...m };
+  const fechaValida = (f: unknown): f is string => {
+    if (typeof f !== 'string' || !ISO_FECHA_RE.test(f)) return false;
+    const [a, me, d] = f.split('-').map(Number);
+    const dt = new Date(a, me - 1, d);
+    return dt.getFullYear() === a && dt.getMonth() === me - 1 && dt.getDate() === d;
+  };
+  if (!fechaValida(out.fechaInicioPlazo)) delete out.fechaInicioPlazo;
+  for (const t of ['Teorica', 'Practica'] as const) {
+    const kModo = `modoFaltas${t}`;
+    const kPct = `asistenciaMin${t}`;
+    const kMax = `faltasMax${t}`;
+    if (out[kModo] !== 'numero' && out[kModo] !== 'porcentaje') delete out[kModo];
+    const pct = out[kPct];
+    if (typeof pct !== 'number' || !isFinite(pct) || pct < 0 || pct > 100) delete out[kPct];
+    const max = out[kMax];
+    if (max !== undefined && (typeof max !== 'number' || !isFinite(max) || max < 0)) delete out[kMax];
+  }
+  return out as T;
+}
+
 export function normalizarEvaluacionesImportadas(evaluaciones: Evaluacion[]): Evaluacion[] {
   const norm = <T extends { tipoNota?: string; notaMaxima: number }>(x: T): T => {
     const tipoNota = x.tipoNota === 'porcentaje' ? 'porcentaje' : 'numero';
@@ -461,7 +487,11 @@ CARRERA Y MÉTRICAS (1.9.0):
 - creditosModalAgruparTipo (true/false): agrupar por tipo de formación el detalle de créditos obtenidos.
 - tarjetaDiseno ("clasica" o "dos_lineas"): diseño de la tarjeta de materia.
 - metricasCreditosContar ("exonerados", "exonerados_aprobados" o "ambos"): qué créditos cuenta Métricas como obtenidos.
-- cuelloBotellaSemestresAdelante (entero ≥ 1): cuántos semestres incompletos hacia adelante se miran en los cuellos de botella.
+- cuelloBotellaSemestresAdelante (entero ≥ 1): cuántos semestres siguientes (después del actual) se miran en los cuellos de botella.
+- cuelloBotellaMostrarCursando (true/false): con "solo siguiente", mostrar siempre las materias cursando que traban a otras.
+- plazoExamenAnios (entero ≥ 0): años que se tiene para dar el examen desde que la materia quedó reprobada/aprobada (0 = sin plazo).
+- vistaMesPuntos ("todas" o "evaluaciones"): en la vista Mes de Horarios, puntos de todas las materias del día o solo de las que tienen evaluación.
+- plazoExamenAplica ("reprobadas", "aprobadas" o "ambas"): a qué estados aplica el plazo.
 
 HORARIO, IDIOMA Y NOVEDADES (1.9.5):
 - horarioCuentaRegresiva (true/false): mostrar en el horario cuánto falta para cada evaluación (hoy, mañana, en N días).
@@ -924,6 +954,10 @@ export function aplicarConfigJson(
   oneOf('tarjetaDiseno', ['clasica', 'dos_lineas']);
   oneOf('metricasCreditosContar', ['exonerados', 'exonerados_aprobados', 'ambos']);
   entero('cuelloBotellaSemestresAdelante', 1, 999);
+  bool('cuelloBotellaMostrarCursando');
+  oneOf('vistaMesPuntos', ['todas', 'evaluaciones']);
+  entero('plazoExamenAnios', 0, 99);
+  oneOf('plazoExamenAplica', ['reprobadas', 'aprobadas', 'ambas']);
 
   if (aplicados.length > 0) {
     actualizarConfig(update);
@@ -995,6 +1029,10 @@ export function configAJson(config: import('../types').Config): Record<string, u
     tarjetaDiseno: config.tarjetaDiseno ?? 'clasica',
     metricasCreditosContar: config.metricasCreditosContar ?? 'exonerados_aprobados',
     cuelloBotellaSemestresAdelante: config.cuelloBotellaSemestresAdelante ?? 1,
+    cuelloBotellaMostrarCursando: config.cuelloBotellaMostrarCursando ?? true,
+    vistaMesPuntos: config.vistaMesPuntos ?? 'todas',
+    plazoExamenAnios: config.plazoExamenAnios ?? 0,
+    plazoExamenAplica: config.plazoExamenAplica ?? 'ambas',
   };
 }
 

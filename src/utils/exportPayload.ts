@@ -73,6 +73,10 @@ export function limpiarMateriaParaExportar(
     delete out.faltas;
     delete out.faltasMaxTeorica;
     delete out.faltasMaxPractica;
+    delete out.modoFaltasTeorica;
+    delete out.modoFaltasPractica;
+    delete out.asistenciaMinTeorica;
+    delete out.asistenciaMinPractica;
   }
 
   if (opts.inclEvaluaciones && opts.inclNotas) {

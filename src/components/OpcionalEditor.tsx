@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { topeEnPorcentaje } from '../utils/calculos';
 import { CampoNumerico } from './CampoNumerico';
+import { formatearDecimal, parsearDecimal, textoEditableDecimal } from '../utils/decimal';
 
 interface Props {
   opcional?: boolean;
@@ -15,7 +16,7 @@ interface Props {
 
 type EstadoTope = 'reprobado' | 'aprobado' | 'exonerado';
 
-const fmtPct = (n: number) => `${String(Math.round(n * 10) / 10).replace('.', ',')}%`;
+const fmtPct = (n: number) => `${formatearDecimal(n, 1)}%`;
 
 /**
  * Evaluación opcional (2.0.0): interruptor y tope hasta donde puede subir la nota.
@@ -51,14 +52,15 @@ export function OpcionalEditor({ opcional, topeOpcional, onCambiar }: Props) {
   };
   const elegirPorcentaje = () => {
     const valor = Math.round(topeEnPorcentaje(topeOpcional ?? { tipo: 'estado', estado: estadoDefault }, config) * 10) / 10;
-    setTextoPct(String(valor));
+    setTextoPct(formatearDecimal(valor, 1));
     onCambiar({ opcional: true, topeOpcional: { tipo: 'porcentaje', valor } });
   };
   const cambiarPorcentaje = (texto: string) => {
-    const limpio = texto.replace(',', '.').replace(/[^0-9.]/g, '');
+    // Acepta "," y "." (los −/+ de CampoNumerico mandan el número con punto)
+    const limpio = textoEditableDecimal(texto, 2);
     setTextoPct(limpio);
-    const n = parseFloat(limpio);
-    if (!isNaN(n)) onCambiar({ opcional: true, topeOpcional: { tipo: 'porcentaje', valor: Math.min(100, Math.max(0, n)) } });
+    const n = parsearDecimal(limpio);
+    if (n !== null) onCambiar({ opcional: true, topeOpcional: { tipo: 'porcentaje', valor: Math.min(100, Math.max(0, n)) } });
   };
 
   const chip = (seleccionado: boolean, etiqueta: string, ayuda: string | null, onPress: () => void, key: string) => (
@@ -113,7 +115,7 @@ export function OpcionalEditor({ opcional, topeOpcional, onCambiar }: Props) {
             <View style={{ marginTop: 6 }}>
               <CampoNumerico
                 label="Tope en % de la nota final (0 a 100)"
-                texto={textoPct ?? String(valorPct)}
+                texto={textoPct ?? formatearDecimal(valorPct, 2)}
                 onTexto={cambiarPorcentaje}
                 min={0}
                 max={100}

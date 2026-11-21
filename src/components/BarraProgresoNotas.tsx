@@ -5,6 +5,8 @@ import { useStore } from '../store/useStore';
 import { useTema } from '../theme/ThemeContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
 import { hexOpacity } from '../utils/useFondoPantalla';
+import { formatearDecimal } from '../utils/decimal';
+import { decimalesDeNotas } from '../utils/numerosNotas';
 import { calcularTramosBarra, puntosObtenidos, aporteOpcionales } from '../utils/calculos';
 
 // Rayas diagonales claras para el tramo que suman las opcionales (web)
@@ -16,7 +18,8 @@ interface Props {
   oportunidadesExamen: number;
 }
 
-const fmtPuntos = (n: number) => `${Math.round(n * 10) / 10} %`;
+/** 2.1.0: decimales según las notas cargadas (0, 1 o 2), con coma. */
+const fmtPuntos = (n: number, dec: number) => `${formatearDecimal(n, dec, dec)} %`;
 
 export function BarraProgresoNotas({ evaluaciones, esNotaExamen, oportunidadesExamen }: Props) {
   const tema = useTema();
@@ -44,7 +47,7 @@ export function BarraProgresoNotas({ evaluaciones, esNotaExamen, oportunidadesEx
             backgroundColor: tema.tarjeta, borderColor: tema.borde, borderWidth: 1,
             borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1,
           }}>
-            <Text style={{ color: tema.texto, fontSize: 11, fontWeight: '600' }}>{fmtPuntos(puntos)}</Text>
+            <Text style={{ color: tema.texto, fontSize: 11, fontWeight: '600' }}>{fmtPuntos(puntos, decimalesDeNotas(evaluaciones))}</Text>
           </View>
         </View>
       </View>

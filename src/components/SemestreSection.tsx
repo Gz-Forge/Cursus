@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { Materia, Config } from '../types';
 import { useTema } from '../theme/ThemeContext';
 import { MateriaCard } from './MateriaCard';
@@ -68,7 +68,7 @@ interface Props {
   onToggle?: () => void;
   webGrid?: boolean;
   onToggleCursando?: (m: Materia, v: boolean) => void;
-  /** Punto 48: tarjeta "＋ Agregar materia" al final del semestre. */
+  /** Agregar materia a este semestre: toque largo de 3 s en el encabezado (clic derecho en web). */
   onAgregar?: (semestre: number) => void;
 }
 
@@ -78,24 +78,32 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
   const toggleExpandido = onToggle ?? (() => setExpandidoLocal(v => !v));
   const tema = useTema();
 
-  const tarjetaAgregar = onAgregar ? (
-    <TouchableOpacity
-      onPress={() => onAgregar(semestre)}
-      accessibilityRole="button"
-      accessibilityLabel={`Agregar materia al ${semestre}° semestre`}
-      style={{
-        borderRadius: 10, padding: 12, marginVertical: 4, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1.5, borderStyle: 'dashed', borderColor: colorAcento, minHeight: 48,
-      }}
-    >
-      <Text style={{ color: colorAcento, fontWeight: '700', fontSize: 14 }}>＋ Agregar materia</Text>
-    </TouchableOpacity>
-  ) : null;
+  // Agregar materia: toque largo (3 s) en celular, clic derecho en web y escritorio.
+  const esWeb = Platform.OS === 'web';
+  const encabezadoRef = useRef<View>(null);
+  const onAgregarRef = useRef(onAgregar);
+  onAgregarRef.current = onAgregar;
+  const agregable = !!onAgregar;
+  useEffect(() => {
+    if (!esWeb || !agregable) return;
+    const nodo = encabezadoRef.current as unknown as HTMLElement | null;
+    if (!nodo || typeof nodo.addEventListener !== 'function') return;
+    const alClicDerecho = (e: Event) => {
+      e.preventDefault();
+      onAgregarRef.current?.(semestre);
+    };
+    nodo.addEventListener('contextmenu', alClicDerecho);
+    return () => nodo.removeEventListener('contextmenu', alClicDerecho);
+  }, [esWeb, agregable, semestre]);
 
   return (
     <View style={{ marginBottom: 8 }}>
+      <View ref={encabezadoRef}>
       <TouchableOpacity
         onPress={toggleExpandido}
+        onLongPress={onAgregar && !esWeb ? () => onAgregar(semestre) : undefined}
+        delayLongPress={3000}
+        accessibilityHint={onAgregar ? 'Mantené presionado para agregar una materia a este semestre' : undefined}
         style={{
           flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
           paddingVertical: 10, paddingHorizontal: 4,
@@ -107,6 +115,7 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
         </Text>
         <ResumenEncabezado materias={materias} totalMaterias={totalMaterias} config={config} colorAcento={colorAcento} />
       </TouchableOpacity>
+      </View>
       {expandido && (
         webGrid ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -122,7 +131,6 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
                 />
               </View>
             ))}
-            {tarjetaAgregar && <View style={{ width: '50%', paddingHorizontal: 4 }}>{tarjetaAgregar}</View>}
           </View>
         ) : (
           <>
@@ -137,7 +145,6 @@ export function SemestreSection({ semestre, materias, totalMaterias, todasLasMat
               onToggleCursando={onToggleCursando ? (v) => onToggleCursando(m, v) : undefined}
             />
           ))}
-          {tarjetaAgregar}
           </>
         )
       )}

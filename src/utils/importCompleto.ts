@@ -1,5 +1,5 @@
 import { Config, Materia } from '../types';
-import { jsonAMaterias, normalizarTipo, normalizarEvaluacionesImportadas, sanitizarHistorialOportunidades } from './importExport';
+import { jsonAMaterias, normalizarTipo, normalizarEvaluacionesImportadas, sanitizarHistorialOportunidades, sanitizarCamposMateriaV21 } from './importExport';
 import type { MateriaJson } from './importExport';
 import { sanitizarConfigImportada, asegurarTemaCoherente } from './configImport';
 
@@ -58,7 +58,7 @@ export function reconstruirMaterias(perfil: unknown, oportunidades: number): Mat
 
   if ('cursando' in primera && 'id' in primera && 'evaluaciones' in primera) {
     // Formato actual: Materia[] completa
-    return (lista as Materia[]).map(m => ({
+    return (lista as Materia[]).map(m => sanitizarCamposMateriaV21({
       ...m,
       previasNecesarias: Array.isArray(m.previasNecesarias) ? m.previasNecesarias : [],
       esPreviaDe: Array.isArray(m.esPreviaDe) ? m.esPreviaDe : [],
@@ -76,7 +76,7 @@ export function reconstruirMaterias(perfil: unknown, oportunidades: number): Mat
   for (const bloque of Array.isArray(perfil.horarios) ? perfil.horarios : []) {
     const m = bloque?.materia;
     if (!m?.nombre || mapaDesdeHorarios.has(m.nombre)) continue;
-    mapaDesdeHorarios.set(m.nombre, { ...m, bloques: limpiarBloques(m.bloques) });
+    mapaDesdeHorarios.set(m.nombre, sanitizarCamposMateriaV21({ ...m, bloques: limpiarBloques(m.bloques) }));
   }
   const todas = jsonAMaterias(lista as MateriaJson[], oportunidades);
   const notasRecord = perfil.notas as Record<string, number | null> | undefined;

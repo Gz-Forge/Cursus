@@ -1,15 +1,35 @@
 import React, { useMemo, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { Config, Materia } from '../types';
+import Svg, { Path } from 'react-native-svg';
+import { Config, Materia, TipoBloque } from '../types';
 import { encabezadoDias, grillaMes, hoyIso, PrimerDia } from '../utils/calendario';
 import {
-  colorDeMateria, diasEnPeriodosExamen, evaluacionesPorDia, periodoQueContiene, textoPeriodo,
+  agendaDelDia, clasesPorDia, colorDeEvaluacion, colorDeMateria, coloresPorDia, diasEnPeriodosExamen,
+  evaluacionesPorDia, MAX_PUNTOS_MES, ModoPuntosMes, periodoQueContiene, textoPeriodo,
 } from '../utils/vistaMes';
 import { hexOpacity } from '../utils/useFondoPantalla';
 
-const MAX_PUNTOS = 3;
+const DIAM_PUNTO = 8;
+const DIAM_TORTA = 14;
 const ALTO_CELDA = 54;
 const ANCHO_MAX = 720;
+
+/** Círculo dividido en porciones iguales, una por color. */
+function TortaColores({ colores, diametro }: { colores: string[]; diametro: number }) {
+  const r = diametro / 2;
+  const n = colores.length;
+  const punto = (i: number) => {
+    const ang = (i / n) * 2 * Math.PI - Math.PI / 2;
+    return `${(r + r * Math.cos(ang)).toFixed(3)} ${(r + r * Math.sin(ang)).toFixed(3)}`;
+  };
+  return (
+    <Svg width={diametro} height={diametro} viewBox={`0 0 ${diametro} ${diametro}`}>
+      {colores.map((c, i) => (
+        <Path key={i} d={`M ${r} ${r} L ${punto(i)} A ${r} ${r} 0 0 1 ${punto(i + 1)} Z`} fill={c} />
+      ))}
+    </Svg>
+  );
+}
 
 function fmtHora(mins: number): string {
   return `${Math.floor(mins / 60).toString().padStart(2, '0')}:${(mins % 60).toString().padStart(2, '0')}`;
@@ -28,11 +48,16 @@ interface Props {
   mostrarPeriodos: boolean;
   onTogglePeriodos: () => void;
   onAbrirMateria: (materiaId: string) => void;
+  /** Materias cuyas clases se muestran (las que se ven en la vista Semana). Default: todas. */
+  materiasClases?: Materia[];
+  /** Modo de los puntos: 'todas' (clases y evaluaciones) o 'evaluaciones'. */
+  modoPuntos: ModoPuntosMes;
+  onCambiarModoPuntos: (modo: ModoPuntosMes) => void;
 }
 
 export function VistaMesHorario({
   materias, config, tema, mesIso, diaSel, onSeleccionarDia, onDobleToqueDia,
-  mostrarPeriodos, onTogglePeriodos, onAbrirMateria,
+  mostrarPeriodos, onTogglePeriodos, onAbrirMateria, materiasClases, modoPuntos, onCambiarModoPuntos,
 }: Props) {
   const primerDia = (config.horarioPrimerDia ?? 'lunes') as PrimerDia;
   const hoy = hoyIso();
@@ -43,6 +68,28 @@ export function VistaMesHorario({
   const semanas = useMemo(() => grillaMes(mesIso, primerDia), [mesIso, primerDia]);
   const porDia = useMemo(() => evaluacionesPorDia(materias), [materias]);
   const materiaPorId = useMemo(() => new Map(materias.map(m => [m.id, m])), [materias]);
+  const tiposOcultos = (config.horarioFiltroOcultos ?? []) as TipoBloque[];
+  const clavesOcultos = tiposOcultos.join(',');
+  const clasesBase = materiasClases ?? materias;
+  const clasesDia = useMemo(
+    () => (modoPuntos === 'todas' ? clasesPorDia(clasesBase, tiposOcultos) : new Map()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clasesBase, clavesOcultos, modoPuntos],
+  );
+  const coloresDia = useMemo(
+    () => coloresPorDia(materias, config, { tiposOcultos, modo: modoPuntos, materiasClases: clasesBase }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [materias, clasesBase, config.coloresHorario, config.coloresEvaluacionesSimples, config.coloresGruposEvaluacion,
+      config.coloresEvaluacionesGrupales, clavesOcultos, modoPuntos],
+  );
+  const labelTipo = (t: TipoBloque): string => {
+    switch (t) {
+      case 'teorica': return config.labelTeorica || 'Teórica';
+      case 'practica': return config.labelPractica || 'Práctica';
+      case 'parcial': return config.labelParcial || 'Parcial';
+      default: return config.labelOtro || 'Otro';
+    }
+  };
 
   // Días en período de examen: el año del mes y, si la grilla muestra días de otro año, también ese
   const diasPeriodo = useMemo(() => {
@@ -86,7 +133,7 @@ export function VistaMesHorario({
     onSeleccionarDia(iso);
   };
 
-  const delDia = porDia.get(diaSel) ?? [];
+  const agenda = agendaDelDia(porDia.get(diaSel) ?? [], clasesDia.get(diaSel) ?? []);
   const [yy, mm, dd] = diaSel.split('-');
 
   return (
@@ -108,7 +155,9 @@ export function VistaMesHorario({
               const delMes = iso.startsWith(mesPrefijo);
               const esHoy = iso === hoy;
               const esSel = iso === diaSel;
-              const evs = porDia.get(iso) ?? [];
+              const colores = coloresDia.get(iso) ?? [];
+              const cantEv = (porDia.get(iso) ?? []).length;
+              const cantCl = (clasesDia.get(iso) ?? []).length;
               const enPeriodo = diasPeriodo.has(iso);
               const fondo = esSel
                 ? acento + hexOpacity(28)
@@ -119,7 +168,7 @@ export function VistaMesHorario({
                   activeOpacity={0.7}
                   onPress={() => tocarDia(iso)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${parseInt(iso.slice(8, 10), 10)}/${iso.slice(5, 7)}, ${evs.length} evaluaciones. Doble toque para ver la semana.`}
+                  accessibilityLabel={`${parseInt(iso.slice(8, 10), 10)}/${iso.slice(5, 7)}, ${cantEv} evaluaciones${modoPuntos === 'todas' ? `, ${cantCl} clases` : ''}. Doble toque para ver la semana.`}
                   style={{
                     flex: 1, height: ALTO_CELDA, margin: 1, borderRadius: 8, borderWidth: 1.5,
                     borderColor: esHoy ? acento : 'transparent', backgroundColor: fondo,
@@ -132,18 +181,13 @@ export function VistaMesHorario({
                   }}>
                     {parseInt(iso.slice(8, 10), 10)}
                   </Text>
-                  {evs.length > 0 && (
+                  {colores.length > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 2 }}>
-                      {evs.slice(0, MAX_PUNTOS).map((e, k) => {
-                        const mat = materiaPorId.get(e.materiaId);
-                        const c = mat ? colorDeMateria(mat, config, 'parcial').fondo : tema.acento;
-                        return <View key={k} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: c }} />;
-                      })}
-                      {evs.length > MAX_PUNTOS && (
-                        <Text style={{ color: tema.textoSecundario, fontSize: 9, fontWeight: '700' }}>
-                          +{evs.length - MAX_PUNTOS}
-                        </Text>
-                      )}
+                      {colores.length > MAX_PUNTOS_MES
+                        ? <TortaColores colores={colores} diametro={DIAM_TORTA} />
+                        : colores.map((c, k) => (
+                          <View key={k} style={{ width: DIAM_PUNTO, height: DIAM_PUNTO, borderRadius: DIAM_PUNTO / 2, backgroundColor: c }} />
+                        ))}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -168,6 +212,30 @@ export function VistaMesHorario({
           </View>
           <Text style={{ color: tema.texto, fontSize: 12 }}>Mostrar períodos de examen</Text>
         </TouchableOpacity>
+
+        {/* Qué puntos se dibujan */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 10, paddingHorizontal: 4 }}>
+          <Text style={{ color: tema.texto, fontSize: 12 }}>Puntos:</Text>
+          <View style={{ flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: tema.acentoLineas ?? tema.acento, overflow: 'hidden' }}>
+            {([['todas', 'Todas las materias'], ['evaluaciones', 'Solo evaluaciones']] as const).map(([v, etiqueta]) => {
+              const activo = modoPuntos === v;
+              return (
+                <TouchableOpacity
+                  key={v}
+                  onPress={() => onCambiarModoPuntos(v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activo }}
+                  style={{ paddingHorizontal: 10, paddingVertical: 5, backgroundColor: activo ? acento : 'transparent' }}
+                >
+                  <Text style={{ color: activo ? '#fff' : tema.textoSecundario, fontSize: 12, fontWeight: activo ? '700' : '500' }}>
+                    {etiqueta}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {textosPeriodos.map(t => (
           <Text key={t} style={{ color: tema.textoSecundario, fontSize: 12, marginTop: 4, paddingHorizontal: 4 }}>
             Período de examen: {t}
@@ -179,19 +247,41 @@ export function VistaMesHorario({
           <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14, marginBottom: 6 }}>
             {`${dd}/${mm}/${yy}`}
           </Text>
-          {delDia.length === 0 ? (
-            <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>No hay evaluaciones este día.</Text>
-          ) : delDia.map(e => {
-            const mat = materiaPorId.get(e.materiaId);
-            const c = mat ? colorDeMateria(mat, config, 'parcial').fondo : tema.acento;
-            const partes = [e.nombre, e.materiaNombre];
-            if (e.hora !== undefined) partes.push(fmtHora(e.hora));
+          {agenda.length === 0 ? (
+            <Text style={{ color: tema.textoSecundario, fontSize: 13 }}>
+              {modoPuntos === 'todas' ? 'No hay clases ni evaluaciones este día.' : 'No hay evaluaciones este día.'}
+            </Text>
+          ) : agenda.map(it => {
+            const esEval = it.kind === 'evaluacion';
+            let materiaId: string;
+            let materiaNombre: string;
+            let c: string;
+            let partes: string[];
+            let clave: string;
+            if (it.kind === 'evaluacion') {
+              const e = it.evaluacion;
+              materiaId = e.materiaId;
+              materiaNombre = e.materiaNombre;
+              c = colorDeEvaluacion(e, config);
+              partes = [e.nombre, e.materiaNombre];
+              if (e.hora !== undefined) partes.push(fmtHora(e.hora));
+              clave = `e-${e.materiaId}-${e.evaluacionId}`;
+            } else {
+              const cl = it.clase;
+              const mat = materiaPorId.get(cl.materiaId) ?? clasesBase.find(m => m.id === cl.materiaId);
+              materiaId = cl.materiaId;
+              materiaNombre = cl.materiaNombre;
+              c = mat ? colorDeMateria(mat, config, cl.tipo).fondo : tema.acento;
+              partes = [labelTipo(cl.tipo), cl.materiaNombre, `${fmtHora(cl.horaInicio)}–${fmtHora(cl.horaFin)}`];
+              if (cl.salon) partes.push(cl.salon);
+              clave = `c-${cl.bloqueId}`;
+            }
             return (
               <TouchableOpacity
-                key={`${e.materiaId}-${e.evaluacionId}`}
-                onPress={() => onAbrirMateria(e.materiaId)}
+                key={clave}
+                onPress={() => onAbrirMateria(materiaId)}
                 accessibilityRole="button"
-                accessibilityLabel={`Editar materia ${e.materiaNombre}`}
+                accessibilityLabel={`${esEval ? 'Evaluación' : 'Clase'}: editar materia ${materiaNombre}`}
                 style={{
                   flexDirection: 'row', alignItems: 'stretch', gap: 10, marginBottom: 6,
                   backgroundColor: tema.tarjeta, borderRadius: 8, overflow: 'hidden',

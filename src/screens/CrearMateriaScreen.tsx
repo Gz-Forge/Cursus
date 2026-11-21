@@ -25,7 +25,7 @@ import * as Clipboard from 'expo-clipboard';
 import { esFormatoMultiMateriaEval, normalizarEvaluacionesImportadas } from '../utils/importExport';
 import { useAlert } from '../contexts/AlertContext';
 import { useEstadoEstilo } from '../hooks/useEstadoEstilo';
-import { EstadoCursandoCard } from '../components/EstadoCursandoCard';
+import { EstadoCursandoFila } from '../components/EstadoCursandoFila';
 import { SelectorTipoFormacion } from '../components/SelectorTipoFormacion';
 import { nivelContador, gruposQueExceden, faltantesGrupos } from '../utils/formulario';
 import { CampoNumerico } from '../components/CampoNumerico';
@@ -33,7 +33,9 @@ import { ultimoMaximo } from '../utils/numerosNotas';
 import { SelectorFecha } from '../components/SelectorFecha';
 import { SelectorHorario } from '../components/SelectorHorario';
 import { esIsoValida, hoyIso } from '../utils/calendario';
-import { OportunidadesInfo } from '../components/OportunidadesInfo';
+import { OportunidadesInfo, quitarUsoEn } from '../components/OportunidadesInfo';
+import { formatearDecimal, parsearDecimal, textoEditableDecimal } from '../utils/decimal';
+import { faltasMaxEfectivas } from '../utils/asistencia';
 import { registrarUso, quitarUltimoUso } from '../utils/oportunidades';
 import { horariosSugeridos, horariosOcupados } from '../utils/horarioSelector';
 import { SelectorDesplegable } from '../components/SelectorDesplegable';
@@ -190,34 +192,33 @@ export function CrearMateriaScreen() {
   const [notaManualStr, setNotaManualStr] = useState<string>('');
 
   const handleNotaManualChange = (v: string) => {
-    const cleaned = v.replace(/[^0-9.]/g, '');
-    const parts = cleaned.split('.');
-    const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned;
+    // 2.1.0: coma decimal ("," y "." se aceptan)
+    const normalized = textoEditableDecimal(v, 2);
     setNotaManualStr(normalized);
-    const num = parseFloat(normalized);
-    if (!isNaN(num)) {
+    const num = parsearDecimal(normalized);
+    if (num !== null) {
       const maxVal = form.tipoNotaManual === 'numero' ? config.notaMaxima : 100;
       const clamped = Math.max(0, Math.min(maxVal, num));
       const pct = form.tipoNotaManual === 'numero' ? (clamped / config.notaMaxima) * 100 : clamped;
-      if (num > maxVal) setNotaManualStr(String(maxVal));
+      if (num > maxVal) setNotaManualStr(formatearDecimal(maxVal, 2));
       setForm(f => ({ ...f, notaManual: Math.max(0, Math.min(100, pct)) }));
-    } else if (normalized === '' || normalized === '.') {
+    } else if (normalized === '' || normalized === ',') {
       setForm(f => ({ ...f, notaManual: null }));
     }
   };
 
   const handleCambiarTipoNota = (nuevoTipo: TipoNota) => {
-    const valorActual = parseFloat(notaManualStr);
+    const valorActual = parsearDecimal(notaManualStr) ?? NaN;
     let nuevaStr = notaManualStr;
     if (!isNaN(valorActual)) {
       if (nuevoTipo === 'numero' && form.tipoNotaManual === 'porcentaje') {
-        nuevaStr = parseFloat(((valorActual / 100) * config.notaMaxima).toFixed(4)).toString();
+        nuevaStr = formatearDecimal((valorActual / 100) * config.notaMaxima, 2);
       } else if (nuevoTipo === 'porcentaje' && form.tipoNotaManual === 'numero') {
-        nuevaStr = parseFloat(((valorActual / config.notaMaxima) * 100).toFixed(4)).toString();
+        nuevaStr = formatearDecimal((valorActual / config.notaMaxima) * 100, 2);
       }
     }
     setNotaManualStr(nuevaStr);
-    const numNuevo = parseFloat(nuevaStr);
+    const numNuevo = parsearDecimal(nuevaStr) ?? NaN;
     const pct = nuevoTipo === 'numero' ? (numNuevo / config.notaMaxima) * 100 : numNuevo;
     setForm(f => ({
       ...f,
@@ -647,7 +648,7 @@ export function CrearMateriaScreen() {
         <View style={Platform.OS === 'web' ? { maxWidth: 620, alignSelf: 'center', width: '100%' } : {}}>
 
         {/* ── Estado actual + Cursando (punto 61) ── */}
-        <EstadoCursandoCard
+        <EstadoCursandoFila
           estado={estado}
           cursando={form.cursando ?? false}
           onToggleCursando={handleToggleCursando}
@@ -690,21 +691,26 @@ export function CrearMateriaScreen() {
             onPaso={delta => setForm(f => (delta < 0 ? registrarUso(f, hoyIso(), 'manual') : quitarUltimoUso(f)))}
           />
         </View>
-        <OportunidadesInfo materia={form} />
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+        <OportunidadesInfo
+          materia={form}
+          onQuitarUso={i => setForm(f => quitarUsoEn(f, i))}
+          onCambiarFechaInicioPlazo={iso => setForm(f => ({ ...f, fechaInicioPlazo: iso }))}
+        />
+        {/* alignItems flex-end: si una etiqueta ocupa 2 líneas, los dos campos quedan a la misma altura */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 }}>
           <CampoNumerico
             label="Créditos que da"
-            texto={String(form.creditosQueDA)}
+            texto={formatearDecimal(form.creditosQueDA)}
             min={0}
             decimal
-            onTexto={v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }}
+            onTexto={v => { const n = parsearDecimal(v); if (n !== null) setForm(f => ({ ...f, creditosQueDA: Math.max(0, n) })); }}
           />
           <CampoNumerico
             label="Créditos necesarios para cursarla"
-            texto={String(form.creditosNecesarios)}
+            texto={formatearDecimal(form.creditosNecesarios)}
             min={0}
             decimal
-            onTexto={v => { const n = parseFloat(v); if (!isNaN(n)) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }}
+            onTexto={v => { const n = parsearDecimal(v); if (n !== null) setForm(f => ({ ...f, creditosNecesarios: Math.max(0, n) })); }}
           />
         </View>
 
@@ -853,7 +859,7 @@ export function CrearMateriaScreen() {
           <View style={{ backgroundColor: tema.tarjeta, borderRadius: 10, padding: 14, marginBottom: 16 }}>
             <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15 }}>Nota calculada</Text>
             <Text style={{ color: tema.acento, fontSize: 20, fontWeight: '700', marginTop: 4 }}>
-              {notaPct.toFixed(1)}% → {((notaPct / 100) * config.notaMaxima).toFixed(1)}/{config.notaMaxima}
+              {formatearDecimal(notaPct, 1)}% → {formatearDecimal((notaPct / 100) * config.notaMaxima, 1)}/{formatearDecimal(config.notaMaxima, 2)}
             </Text>
             <Text style={{ color: tema.textoSecundario, marginTop: 4 }}>Estado: {estado}</Text>
           </View>
@@ -1432,16 +1438,21 @@ export function CrearMateriaScreen() {
         {/* Punto 7: una tarjeta por tipo, con el máximo de faltas adentro */}
         {(
           [
-            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, key: 'faltasMaxTeorica' as const },
-            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, key: 'faltasMaxPractica' as const },
+            { label: config.labelTeorica || 'Teórica', tipo: 'teorica' as const, key: 'faltasMaxTeorica' as const, keyModo: 'modoFaltasTeorica' as const, keyMin: 'asistenciaMinTeorica' as const },
+            { label: config.labelPractica || 'Práctica', tipo: 'practica' as const, key: 'faltasMaxPractica' as const, keyModo: 'modoFaltasPractica' as const, keyMin: 'asistenciaMinPractica' as const },
           ] as const
-        ).map(({ label, tipo, key }) => (
+        ).map(({ label, tipo, key, keyModo, keyMin }) => (
           <MedidorAsistencia
             key={tipo}
             label={label}
             faltas={(form.faltas ?? []).filter(f => f.tipo === tipo && !f.justificada).length}
-            max={form[key]}
+            max={faltasMaxEfectivas(form, tipo)}
             onCambiarMax={max => setForm(f => ({ ...f, [key]: max }))}
+            modo={form[keyModo] ?? 'numero'}
+            onCambiarModo={modo => setForm(f => ({ ...f, [keyModo]: modo }))}
+            asistenciaMin={form[keyMin]}
+            onCambiarAsistenciaMin={pct => setForm(f => ({ ...f, [keyMin]: pct }))}
+            totalClases={(form.bloques ?? []).filter(b => b.tipo === tipo).length}
           />
         ))}
 

@@ -37,14 +37,14 @@ describe('buscador de previas (6)', () => {
 
 describe('medidor de asistencia (7)', () => {
   it('colores según lo que queda', () => {
-    expect(estadoAsistencia(0, 4)).toEqual({ restantes: 4, porcentaje: 0, color: 'verde' });
+    expect(estadoAsistencia(0, 4)).toEqual({ restantes: 4, porcentaje: 0, color: 'verde', sinFaltasRestantes: false });
     expect(estadoAsistencia(1, 4).color).toBe('verde');
     expect(estadoAsistencia(2, 4).color).toBe('naranja');   // queda la mitad
     expect(estadoAsistencia(3, 4).color).toBe('rojo');      // queda 1
-    expect(estadoAsistencia(6, 4)).toEqual({ restantes: -2, porcentaje: 1, color: 'rojo' });
+    expect(estadoAsistencia(6, 4)).toEqual({ restantes: -2, porcentaje: 1, color: 'rojo', sinFaltasRestantes: true });
   });
   it('sin límite', () => {
-    expect(estadoAsistencia(3, undefined)).toEqual({ restantes: null, porcentaje: 0, color: 'gris' });
+    expect(estadoAsistencia(3, undefined)).toEqual({ restantes: null, porcentaje: 0, color: 'gris', sinFaltasRestantes: false });
   });
 });
 

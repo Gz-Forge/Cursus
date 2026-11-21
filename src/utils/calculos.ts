@@ -1,4 +1,5 @@
 import { Config, EstadoMateria, Evaluacion, GrupoEvaluacion, Materia, SubEvaluacion, TipoNota, TopeOpcional } from '../types';
+import { plazoAplica, plazoVencido, aniosDePlazo, fechaIsoLocal } from './plazoExamen';
 
 export type UmbralesTope = Pick<Config, 'umbralPorExamen' | 'umbralAprobacion' | 'umbralExoneracion' | 'usarEstadoAprobado'>;
 
@@ -225,7 +226,8 @@ export function obtenerNotaFinal(materia: Materia, config?: UmbralesTope): numbe
   return calcularNotaTotal(materia.evaluaciones, config);
 }
 
-export function calcularEstadoFinal(materia: Materia, config: Config): EstadoMateria {
+/** Estado de la materia sin considerar el plazo para dar examen (solo oportunidades). */
+export function estadoSinPlazo(materia: Materia, config: Config): EstadoMateria {
   if (materia.cursando) return 'cursando';
   const nota = obtenerNotaFinal(materia, config);
   if (nota === null) return 'por_cursar';
@@ -235,6 +237,54 @@ export function calcularEstadoFinal(materia: Materia, config: Config): EstadoMat
     return 'recursar';
   }
   return estado;
+}
+
+/**
+ * Estado final. Si se queda sin oportunidades de examen, o (2.1.0) vence el plazo para dar examen
+ * y aplica a su estado, pasa a 'recursar'. Sin plazo configurado el resultado es el de siempre.
+ * `hoy` es opcional (default: ahora).
+ */
+export function calcularEstadoFinal(materia: Materia, config: Config, hoy?: Date): EstadoMateria {
+  const estado = estadoSinPlazo(materia, config);
+  if (
+    (estado === 'aprobado' || estado === 'reprobado') &&
+    plazoAplica(estado, config) &&
+    plazoVencido(materia, config, hoy)
+  ) {
+    return 'recursar';
+  }
+  return estado;
+}
+
+/**
+ * 2.1.0: completa o borra Materia.fechaInicioPlazo según el estado (sin plazo) de la materia.
+ * - Estado al que aplica el plazo y sin fecha: pone hoy (solo si el plazo está activo).
+ * - Estado al que no aplica (o plazo no aplica a él): borra la fecha.
+ * - Si ya tiene fecha y sigue aplicando, se respeta (puede haberla editado el usuario).
+ * Devuelve la misma referencia si no hay cambios.
+ */
+export function ajustarFechaPlazo(materia: Materia, config: Config, hoy: Date = new Date()): Materia {
+  const estado = estadoSinPlazo(materia, config);
+  if (plazoAplica(estado, config)) {
+    if (materia.fechaInicioPlazo) return materia;
+    return { ...materia, fechaInicioPlazo: fechaIsoLocal(hoy) };
+  }
+  if (materia.fechaInicioPlazo === undefined) return materia;
+  // Con el plazo desactivado no se tocan las fechas de materias que siguen en aprobado/reprobado.
+  if ((estado === 'aprobado' || estado === 'reprobado') && aniosDePlazo(config) === 0) return materia;
+  const { fechaInicioPlazo: _f, ...resto } = materia;
+  return resto as Materia;
+}
+
+/** ajustarFechaPlazo sobre toda la lista; conserva la referencia del array si nada cambió. */
+export function ajustarFechasPlazo(materias: Materia[], config: Config, hoy: Date = new Date()): Materia[] {
+  let cambio = false;
+  const nuevas = materias.map(m => {
+    const n = ajustarFechaPlazo(m, config, hoy);
+    if (n !== m) cambio = true;
+    return n;
+  });
+  return cambio ? nuevas : materias;
 }
 
 export function creditosAcumulados(materias: Materia[], config: Config): number {
@@ -390,23 +440,41 @@ export function agruparPorTipo(materias: Materia[]): GrupoTipo[] {
 }
 
 /**
- * Los primeros N semestres (ascendente) con al menos una materia no terminada
- * (ni aprobada ni exonerada), con N = config.cuelloBotellaSemestresAdelante (default 1).
+ * Semestre actual: el más alto con materias cursando; si no cursa ninguna, el menor semestre con
+ * alguna materia no terminada (ni aprobada ni exonerada). null si todo está terminado.
+ */
+export function semestreActual(materias: Materia[], config: Config): number | null {
+  let actual: number | null = null;
+  let cursando: number | null = null;
+  for (const m of materias) {
+    const e = calcularEstadoFinal(m, config);
+    if (e === 'cursando' && (cursando === null || m.semestre > cursando)) cursando = m.semestre;
+    if (e !== 'aprobado' && e !== 'exonerado' && (actual === null || m.semestre < actual)) actual = m.semestre;
+  }
+  // Si está cursando materias, el actual es el semestre más alto que cursa
+  // (una materia vieja pendiente no debe hacer que "el siguiente" quede atrás).
+  return cursando ?? actual;
+}
+
+/**
+ * Los N semestres siguientes al actual (N = config.cuelloBotellaSemestresAdelante, default 1):
+ * semestres existentes (con materias) con número en (actual, actual + N]. El actual no se incluye.
+ * Lista vacía si no hay siguiente.
  */
 export function semestresPorDelante(materias: Materia[], config: Config): number[] {
   const n = Math.max(1, Math.floor(config.cuelloBotellaSemestresAdelante ?? 1));
-  const incompletos = new Set<number>();
-  for (const m of materias) {
-    const e = calcularEstadoFinal(m, config);
-    if (e !== 'aprobado' && e !== 'exonerado') incompletos.add(m.semestre);
-  }
-  return Array.from(incompletos).sort((a, b) => a - b).slice(0, n);
+  const actual = semestreActual(materias, config);
+  if (actual === null) return [];
+  const existentes = new Set<number>();
+  for (const m of materias) existentes.add(m.semestre);
+  return Array.from(existentes).filter(s => s > actual && s <= actual + n).sort((a, b) => a - b);
 }
 
 /** Materias no terminadas que traban a otras (cuellos de botella), de mayor a menor cantidad de dependientes. */
 export function cuellosDeBotella(materias: Materia[], config: Config): Materia[] {
   const umbral = config.cuelloBotellaUmbral ?? 3;
   const soloSiguiente = config.cuelloBotellaSoloSiguiente ?? false;
+  const mostrarCursando = config.cuelloBotellaMostrarCursando ?? true;
   const sems = semestresPorDelante(materias, config);
   const semSet = new Set(sems);
   const numerosAdelante = new Set(
@@ -416,10 +484,10 @@ export function cuellosDeBotella(materias: Materia[], config: Config): Materia[]
     .filter(m => {
       const e = calcularEstadoFinal(m, config);
       if (e === 'aprobado' || e === 'exonerado') return false;
-      // Con soloSiguiente activo, las cursando siempre aparecen
-      if (soloSiguiente && e === 'cursando' && m.esPreviaDe.length > 0) return true;
+      // Con soloSiguiente activo, las cursando con dependientes aparecen siempre (salvo mostrarCursando = false)
+      if (soloSiguiente && mostrarCursando && e === 'cursando' && m.esPreviaDe.length > 0) return true;
       if (m.esPreviaDe.length < umbral) return false;
-      if (soloSiguiente && sems.length > 0) {
+      if (soloSiguiente) {
         return m.esPreviaDe.some(num => numerosAdelante.has(num));
       }
       return true;

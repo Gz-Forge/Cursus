@@ -12,10 +12,10 @@ interface Props {
 }
 
 /**
- * Punto 61: arriba de Crear/Editar materia, el estado actual como chip
- * ("🟠 Reprobada") y el interruptor "Cursando" a la derecha.
+ * 2.1.0: arriba de Crear/Editar materia, el interruptor "Cursando" a la izquierda
+ * y el estado actual (chip con ícono) a la derecha. Reemplaza a EstadoCursandoCard (orden inverso).
  */
-export function EstadoCursandoCard({ estado, cursando, onToggleCursando }: Props) {
+export function EstadoCursandoFila({ estado, cursando, onToggleCursando }: Props) {
   const tema = useTema();
   const { getColor, getIcono, getLabel, getLabelSingular } = useEstadoEstilo();
   const color = getColor(estado);
@@ -24,6 +24,15 @@ export function EstadoCursandoCard({ estado, cursando, onToggleCursando }: Props
       backgroundColor: tema.tarjeta, borderRadius: 8, padding: 12, marginBottom: 16,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
     }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Switch
+          value={cursando}
+          onValueChange={onToggleCursando}
+          trackColor={{ true: getColor('cursando') }}
+          accessibilityLabel={getLabel('cursando')}
+        />
+        <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{getLabel('cursando')}</Text>
+      </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
         <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Estado</Text>
         <View
@@ -39,15 +48,6 @@ export function EstadoCursandoCard({ estado, cursando, onToggleCursando }: Props
             {getLabelSingular(estado)}
           </Text>
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Text style={{ color: tema.texto, fontSize: 13, fontWeight: '600' }}>{getLabel('cursando')}</Text>
-        <Switch
-          value={cursando}
-          onValueChange={onToggleCursando}
-          trackColor={{ true: getColor('cursando') }}
-          accessibilityLabel={getLabel('cursando')}
-        />
       </View>
     </View>
   );

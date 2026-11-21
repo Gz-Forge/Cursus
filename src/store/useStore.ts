@@ -10,7 +10,7 @@ import {
   MAX_PERFILES,
   MAX_NOMBRE,
 } from '../utils/perfiles';
-import { renumerarMaterias, calcularEstadoFinal } from '../utils/calculos';
+import { renumerarMaterias, calcularEstadoFinal, ajustarFechaPlazo, ajustarFechasPlazo } from '../utils/calculos';
 import { migrarPeriodosExamen } from '../utils/periodosExamen';
 import { migrarTemas } from '../theme/temasGuardados';
 import { registrarUso } from '../utils/oportunidades';
@@ -69,6 +69,10 @@ export const CONFIG_DEFAULT: Config = {
   cuelloBotellaUmbral: 3,
   cuelloBotellaSoloSiguiente: false,
   cuelloBotellaSemestresAdelante: 1,
+  cuelloBotellaMostrarCursando: true,
+  vistaMesPuntos: 'todas',
+  plazoExamenAnios: 0,
+  plazoExamenAplica: 'ambas',
   semestreExpandidoMap: {},
   mostrarFelicitaciones: true,
   frasesUsadas: [],
@@ -107,13 +111,18 @@ interface Store extends AppState {
  * (antes de mezclarla con los defaults, porque si no `periodosExamen: []` taparía las fechas viejas)
  * y la mezcla con CONFIG_DEFAULT. `migrada` indica que hay que volver a persistir.
  */
-function configDeEstado(estado: AppState): { config: Config; migrada: boolean } {
+function configDeEstado(estado: AppState): { config: Config; migrada: boolean; materias: Materia[] } {
   const cambiosPeriodos = migrarPeriodosExamen((estado.config ?? {}) as Config);
   const cambiosTemas = migrarTemas((estado.config ?? {}) as Config);
   const cambios = cambiosPeriodos || cambiosTemas ? { ...(cambiosPeriodos ?? {}), ...(cambiosTemas ?? {}) } : null;
+  const config: Config = { ...CONFIG_DEFAULT, ...estado.config, ...(cambios ?? {}) };
+  // 2.1.0: migración idempotente del plazo para examen (solo completa fechas que faltan, si el plazo está activo).
+  const materiasOrig = estado.materias ?? [];
+  const materias = ajustarFechasPlazo(materiasOrig, config);
   return {
-    config: { ...CONFIG_DEFAULT, ...estado.config, ...(cambios ?? {}) },
-    migrada: cambios !== null,
+    config,
+    materias,
+    migrada: cambios !== null || materias !== materiasOrig,
   };
 }
 
@@ -135,14 +144,14 @@ export const useStore = create<Store>((set, get) => ({
     await migrarSiNecesario();
     const meta = await cargarMeta();
     const estado = await cargarPerfilEstado(meta.activoId);
-    const { config, migrada } = configDeEstado(estado);
+    const { config, migrada, materias: materiasMigradas } = configDeEstado(estado);
     if (migrada) {
-      guardarPerfilEstado(meta.activoId, { materias: estado.materias ?? [], config }, { marcarModificado: false }).catch(
+      guardarPerfilEstado(meta.activoId, { materias: materiasMigradas, config }, { marcarModificado: false }).catch(
         e => { if (__DEV__) console.error('[store] cargar: fallo al persistir la migración', e); },
       );
     }
     set({
-      materias: estado.materias ?? [],
+      materias: materiasMigradas,
       config,
       perfilActivoId: meta.activoId,
       perfiles: meta.perfiles,
@@ -152,23 +161,25 @@ export const useStore = create<Store>((set, get) => ({
 
   guardarMateria: (materia) => {
     const { perfilActivoId, config, materias } = get();
-    const renumeradas = renumerarMaterias(materias, materia);
+    const renumeradas = renumerarMaterias(materias, ajustarFechaPlazo(materia, config));
     set({ materias: renumeradas });
     guardarPerfilEstado(perfilActivoId, { materias: renumeradas, config }).catch(
       e => { if (__DEV__) console.error('[store] guardarMateria: fallo al persistir', e); },
     );
   },
 
-  reemplazarMaterias: (nuevas) => {
+  reemplazarMaterias: (nuevasIn) => {
     const { perfilActivoId, config } = get();
+    const nuevas = ajustarFechasPlazo(nuevasIn, config);
     set({ materias: nuevas });
     guardarPerfilEstado(perfilActivoId, { materias: nuevas, config }).catch(
       e => { if (__DEV__) console.error('[store] reemplazarMaterias: fallo al persistir', e); },
     );
   },
 
-  reemplazarEstado: async (materias, config) => {
+  reemplazarEstado: async (materiasIn, config) => {
     const { perfilActivoId } = get();
+    const materias = ajustarFechasPlazo(materiasIn, config);
     set({ materias, config });
     await guardarPerfilEstado(perfilActivoId, { materias, config });
   },
@@ -195,8 +206,11 @@ export const useStore = create<Store>((set, get) => ({
   actualizarConfig: (parcial) => {
     const { perfilActivoId, materias, config: configActual } = get();
     const config = { ...configActual, ...parcial };
-    set({ config });
-    guardarPerfilEstado(perfilActivoId, { materias, config }).catch(
+    // 2.1.0: al cambiar el plazo para examen, las materias que ya están en un estado al que aplica empiezan hoy.
+    const plazoCambio = parcial.plazoExamenAnios !== undefined || parcial.plazoExamenAplica !== undefined;
+    const materiasNuevas = plazoCambio ? ajustarFechasPlazo(materias, config) : materias;
+    set(materiasNuevas !== materias ? { config, materias: materiasNuevas } : { config });
+    guardarPerfilEstado(perfilActivoId, { materias: materiasNuevas, config }).catch(
       e => { if (__DEV__) console.error('[store] actualizarConfig: fallo al persistir', e); },
     );
   },
@@ -208,7 +222,11 @@ export const useStore = create<Store>((set, get) => ({
     const nuevas = materias.map(m => {
       const estado = calcularEstadoFinal(m, config);
       if (estado === 'aprobado' || estado === 'reprobado') {
-        return { ...registrarUso(m, hoy, 'periodo'), oportunidadesExamen: Math.max(0, m.oportunidadesExamen - 1) };
+        // Si se queda sin oportunidades pasa a recursar: ajustarFechaPlazo le borra la fecha del plazo.
+        return ajustarFechaPlazo(
+          { ...registrarUso(m, hoy, 'periodo'), oportunidadesExamen: Math.max(0, m.oportunidadesExamen - 1) },
+          config,
+        );
       }
       return m;
     });
@@ -228,14 +246,14 @@ export const useStore = create<Store>((set, get) => ({
     // actualizarConfig) ya persiste al storage inmediatamente. Un save redundante aquí
     // compite en escritura async con esas mutaciones (race condition R3-06).
     const estado = await cargarPerfilEstado(id);
-    const { config, migrada } = configDeEstado(estado);
+    const { config, migrada, materias: materiasMigradas } = configDeEstado(estado);
     if (migrada) {
-      await guardarPerfilEstado(id, { materias: estado.materias ?? [], config }, { marcarModificado: false });
+      await guardarPerfilEstado(id, { materias: materiasMigradas, config }, { marcarModificado: false });
     }
     const meta = await cargarMeta();
     await guardarMeta({ ...meta, activoId: id });
     set({
-      materias: estado.materias ?? [],
+      materias: materiasMigradas,
       config,
       perfilActivoId: id,
     });
@@ -285,12 +303,12 @@ export const useStore = create<Store>((set, get) => ({
     await guardarMeta(nuevaMeta);
     if (meta.activoId === id) {
       const estado = await cargarPerfilEstado(nuevoActivoId);
-      const { config, migrada } = configDeEstado(estado);
+      const { config, migrada, materias: materiasMigradas } = configDeEstado(estado);
       if (migrada) {
-        await guardarPerfilEstado(nuevoActivoId, { materias: estado.materias ?? [], config }, { marcarModificado: false });
+        await guardarPerfilEstado(nuevoActivoId, { materias: materiasMigradas, config }, { marcarModificado: false });
       }
       set({
-        materias: estado.materias ?? [],
+        materias: materiasMigradas,
         config,
         perfilActivoId: nuevoActivoId,
         perfiles: nuevosPerfiles,
