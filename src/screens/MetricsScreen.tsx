@@ -490,7 +490,7 @@ export function MetricsScreen() {
                       {/* Toggle solo siguiente semestre */}
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 12 }}>
-                          Solo las que afectan al próximo semestre incompleto
+                          Solo las que traban los próximos semestres
                         </Text>
                         <Switch
                           value={soloSiguiente}
@@ -503,7 +503,10 @@ export function MetricsScreen() {
                       {/* Semestres por delante (solo con el interruptor activo) */}
                       {soloSiguiente && (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
-                          <Text style={{ color: tema.textoSecundario, fontSize: 12, flex: 1, marginRight: 12 }}>Semestres por delante</Text>
+                          <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Semestres por delante</Text>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>1 es el semestre siguiente al que estás cursando.</Text>
+                          </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Disminuir semestres hacia adelante"
                               onPress={() => actualizarConfig({ cuelloBotellaSemestresAdelante: Math.max(1, semsAdelanteN - 1) })}
@@ -521,6 +524,24 @@ export function MetricsScreen() {
                               <Text style={{ color: tema.texto, fontSize: 20, lineHeight: 24 }}>+</Text>
                             </TouchableOpacity>
                           </View>
+                        </View>
+                      )}
+
+                      {/* Mostrar siempre las que se están cursando (solo con el interruptor activo) */}
+                      {soloSiguiente && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                          <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>Mostrar siempre las que estás cursando</Text>
+                            <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 2 }}>
+                              Si lo apagás, las materias que cursás solo aparecen si traban los semestres por delante.
+                            </Text>
+                          </View>
+                          <Switch
+                            value={config.cuelloBotellaMostrarCursando ?? true}
+                            onValueChange={v => actualizarConfig({ cuelloBotellaMostrarCursando: v })}
+                            trackColor={{ false: tema.borde, true: tema.acentoFondo ?? tema.acento }}
+                            thumbColor="#fff"
+                          />
                         </View>
                       )}
                     </View>

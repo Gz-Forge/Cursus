@@ -102,9 +102,20 @@ export interface Materia {
   bloques?: BloqueHorario[];
   faltasMaxTeorica?: number;
   faltasMaxPractica?: number;
+  /** 2.1.0: cómo se define el límite de faltas de teoría (default 'numero'). */
+  modoFaltasTeorica?: ModoFaltas;
+  /** 2.1.0: % mínimo de asistencia de teoría (0-100), usado si modoFaltasTeorica === 'porcentaje'. */
+  asistenciaMinTeorica?: number;
+  modoFaltasPractica?: ModoFaltas;
+  asistenciaMinPractica?: number;
+  /** 2.1.0: fecha 'YYYY-MM-DD' desde la que corre el plazo para dar examen. */
+  fechaInicioPlazo?: string;
   faltas?: RegistroFalta[];
   historialOportunidades?: UsoOportunidad[]; // 2.0.0: usos de oportunidades de examen (más viejo primero)
 }
+
+export type ModoFaltas = 'numero' | 'porcentaje';
+export type PlazoExamenAplica = 'reprobadas' | 'aprobadas' | 'ambas';
 
 /** Una oportunidad de examen que se usó, ya sea por un período o a mano. */
 export interface UsoOportunidad {
@@ -274,6 +285,10 @@ export interface Config {
   tarjetaDiseno?: 'clasica' | 'dos_lineas';    // 1.9.0: diseño de la tarjeta de materia (default 'clasica')
   metricasCreditosContar?: 'exonerados' | 'exonerados_aprobados' | 'ambos'; // 1.9.0: qué créditos cuenta Métricas (default 'exonerados_aprobados')
   cuelloBotellaSemestresAdelante?: number;     // 1.9.0: cuántos semestres incompletos mirar adelante para el cuello de botella (entero ≥ 1, default 1)
+  vistaMesPuntos?: 'todas' | 'evaluaciones'; // 2.1.0: vista Mes: puntos de todas las materias del día o solo de las que tienen evaluación (default 'todas')
+  cuelloBotellaMostrarCursando?: boolean;      // 2.1.0: con "solo siguiente", mostrar siempre las cursando con dependientes (default true)
+  plazoExamenAnios?: number;                   // 2.1.0: años para dar examen desde fechaInicioPlazo (0/undefined = sin plazo)
+  plazoExamenAplica?: PlazoExamenAplica;       // 2.1.0: a qué estados aplica el plazo (default 'ambas')
   estadoColoresPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoIconosPersonalizados?: Partial<Record<EstadoMateria, string>>;
   estadoNombresPersonalizados?: Partial<Record<EstadoMateria, string>>;

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useTema } from '../theme/ThemeContext';
 import { pasoNumero } from '../utils/numerosNotas';
+import { formatearDecimal } from '../utils/decimal';
 
 interface Props {
   label: string;
@@ -30,7 +31,8 @@ export function CampoNumerico({ label, texto, onTexto, min, max, paso = 1, decim
   const base = isNaN(actual) ? min : actual;
   const cambiar = (delta: number) => {
     const n = pasoNumero(isNaN(actual) ? (delta > 0 ? min - paso : min) : base, delta, min, max);
-    onTexto(String(n));
+    // 2.1.0: con decimales, el resultado de − / + se muestra con coma
+    onTexto(decimal ? formatearDecimal(n) : String(n));
     if (n !== base) onPaso?.(n > base ? paso : -paso);
   };
   const puedeRestar = !isNaN(actual) && base > min;

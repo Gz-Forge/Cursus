@@ -12,6 +12,7 @@ export interface EvaluacionDelDia {
   materiaNumero: number;
   evaluacionId: string;      // id de la evaluación simple o de la sub-evaluación
   nombre: string;            // nombre de la evaluación; para sub-evaluaciones: "Grupo · Prueba"
+  grupoId?: string;          // 2.1.0: id del grupo si es una sub-evaluación (para el color)
   fecha: string;
   hora?: number;
   horaFin?: number;
@@ -34,6 +35,7 @@ function listarEvaluacionesConFecha(materias: Materia[]): EvaluacionDelDia[] {
           out.push({
             ...base,
             evaluacionId: sub.id,
+            grupoId: ev.id,
             nombre: `${ev.nombre} · ${sub.nombre}`,
             fecha: sub.fecha,
             hora: sub.hora,
@@ -166,3 +168,129 @@ export function colorDeMateria(
   return { fondo: COLORES_MATERIA_DEFAULT[(materia.numero ?? 0) % COLORES_MATERIA_DEFAULT.length], texto: '#ffffff' };
 }
 
+
+// ── 2.1.0: clases (bloques) en la vista Mes ────────────────────────────
+
+export interface ClaseDelDia {
+  materiaId: string;
+  materiaNombre: string;
+  materiaNumero: number;
+  bloqueId: string;
+  tipo: TipoBloque;
+  fecha: string;
+  horaInicio: number;
+  horaFin: number;
+  salon?: string;
+}
+
+export type ModoPuntosMes = 'todas' | 'evaluaciones';
+
+export interface OpcionesPuntosMes {
+  /** Tipos de bloque ocultos en el filtro del horario (`config.horarioFiltroOcultos`). */
+  tiposOcultos?: TipoBloque[];
+  /** 'todas' (clases y evaluaciones) o 'evaluaciones' (solo evaluaciones). Default 'todas'. */
+  modo?: ModoPuntosMes;
+  /** Materias cuyas clases cuentan (el horario solo muestra las que están cursando). Default: todas. */
+  materiasClases?: Materia[];
+}
+
+/** Clases con fecha agrupadas por fecha ISO, ordenadas por hora de inicio; respeta el filtro de tipos. */
+export function clasesPorDia(materias: Materia[], tiposOcultos: TipoBloque[] = []): Map<string, ClaseDelDia[]> {
+  const mapa = new Map<string, ClaseDelDia[]>();
+  for (const m of materias) {
+    for (const b of m.bloques ?? []) {
+      if (!b.fecha || tiposOcultos.includes(b.tipo)) continue;
+      const c: ClaseDelDia = {
+        materiaId: m.id, materiaNombre: m.nombre, materiaNumero: m.numero, bloqueId: b.id,
+        tipo: b.tipo, fecha: b.fecha, horaInicio: b.horaInicio, horaFin: b.horaFin, salon: b.salon,
+      };
+      const arr = mapa.get(b.fecha);
+      if (arr) arr.push(c); else mapa.set(b.fecha, [c]);
+    }
+  }
+  for (const arr of mapa.values()) {
+    arr.sort((a, b) => a.horaInicio - b.horaInicio || a.materiaNombre.localeCompare(b.materiaNombre, 'es'));
+  }
+  return mapa;
+}
+
+/** Alias con el nombre de la tarea: las clases de un día concreto. */
+export function clasesDelDia(materias: Materia[], iso: string, tiposOcultos: TipoBloque[] = []): ClaseDelDia[] {
+  return clasesPorDia(materias, tiposOcultos).get(iso) ?? [];
+}
+
+/**
+ * Color de una evaluación, igual que lo resuelve la vista Semana: las sub-evaluaciones por el color
+ * del grupo (o el global de grupales, o violeta); las simples por el de la evaluación, o el de
+ * "parcial" de la materia, o naranja.
+ */
+export function colorDeEvaluacion(
+  e: Pick<EvaluacionDelDia, 'materiaId' | 'evaluacionId' | 'grupoId'>,
+  config: Pick<Config, 'coloresHorario' | 'coloresEvaluacionesGrupales' | 'coloresGruposEvaluacion' | 'coloresEvaluacionesSimples'>,
+): string {
+  if (e.grupoId) {
+    return config.coloresGruposEvaluacion?.[e.grupoId]?.fondo ?? config.coloresEvaluacionesGrupales?.fondo ?? '#9C27B0';
+  }
+  return config.coloresEvaluacionesSimples?.[e.evaluacionId]?.fondo
+    ?? config.coloresHorario?.[e.materiaId]?.parcial?.fondo
+    ?? '#FF9800';
+}
+
+type ConfigColores = Pick<Config, 'coloresHorario' | 'coloresEvaluacionesGrupales' | 'coloresGruposEvaluacion' | 'coloresEvaluacionesSimples'>;
+
+/**
+ * Colores distintos (sin repetir, en orden de hora) de lo que ocurre cada día: evaluaciones y,
+ * en modo 'todas', clases de los tipos visibles. Clave: fecha ISO.
+ */
+export function coloresPorDia(
+  materias: Materia[],
+  config: ConfigColores,
+  opciones: OpcionesPuntosMes = {},
+): Map<string, string[]> {
+  const modo = opciones.modo ?? 'todas';
+  const items = new Map<string, { hora: number; color: string }[]>();
+  const agregar = (fecha: string, hora: number | undefined, color: string) => {
+    const arr = items.get(fecha);
+    const it = { hora: hora ?? Number.POSITIVE_INFINITY, color };
+    if (arr) arr.push(it); else items.set(fecha, [it]);
+  };
+  for (const e of listarEvaluacionesConFecha(materias)) {
+    agregar(e.fecha, e.hora, colorDeEvaluacion(e, config));
+  }
+  if (modo === 'todas') {
+    const base = opciones.materiasClases ?? materias;
+    for (const c of clasesPorDia(base, opciones.tiposOcultos ?? []).values()) {
+      for (const x of c) {
+        const mat = base.find(m => m.id === x.materiaId);
+        if (mat) agregar(x.fecha, x.horaInicio, colorDeMateria(mat, config, x.tipo).fondo);
+      }
+    }
+  }
+  const out = new Map<string, string[]>();
+  for (const [fecha, arr] of items) {
+    arr.sort((a, b) => a.hora - b.hora);
+    const vistos: string[] = [];
+    for (const it of arr) {
+      if (!vistos.some(c => c.toLowerCase() === it.color.toLowerCase())) vistos.push(it.color);
+    }
+    out.set(fecha, vistos);
+  }
+  return out;
+}
+
+/** Hasta cuántos puntos sueltos se dibujan; con más colores se dibuja un solo círculo tipo torta. */
+export const MAX_PUNTOS_MES = 4;
+
+export type EntradaAgenda =
+  | { kind: 'evaluacion'; hora: number | undefined; evaluacion: EvaluacionDelDia }
+  | { kind: 'clase'; hora: number; clase: ClaseDelDia };
+
+/** Evaluaciones y clases de un día en una sola lista ordenada por hora (sin hora al final). */
+export function agendaDelDia(evaluaciones: EvaluacionDelDia[], clases: ClaseDelDia[]): EntradaAgenda[] {
+  const out: EntradaAgenda[] = [
+    ...evaluaciones.map(evaluacion => ({ kind: 'evaluacion' as const, hora: evaluacion.hora, evaluacion })),
+    ...clases.map(clase => ({ kind: 'clase' as const, hora: clase.horaInicio, clase })),
+  ];
+  const h = (x: EntradaAgenda) => x.hora ?? Number.POSITIVE_INFINITY;
+  return out.sort((a, b) => (h(a) === h(b) ? (a.kind === b.kind ? 0 : a.kind === 'clase' ? -1 : 1) : h(a) < h(b) ? -1 : 1));
+}

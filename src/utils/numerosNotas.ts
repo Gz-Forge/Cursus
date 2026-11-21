@@ -116,3 +116,25 @@ export function ajustarNota(nota: number | null, maximo: number): number | null 
   if (nota === null) return null;
   return Math.max(0, Math.min(maximo, nota));
 }
+
+// ── 2.1.0: decimales de la barra de progreso ────────────────────────────────
+
+/**
+ * Cuántos decimales usar al mostrar la barra de progreso de notas, según las notas cargadas
+ * (simples y sub-evaluaciones; se ignoran las null): 2 si alguna tiene 2 o más decimales,
+ * 1 si el máximo es 1 decimal, 0 si todas son enteras. Robusto a coma flotante.
+ */
+export function decimalesDeNotas(evaluaciones: Evaluacion[]): 0 | 1 | 2 {
+  let maxDec: 0 | 1 | 2 = 0;
+  const mirar = (nota: number | null | undefined) => {
+    if (typeof nota !== 'number' || !isFinite(nota)) return;
+    const c = Math.round(Math.abs(nota) * 100);
+    const d: 0 | 1 | 2 = c % 100 === 0 ? 0 : c % 10 === 0 ? 1 : 2;
+    if (d > maxDec) maxDec = d;
+  };
+  for (const ev of evaluaciones ?? []) {
+    if (ev.tipo === 'simple') mirar(ev.nota);
+    else for (const sub of ev.subEvaluaciones ?? []) mirar(sub.nota);
+  }
+  return maxDec;
+}

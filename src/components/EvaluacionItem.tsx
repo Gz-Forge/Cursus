@@ -15,6 +15,7 @@ import { OpcionalEditor } from './OpcionalEditor';
 import { parsearMes } from '../utils/fecha';
 import { confirmacionBorrarEvaluacion } from '../utils/ayudas';
 import { ultimoMaximo, ajustarNota } from '../utils/numerosNotas';
+import { formatearDecimal, parsearDecimal, textoEditableDecimal } from '../utils/decimal';
 import { SelectorFecha } from './SelectorFecha';
 import { SelectorHorario } from './SelectorHorario';
 import { esIsoValida } from '../utils/calendario';
@@ -35,11 +36,11 @@ function isoToDisplay(iso: string): string {
 }
 
 function fmtNum(n: number): string {
-  return String(Math.round(n * 100) / 100);
+  return formatearDecimal(n, 2);
 }
 
 function fmtComa(n: number): string {
-  return String(Math.round(n * 10) / 10).replace('.', ',');
+  return formatearDecimal(n, 1);
 }
 
 /** Etiqueta chica "opcional" junto al nombre de una evaluación plegada o desplegada. */
@@ -160,7 +161,7 @@ function FechaHoraPicker({
   );
 }
 
-// ── Input de nota con estado local string (evita borrar el punto decimal) ──
+// ── Input de nota con estado local string (coma decimal; acepta "," y ".") ──
 interface NotaInputProps {
   value: number | null;
   onChange: (v: number | null) => void;
@@ -169,13 +170,14 @@ interface NotaInputProps {
   placeholderTextColor?: string;
 }
 function NotaInput({ value, onChange, style, placeholder, placeholderTextColor }: NotaInputProps) {
-  const [str, setStr] = useState<string>(value !== null ? String(value) : '');
+  const [str, setStr] = useState<string>(value !== null ? formatearDecimal(value, 2) : '');
 
   React.useEffect(() => {
-    const parsed = parseFloat(str);
+    const parsed = parsearDecimal(str);
     const externalChanged = value === null ? str !== '' : parsed !== value;
-    if (externalChanged && !str.endsWith('.')) {
-      setStr(value !== null ? String(value) : '');
+    // Un "7," a medias no se pisa
+    if (externalChanged && !str.endsWith(',')) {
+      setStr(value !== null ? formatearDecimal(value, 2) : '');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -188,16 +190,12 @@ function NotaInput({ value, onChange, style, placeholder, placeholderTextColor }
       placeholder={placeholder}
       placeholderTextColor={placeholderTextColor}
       onChangeText={v => {
-        const cleaned = v.replace(/[^0-9.]/g, '');
-        const parts = cleaned.split('.');
-        const normalized = parts.length > 2
-          ? `${parts[0]}.${parts.slice(1).join('')}`
-          : cleaned;
+        const normalized = textoEditableDecimal(v, 2);
         setStr(normalized);
-        const num = parseFloat(normalized);
-        if (!isNaN(num)) {
+        const num = parsearDecimal(normalized);
+        if (num !== null) {
           onChange(num);
-        } else if (normalized === '' || normalized === '.') {
+        } else if (normalized === '' || normalized === ',') {
           onChange(null);
         }
       }}
@@ -246,16 +244,20 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
 
   // Al cambiar el tipo de nota, convierte el valor ya ingresado para que la
   // contribución no salte de golpe, y fija/libera el máximo (100 en porcentaje).
+  // Último máximo numérico editado por id (simple o sub-evaluación): al volver a Número se restaura
+  const maximosPrevios = useRef<Record<string, number>>({});
+
   const cambiarTipoNotaSimple = (nuevoTipo: TipoNota) => {
     const simple = evaluacion as EvaluacionSimple;
     if (nuevoTipo === simple.tipoNota) return;
     if (nuevoTipo === 'porcentaje') {
+      if (simple.tipoNota === 'numero' && simple.notaMaxima > 0) maximosPrevios.current[simple.id] = simple.notaMaxima;
       const convertida = simple.nota !== null
         ? Math.round((simple.nota / simple.notaMaxima) * 10000) / 100
         : null;
       actualizarSimple({ tipoNota: 'porcentaje', nota: convertida, notaMaxima: 100 });
     } else {
-      const nuevoMax = 10;
+      const nuevoMax = maximosPrevios.current[simple.id] ?? 10;
       const convertida = simple.nota !== null
         ? Math.round((simple.nota / 100) * nuevoMax * 100) / 100
         : null;
@@ -268,12 +270,13 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
     const sub = grupo.subEvaluaciones[idx];
     if (nuevoTipo === sub.tipoNota) return;
     if (nuevoTipo === 'porcentaje') {
+      if (sub.tipoNota === 'numero' && sub.notaMaxima > 0) maximosPrevios.current[sub.id] = sub.notaMaxima;
       const convertida = sub.nota !== null
         ? Math.round((sub.nota / sub.notaMaxima) * 10000) / 100
         : null;
       actualizarSub(idx, { tipoNota: 'porcentaje', nota: convertida, notaMaxima: 100 });
     } else {
-      const nuevoMax = 10;
+      const nuevoMax = maximosPrevios.current[sub.id] ?? 10;
       const convertida = sub.nota !== null
         ? Math.round((sub.nota / 100) * nuevoMax * 100) / 100
         : null;
@@ -343,7 +346,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
             </TouchableOpacity>
           )}
           <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-            {contribucion !== null ? `${contribucion.toFixed(2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
+            {contribucion !== null ? `${formatearDecimal(contribucion, 2)} / ${evaluacion.pesoEnMateria}` : `${evaluacion.pesoEnMateria}%`}
           </Text>
           <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{colapsada ? '▼' : '▲'}</Text>
           <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${evaluacion.nombre || 'evaluación'}`}>
@@ -438,7 +441,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           topeOpcional={evaluacion.topeOpcional}
           onCambiar={actualizarSimple}
         />
-        {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {contribucion.toFixed(2)}% a la nota final</Text>}
+        {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {formatearDecimal(contribucion, 2)}% a la nota final</Text>}
         </>)}
       </View>
     );
@@ -496,7 +499,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
           </TouchableOpacity>
         )}
         <Text style={{ color: tema.textoSecundario, fontSize: 12 }}>
-          {parcialGrupo !== null ? `${parcialGrupo.toFixed(2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
+          {parcialGrupo !== null ? `${formatearDecimal(parcialGrupo, 2)} / ${fmtNum(grupo.pesoEnMateria)}` : `${fmtNum(grupo.pesoEnMateria)}%`}
         </Text>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>{grupoColapsado ? '▼' : '▲'}</Text>
         <TouchableOpacity onPress={pedirEliminar} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${grupo.nombre || 'grupo'}`}>
@@ -507,8 +510,9 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
       {!grupoColapsado && (<>
       <View style={estilos.fila}>
         <Text style={estilos.label}>Peso total del grupo en materia (%)</Text>
-        <TextInput style={[estilos.input, { flex: 0, width: 70 }]} keyboardType="numeric"
-          value={String(grupo.pesoEnMateria)} onChangeText={v => { const n = Number(v); if (!isNaN(n)) onChange({ ...grupo, pesoEnMateria: Math.round(Math.min(100, Math.max(0, n)) * 100) / 100 }); }} />
+        <NotaInput style={[estilos.input, { flex: 0, width: 70 }]}
+          value={grupo.pesoEnMateria}
+          onChange={v => onChange({ ...grupo, pesoEnMateria: Math.round(Math.min(100, Math.max(0, v ?? 0)) * 100) / 100 })} />
       </View>
       {/* Punto 66: reparto del peso entre las pruebas */}
       <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
@@ -569,7 +573,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
                 </TouchableOpacity>
               )}
               <Text style={{ color: tema.textoSecundario, fontSize: 11 }}>
-                {aporteSub !== null ? `${aporteSub.toFixed(2)} / ${fmtNum(pesoSub)}` : ''}
+                {aporteSub !== null ? `${formatearDecimal(aporteSub, 2)} / ${fmtNum(pesoSub)}` : ''}
               </Text>
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 11 }}>{subColapsada ? '▼' : '▲'}</Text>
               <TouchableOpacity onPress={() => eliminarSub(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} accessibilityRole="button" accessibilityLabel={`Borrar ${sub.nombre || `Prueba ${i + 1}`}`}>
@@ -666,7 +670,7 @@ export function EvaluacionItem({ evaluacion, onChange, onEliminar, isColapsada, 
       <TouchableOpacity onPress={agregarSub} style={{ padding: 6 }}>
         <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 13 }}>+ Añadir prueba al grupo</Text>
       </TouchableOpacity>
-      {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {contribucion.toFixed(2)}% a la nota final</Text>}
+      {contribucion !== null && <Text style={estilos.resultado}>→ Contribuye: {formatearDecimal(contribucion, 2)}% a la nota final</Text>}
       </>)}
     </View>
   );

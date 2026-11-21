@@ -212,6 +212,8 @@ export function ConfigScreen() {
   const [oportStr, setOportStr] = useState(() => String(config.oportunidadesExamenDefault));
   React.useEffect(() => { setNotaMaxStr(String(config.notaMaxima)); }, [config.notaMaxima]);
   React.useEffect(() => { setOportStr(String(config.oportunidadesExamenDefault)); }, [config.oportunidadesExamenDefault]);
+  const [plazoStr, setPlazoStr] = useState(() => String(config.plazoExamenAnios ?? 0));
+  React.useEffect(() => { setPlazoStr(String(config.plazoExamenAnios ?? 0)); }, [config.plazoExamenAnios]);
 
   const scrollAnim = React.useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(0);
@@ -713,6 +715,60 @@ export function ConfigScreen() {
           </Ancla>
           <Ancla id="nota-maxima">{campo('Nota máxima', 'notaMaxima', 1, 'Ej.: 12, 10 o 100.')}</Ancla>
           <Ancla id="oportunidades-examen">{campo('Oportunidades de examen por defecto', 'oportunidadesExamenDefault', 1)}</Ancla>
+
+          <Ancla id="plazo-examen">
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 14, fontWeight: '600', marginBottom: 10 }}>PLAZO PARA DAR EXAMEN</Text>
+              <View style={{ width: 190 }}>
+                <CampoNumerico
+                  label="Años de plazo"
+                  texto={plazoStr}
+                  min={0}
+                  max={99}
+                  onTexto={v => {
+                    setPlazoStr(v);
+                    const n = Number(v);
+                    if (v.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 99) actualizarConfig({ plazoExamenAnios: n });
+                  }}
+                />
+              </View>
+              <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 4 }}>
+                Si pasan estos años desde que la materia quedó pendiente de examen, tenés que recursarla aunque te queden oportunidades. 0 = sin plazo.
+              </Text>
+              {(config.plazoExamenAnios ?? 0) > 0 && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 12, marginBottom: 6 }}>Aplica a:</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    {([
+                      { valor: 'reprobadas', label: getLabel('reprobado') },
+                      { valor: 'aprobadas', label: getLabel('aprobado') },
+                      { valor: 'ambas', label: 'Ambas' },
+                    ] as const).map(op => {
+                      const activo = (config.plazoExamenAplica ?? 'ambas') === op.valor;
+                      return (
+                        <TouchableOpacity
+                          key={op.valor}
+                          onPress={() => actualizarConfig({ plazoExamenAplica: op.valor })}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: activo }}
+                          style={{
+                            paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1,
+                            borderColor: activo ? (tema.acentoFondo ?? tema.acento) : tema.borde,
+                            backgroundColor: activo ? (tema.acentoFondo ?? tema.acento) : tema.tarjeta,
+                          }}
+                        >
+                          <Text style={{ color: activo ? '#fff' : tema.texto, fontSize: 13, fontWeight: activo ? '700' : '400' }}>{op.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ color: tema.textoSecundario, fontSize: 11, marginTop: 8 }}>
+                    Las materias que ya están en ese estado empiezan a contar desde hoy. Podés cambiar la fecha en Editar materia.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </Ancla>
 
           <Ancla id="periodos-examen">
             <TouchableOpacity

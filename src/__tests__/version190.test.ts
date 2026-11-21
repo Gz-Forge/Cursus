@@ -117,18 +117,20 @@ describe('cuellosDeBotella / semestresPorDelante', () => {
   ];
   const base = { ...CONFIG, cuelloBotellaUmbral: 3 };
 
-  it('semestresPorDelante respeta N', () => {
-    expect(semestresPorDelante(ms, base)).toEqual([2]);
-    expect(semestresPorDelante(ms, { ...base, cuelloBotellaSemestresAdelante: 2 })).toEqual([2, 3]);
-    expect(semestresPorDelante(ms, { ...base, cuelloBotellaSemestresAdelante: 10 })).toEqual([2, 3, 4]);
+  it('semestresPorDelante respeta N (2.1.0: son los N semestres siguientes al actual)', () => {
+    // El semestre actual es el 2 (el menor incompleto): no se incluye.
+    expect(semestresPorDelante(ms, base)).toEqual([3]);
+    expect(semestresPorDelante(ms, { ...base, cuelloBotellaSemestresAdelante: 2 })).toEqual([3, 4]);
+    expect(semestresPorDelante(ms, { ...base, cuelloBotellaSemestresAdelante: 10 })).toEqual([3, 4]);
   });
 
   it('sin soloSiguiente devuelve todos los que superan el umbral', () => {
     expect(cuellosDeBotella(ms, base).map(m => m.numero).sort()).toEqual([2, 3]);
   });
 
-  it('soloSiguiente con N=1 (lógica actual): nadie del sem 2 traba al propio sem 2', () => {
-    expect(cuellosDeBotella(ms, { ...base, cuelloBotellaSoloSiguiente: true })).toEqual([]);
+  it('soloSiguiente con N=1 (2.1.0): marca los cuellos que traban al semestre siguiente', () => {
+    // La 2 (sem 2) traba a 4, 5 y 6 (sem 3); la 3 solo traba al sem 4.
+    expect(cuellosDeBotella(ms, { ...base, cuelloBotellaSoloSiguiente: true }).map(m => m.numero)).toEqual([2]);
   });
 
   it('soloSiguiente con N=1 conserva las cursando con dependientes', () => {
@@ -138,10 +140,7 @@ describe('cuellosDeBotella / semestresPorDelante', () => {
 
   it('soloSiguiente con N=2 incluye el cuello que afecta al semestre siguiente al siguiente', () => {
     const r = cuellosDeBotella(ms, { ...base, cuelloBotellaSoloSiguiente: true, cuelloBotellaSemestresAdelante: 2 });
-    expect(r.map(m => m.numero)).toEqual([2]);
-    // La 3 solo afecta al sem 4: entra recién con N=3
-    const r3 = cuellosDeBotella(ms, { ...base, cuelloBotellaSoloSiguiente: true, cuelloBotellaSemestresAdelante: 3 });
-    expect(r3.map(m => m.numero).sort()).toEqual([2, 3]);
+    expect(r.map(m => m.numero).sort()).toEqual([2, 3]);
   });
 
   it('ordena por cantidad de dependientes desc', () => {

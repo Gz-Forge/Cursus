@@ -21,6 +21,7 @@ export const INDICE_AJUSTES: AjusteIndexado[] = [
   { id: 'sistema-de-notas', texto: 'Sistema de notas', panel: 'notas', claves: ['calificaciones', 'escala'] },
   { id: 'nota-maxima', texto: 'Nota máxima', panel: 'notas', claves: ['escala', 'maximo', '12', '10', '100'] },
   { id: 'oportunidades-examen', texto: 'Oportunidades de examen por defecto', panel: 'notas', claves: ['examenes', 'intentos', 'rendir'] },
+  { id: 'plazo-examen', texto: 'Plazo para dar examen', panel: 'notas', claves: ['años', 'vencimiento', 'recursar', 'caducidad', 'reprobadas', 'aprobadas', 'pendiente de examen'] },
   { id: 'periodos-examen', texto: 'Configurar períodos de examen', panel: 'notas', claves: ['fechas de examen', 'modo examen', 'automatico', 'manual'] },
   { id: 'umbrales-estado', texto: 'Umbrales de estado', panel: 'notas', claves: ['porcentaje', 'aprobacion', 'exoneracion', 'aprobar'] },
   { id: 'nota-minima-examen', texto: 'Nota mínima para salvar examen', panel: 'notas', claves: ['umbral', 'examen', 'recursar'] },

@@ -19,9 +19,9 @@ import {
 } from '../utils/horarioImportExport';
 import { calcularLayoutSuperposicion, LayoutBloque, ajustarAPaso, DURACION_MIN_BLOQUE, textoBloque } from '../utils/horarioLayout';
 import { SelectorHorario } from '../components/SelectorHorario';
-import { SelectorFecha } from '../components/SelectorFecha';
 import { semanasEntre, sumarMeses, tituloMes } from '../utils/calendario';
 import { COLORES_MATERIA_DEFAULT } from '../utils/vistaMes';
+import { formatearDecimal, parsearDecimal, textoEditableDecimal } from '../utils/decimal';
 import { generarICS } from '../utils/exportarICS';
 import { VistaMesHorario } from '../components/VistaMesHorario';
 import { mostrarCuentaRegresiva, textoCuentaRegresiva } from '../utils/cuentaRegresiva';
@@ -99,6 +99,10 @@ function TextoBloqueVista({ texto, color, lineas, fuente, cuenta }: {
   const hayDetalle = !!texto.detalle;
   const mostrarCuenta = !!cuenta && (hayDetalle ? lineas >= 3 : lineas >= 2);
   const lineasNombre = Math.max(1, lineas - (mostrarCuenta ? 1 : 0));
+  // 2.1.0: el detalle (p. ej. el nombre de la evaluación) usa todas las líneas que sobran en el bloque.
+  // La materia toma 1 línea (2 si el bloque es alto) y el detalle el resto, en vez de cortarse en 1 línea.
+  const lineasTitulo = lineasNombre >= 5 ? 2 : 1;
+  const lineasDetalle = Math.max(1, lineasNombre - lineasTitulo);
   const lineaCuenta = mostrarCuenta ? (
     <Text
       style={{ color, fontSize: fuente - 1, lineHeight: altoLinea, opacity: 0.85 }}
@@ -126,14 +130,14 @@ function TextoBloqueVista({ texto, color, lineas, fuente, cuenta }: {
     <>
       <Text
         style={{ color, fontSize: fuente, fontWeight: '700', lineHeight: altoLinea }}
-        numberOfLines={Math.max(1, lineasNombre - 1)}
+        numberOfLines={lineasTitulo}
         ellipsizeMode="tail"
       >
         {texto.titulo}
       </Text>
       <Text
         style={{ color, fontSize: fuente - 1, lineHeight: altoLinea, opacity: 0.85 }}
-        numberOfLines={1}
+        numberOfLines={lineasDetalle}
         ellipsizeMode="tail"
       >
         {texto.detalle}
@@ -248,8 +252,8 @@ export function HorarioScreen() {
       const materia = mats.find(m => m.id === modalEdicionRapida.materiaId);
       const ev = buscarEvaluacion(materia, modalEdicionRapida.bloqueId);
       setModalTipoNota(ev?.tipoNota ?? 'numero');
-      setModalNotaStr(ev?.nota !== null && ev?.nota !== undefined ? String(ev.nota) : '');
-      setModalNotaMaxStr(String(ev?.notaMaxima ?? config.notaMaxima));
+      setModalNotaStr(ev?.nota !== null && ev?.nota !== undefined ? formatearDecimal(ev.nota, 4) : '');
+      setModalNotaMaxStr(formatearDecimal(ev?.notaMaxima ?? config.notaMaxima, 4));
     }
   }, [modalEdicionRapida?.bloqueId]);
   // --- Modal crear bloque (doble tap en espacio vacío) ---
@@ -1042,19 +1046,19 @@ export function HorarioScreen() {
     modalEdicionRapida?.tipo === 'regular' ? labelDeTipo(modalTipoBloque) : (evalEdicionRapida?.nombre || 'Evaluación'),
     materiaEdicionRapida?.nombre,
   ].filter(Boolean).join(' · ');
-  const notaPrevia = parseFloat(modalNotaStr);
-  const maxPrevio = modalTipoNota === 'porcentaje' ? 100 : parseFloat(modalNotaMaxStr);
-  const aportePrevio = evalEdicionRapida && !isNaN(notaPrevia) && maxPrevio > 0
+  const notaPrevia = parsearDecimal(modalNotaStr);
+  const maxPrevio = modalTipoNota === 'porcentaje' ? 100 : (parsearDecimal(modalNotaMaxStr) ?? NaN);
+  const aportePrevio = evalEdicionRapida && notaPrevia !== null && maxPrevio > 0
     ? (notaPrevia / maxPrevio) * evalEdicionRapida.peso
     : null;
 
   const cambiarTipoNotaModal = (nuevo: TipoNota) => {
     if (nuevo === modalTipoNota) return;
-    const nota = parseFloat(modalNotaStr);
-    const max = parseFloat(modalNotaMaxStr);
-    const conv = convertirNotaDeTipo(!isNaN(nota) ? nota : null, max > 0 ? max : 10, nuevo);
-    setModalNotaStr(conv.nota !== null ? String(conv.nota) : '');
-    setModalNotaMaxStr(String(conv.notaMaxima));
+    const nota = parsearDecimal(modalNotaStr);
+    const max = parsearDecimal(modalNotaMaxStr) ?? 0;
+    const conv = convertirNotaDeTipo(nota, max > 0 ? max : 10, nuevo);
+    setModalNotaStr(conv.nota !== null ? formatearDecimal(conv.nota, 4) : '');
+    setModalNotaMaxStr(formatearDecimal(conv.notaMaxima, 4));
     setModalTipoNota(nuevo);
   };
 
@@ -1074,27 +1078,6 @@ export function HorarioScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalEdicionRapida]);
 
-  // Punto 98: ir a una fecha (doble clic / doble toque sobre la fecha del encabezado)
-  const [irAFechaAbierto, setIrAFechaAbierto] = useState(false);
-  const ultimoToqueFecha = React.useRef(0);
-  const tocarFechaEncabezado = () => {
-    const ahora = Date.now();
-    if (ahora - ultimoToqueFecha.current < 400) {
-      ultimoToqueFecha.current = 0;
-      setIrAFechaAbierto(true);
-    } else {
-      ultimoToqueFecha.current = ahora;
-    }
-  };
-  const irAFecha = (iso: string) => {
-    if (vista === 'mes') {
-      setMesIso(iso.slice(0, 8) + '01');
-      setDiaSel(iso);
-    } else {
-      setWeekOffset(semanasEntre(hoyIso, iso, (config.horarioPrimerDia ?? 'lunes') as 'lunes' | 'domingo'));
-    }
-    setIrAFechaAbierto(false);
-  };
   const irAHoyMes = () => { setMesIso(hoyIso.slice(0, 8) + '01'); setDiaSel(hoyIso); };
   irAHoyMesRef.current = irAHoyMes;
   const navAnterior = () => { if (vista === 'mes') setMesIso(m => sumarMeses(m, -1)); else setWeekOffset(w => w - 1); };
@@ -1194,16 +1177,16 @@ export function HorarioScreen() {
       const materia = mats.find(m2 => m2.id === modalEdicionRapida.materiaId);
       if (materia) {
         const notaTxt = modalNotaStr.trim();
-        const notaVal = notaTxt === '' ? null : parseFloat(notaTxt);
-        if (notaVal !== null && isNaN(notaVal)) {
+        const notaVal = notaTxt === '' ? null : parsearDecimal(notaTxt);
+        if (notaTxt !== '' && notaVal === null) {
           setModalTab('nota');
           showAlert('Nota inválida', 'Ingresá un número en la pestaña Nota.');
           return;
         }
-        const maxParsed = parseFloat(modalNotaMaxStr);
+        const maxParsed = parsearDecimal(modalNotaMaxStr);
         const maxVal = modalTipoNota === 'porcentaje'
           ? 100
-          : (isNaN(maxParsed) ? 10 : Math.min(9999, Math.max(0.01, maxParsed)));
+          : (maxParsed === null ? 10 : Math.min(9999, Math.max(0.01, maxParsed)));
         const camposNota = { tipoNota: modalTipoNota, nota: notaVal, notaMaxima: maxVal };
         const patchEval = (evs: typeof materia.evaluaciones): typeof materia.evaluaciones =>
           evs.map(ev => {
@@ -1244,12 +1227,11 @@ export function HorarioScreen() {
                 <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
               </TouchableOpacity>
               <View style={{ alignItems: 'center' }}>
-                {/* Punto 98: doble clic (o doble toque) sobre la fecha abre un calendario para saltar de semana */}
-                <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes visible. Doble toque para ir a una fecha.' : 'Semana visible. Doble toque para ir a una fecha.'}>
+                <View>
                   <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
                     {tituloCabecera}
                   </Text>
-                </TouchableOpacity>
+                </View>
                 <TouchableOpacity onPress={irAHoyCabecera}>
                   <Text style={{ color: ayudaCabecera.activo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                     {ayudaCabecera.texto}
@@ -1298,11 +1280,11 @@ export function HorarioScreen() {
               <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 22 }}>◀</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-              <TouchableOpacity onPress={tocarFechaEncabezado} accessibilityRole="button" accessibilityLabel={vista === 'mes' ? 'Mes visible. Doble toque para ir a una fecha.' : 'Semana visible. Doble toque para ir a una fecha.'}>
+              <View>
                 <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 14 }}>
                   {tituloCabecera}
                 </Text>
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity onPress={irAHoyCabecera}>
                 <Text style={{ color: ayudaCabecera.activo ? (tema.acentoTexto ?? tema.acento) : tema.textoSecundario, fontSize: 11 }}>
                   {ayudaCabecera.texto}
@@ -1354,6 +1336,9 @@ export function HorarioScreen() {
           mostrarPeriodos={mostrarPeriodos}
           onTogglePeriodos={() => setMostrarPeriodos(v => !v)}
           onAbrirMateria={(materiaId) => navigation.navigate('EditMateria', { materiaId })}
+          materiasClases={materiasEnCurso}
+          modoPuntos={config.vistaMesPuntos ?? 'todas'}
+          onCambiarModoPuntos={(modo) => actualizarConfig({ vistaMesPuntos: modo })}
         />
       )}
       {/* La vista semana queda montada (oculta) en modo Mes para conservar sus medidas */}
@@ -2928,35 +2913,6 @@ export function HorarioScreen() {
       })()}
     </View>
 
-    {/* Punto 98: calendario para saltar a cualquier semana */}
-    <Modal visible={irAFechaAbierto} transparent animationType="fade" onRequestClose={() => setIrAFechaAbierto(false)}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <Pressable accessibilityRole="button"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onPress={() => setIrAFechaAbierto(false)}
-          accessibilityLabel="Cerrar"
-        />
-        <View style={{ backgroundColor: tema.superficie, borderRadius: 16, padding: 16, width: '100%', maxWidth: 360 }}>
-          <Text style={{ color: tema.texto, fontWeight: '700', fontSize: 15, marginBottom: 10 }}>Ir a una fecha</Text>
-          <SelectorFecha
-            fecha={fechasSemana[0]}
-            onCambiar={irAFecha}
-            vistaInicial="mes"
-            noRecordarVista
-            diasMarcados={todosLosBloques.map(b => b.fecha)}
-          />
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            <TouchableOpacity onPress={() => irAFecha(hoyIso)} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: tema.fondo, alignItems: 'center' }}>
-              <Text style={{ color: tema.acentoTexto ?? tema.acento, fontWeight: '600' }}>Hoy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setIrAFechaAbierto(false)} style={{ flex: 1, padding: 10, borderRadius: 8, backgroundColor: tema.fondo, alignItems: 'center' }}>
-              <Text style={{ color: tema.textoSecundario, fontWeight: '600' }}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-
     {/* ── Modal de edición rápida (doble tap en móvil / clic derecho en escritorio) ── */}
     <Modal
       visible={modalEdicionRapida !== null}
@@ -3112,7 +3068,7 @@ export function HorarioScreen() {
                   <TextInput
                     style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, width: 70 }}
                     value={modalNotaStr}
-                    onChangeText={v => setModalNotaStr(v.replace(/[^0-9.]/g, ''))}
+                    onChangeText={v => setModalNotaStr(textoEditableDecimal(v, 4))}
                     keyboardType="decimal-pad"
                     placeholder="—"
                     placeholderTextColor={tema.textoSecundario}
@@ -3123,7 +3079,7 @@ export function HorarioScreen() {
                       <TextInput
                         style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 8, borderRadius: 6, fontSize: 14, width: 70 }}
                         value={modalNotaMaxStr}
-                        onChangeText={v => setModalNotaMaxStr(v.replace(/[^0-9.]/g, ''))}
+                        onChangeText={v => setModalNotaMaxStr(textoEditableDecimal(v, 4))}
                         keyboardType="decimal-pad"
                       />
                     </>
@@ -3133,7 +3089,7 @@ export function HorarioScreen() {
                 </View>
                 {aportePrevio !== null && evalEdicionRapida && (
                   <Text style={{ color: tema.acentoTexto ?? tema.acento, fontSize: 12 }}>
-                    → Contribuye {aportePrevio.toFixed(2)} de {Math.round(evalEdicionRapida.peso * 100) / 100}% a la nota final
+                    → Contribuye {formatearDecimal(aportePrevio, 2, 2)} de {formatearDecimal(evalEdicionRapida.peso, 2)}% a la nota final
                   </Text>
                 )}
               </>
@@ -3488,7 +3444,7 @@ export function HorarioScreen() {
                           <TextInput
                             style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14 }}
                             value={cmbPesoEval}
-                            onChangeText={v => setCmbPesoEval(v.replace(/[^0-9.]/g, ''))}
+                            onChangeText={v => setCmbPesoEval(textoEditableDecimal(v, 4))}
                             placeholder="Ej: 40"
                             placeholderTextColor={tema.textoSecundario}
                             keyboardType="numeric"
@@ -3563,7 +3519,7 @@ export function HorarioScreen() {
                                 <TextInput
                                   style={{ backgroundColor: tema.fondo, color: tema.texto, padding: 12, borderRadius: 10, fontSize: 14, marginBottom: 18 }}
                                   value={cmbPesoGrupo}
-                                  onChangeText={v => setCmbPesoGrupo(v.replace(/[^0-9.]/g, ''))}
+                                  onChangeText={v => setCmbPesoGrupo(textoEditableDecimal(v, 4))}
                                   placeholder="Ej: 30"
                                   placeholderTextColor={tema.textoSecundario}
                                   keyboardType="numeric"
@@ -3609,7 +3565,7 @@ export function HorarioScreen() {
                         if (!cmbPesoEval) return;
                         const nuevaEval: EvaluacionSimple = {
                           id: newId(), tipo: 'simple', nombre: cmbNombreEval.trim(),
-                          pesoEnMateria: parseFloat(cmbPesoEval) || 0,
+                          pesoEnMateria: parsearDecimal(cmbPesoEval) ?? 0,
                           tipoNota: 'numero', nota: null, notaMaxima: config.notaMaxima,
                           fecha: modalCrearBloque.fecha, hora: modalCrearBloque.horaInicio, horaFin: modalCrearBloque.horaFin ?? undefined,
                         };
@@ -3639,7 +3595,7 @@ export function HorarioScreen() {
                           };
                           const nuevoGrupo: GrupoEvaluacion = {
                             id: newId(), tipo: 'grupo', nombre: cmbNombreGrupo.trim(),
-                            pesoEnMateria: parseFloat(cmbPesoGrupo) || 0,
+                            pesoEnMateria: parsearDecimal(cmbPesoGrupo) ?? 0,
                             subEvaluaciones: [primeraSub],
                           };
                           guardarMateria({ ...materia, evaluaciones: [...materia.evaluaciones, nuevoGrupo] });
