@@ -41,6 +41,7 @@
       "backgroundColor": "#121212"
     },
     "plugins": [
+      "./plugins/withPortraitOpcional",
       [
         "expo-build-properties",
         {
